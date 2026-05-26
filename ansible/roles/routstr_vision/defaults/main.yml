@@ -1,0 +1,21 @@
+---
+routstr_vision_port: 8001
+routstr_vision_rest_port: 8001
+routstr_vision_tor_enabled: true
+routstr_vision_data_dir: "{{ tollgate_base_dir }}/routstr-vision/data"
+routstr_vision_log_dir: "{{ tollgate_base_dir }}/routstr-vision/logs"
+routstr_vision_tor_dir: "{{ tollgate_base_dir }}/routstr-vision/tor-data"
+routstr_vision_container_name: tollgate-routstr-vision
+routstr_vision_tor_container_name: tollgate-routstr-vision-tor
+routstr_vision_image: "ghcr.io/routstr/proxy:latest"
+routstr_vision_tor_image: "ghcr.io/hundehausen/tor-hidden-service:latest"
+routstr_vision_domain: "routstr-vision.{{ base_domain }}"
+
+routstr_vision_mint_subdomain: routstr-vision-mint
+routstr_vision_mint_rest_port: 8094
+routstr_vision_mint_grpc_port: 50056
+routstr_vision_mint_container_name: "mint-routstr-vision-mint"
+routstr_vision_mint_url: "https://{{ routstr_vision_mint_subdomain }}.{{ mint_domain }}"
+routstr_vision_mint_units: "sat,msat"
+
+routstr_vision_operator_npub: "npub1vc8y8836f2sjsamt8tsms74gygf7ff9z7k7m75hv7yl8uysajweqs5u87k"

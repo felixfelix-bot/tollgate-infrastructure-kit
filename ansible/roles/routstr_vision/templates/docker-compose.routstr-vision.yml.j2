@@ -1,0 +1,35 @@
+services:
+  {{ routstr_vision_container_name }}:
+    image: {{ routstr_vision_image }}
+    container_name: {{ routstr_vision_container_name }}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - {{ routstr_vision_data_dir }}:/app/data
+      - {{ routstr_vision_log_dir }}:/app/logs
+    environment:
+      PORT: "{{ routstr_vision_rest_port }}"
+      DATABASE_URL: "sqlite+aiosqlite:////app/data/routstr.db"
+      ADMIN_PASSWORD: "{{ routstr_vision_admin_password }}"
+      UPSTREAM_BASE_URL: "{{ routstr_vision_upstream_base_url }}"
+      UPSTREAM_API_KEY: "{{ routstr_vision_upstream_api_key }}"
+      NAME: "{{ routstr_vision_node_name }}"
+      DESCRIPTION: "{{ routstr_vision_node_description }}"
+      HTTP_URL: "https://{{ routstr_vision_domain }}"
+      CASHU_MINTS: "{{ routstr_vision_mint_url }}"
+      RELAYS: "{{ routstr_vision_relays }}"
+      NSEC: "{{ routstr_vision_nsec }}"
+      RECEIVE_LN_ADDRESS: "{{ routstr_vision_ln_address }}"
+      LOG_LEVEL: "info"
+      CORS_ORIGINS: "*"
+      TOR_PROXY_URL: "socks5://127.0.0.1:9050"
+
+  {{ routstr_vision_tor_container_name }}:
+    image: {{ routstr_vision_tor_image }}
+    container_name: {{ routstr_vision_tor_container_name }}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - {{ routstr_vision_tor_dir }}:/var/lib/tor
+    environment:
+      HS_ROUTER: "127.0.0.1:{{ routstr_vision_rest_port }}:80"

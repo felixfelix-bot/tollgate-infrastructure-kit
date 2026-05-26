@@ -43,6 +43,11 @@
         reverse_proxy localhost:{{ routstr_mint_rest_port | default(8089) }}
     }
 
+    @routstr-vision-mint host routstr-vision-mint.{{ mint_domain }}
+    handle @routstr-vision-mint {
+        reverse_proxy localhost:{{ routstr_vision_mint_rest_port | default(8094) }}
+    }
+
     @print host print.{{ mint_domain }}
     handle @print {
         handle /api/* {
@@ -77,6 +82,14 @@ routstr.{{ base_domain }} {
     }
 
     reverse_proxy localhost:{{ routstr_port | default(8000) }}
+}
+
+routstr-vision.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    reverse_proxy localhost:{{ routstr_vision_port | default(8001) }}
 }
 
 ngit.{{ base_domain }} {
@@ -315,6 +328,10 @@ runner.{{ base_domain }} {
 
     handle /routstr/* {
         reverse_proxy localhost:{{ routstr_port | default(8000) }}
+    }
+
+    handle /routstr-vision/* {
+        reverse_proxy localhost:{{ routstr_vision_port | default(8001) }}
     }
 
     handle /ngit/* {

@@ -1,0 +1,160 @@
+---
+- name: Generate or load Routstr Vision Nostr keypair
+  block:
+    - name: Check for existing Routstr Vision config
+      stat:
+        path: "{{ tollgate_base_dir }}/routstr-vision/routstr.conf"
+      register: routstr_vision_conf
+
+    - name: Load existing config
+      slurp:
+        src: "{{ tollgate_base_dir }}/routstr-vision/routstr.conf"
+      register: existing_vision_conf
+      when: routstr_vision_conf.stat.exists
+
+    - name: Parse existing config
+      set_fact:
+        routstr_vision_existing_config: "{{ (existing_vision_conf.content | b64decode | from_json) if routstr_vision_conf.stat.exists else {} }}"
+
+    - name: Set existing nsec if available
+      set_fact:
+        routstr_vision_nsec: "{{ routstr_vision_existing_config.nsec | default('') }}"
+
+    - name: Generate new Nostr keypair if needed
+      block:
+        - name: Install pynostr
+          pip:
+            name: pynostr
+            state: present
+            extra_args: "--break-system-packages"
+
+        - name: Generate Nostr key
+          shell: |
+            python3 -c "
+            from pynostr.key import PrivateKey
+            pk = PrivateKey()
+            print(pk.bech32())
+            "
+          register: vision_nsec_output
+          changed_when: false
+
+        - name: Set generated nsec
+          set_fact:
+            routstr_vision_nsec: "{{ vision_nsec_output.stdout }}"
+      when: routstr_vision_nsec | length == 0
+
+- name: Set Routstr Vision facts from env
+  set_fact:
+    routstr_vision_admin_password: "{{ lookup('env', 'ROUTSTR_VISION_ADMIN_PASSWORD') | default('changeme', true) }}"
+    routstr_vision_upstream_base_url: "{{ lookup('env', 'ROUTSTR_VISION_UPSTREAM_BASE_URL') | default('https://openrouter.ai/api/v1', true) }}"
+    routstr_vision_upstream_api_key: "{{ lookup('env', 'ROUTSTR_VISION_UPSTREAM_API_KEY') | default('', true) }}"
+    routstr_vision_node_name: "{{ lookup('env', 'ROUTSTR_VISION_NODE_NAME') | default('Tollgate Vision Node', true) }}"
+    routstr_vision_node_description: "{{ lookup('env', 'ROUTSTR_VISION_NODE_DESCRIPTION') | default('Vision-capable AI inference via Cashu micropayments', true) }}"
+    routstr_vision_ln_address: "{{ lookup('env', 'ROUTSTR_VISION_LN_ADDRESS') | default('', true) }}"
+    routstr_vision_receive_ln_address: "{{ lookup('env', 'ROUTSTR_VISION_RECEIVE_LN_ADDRESS') | default('', true) }}"
+    routstr_vision_relays: "ws://localhost:7777,wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net"
+
+- name: Create Routstr Vision directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ tollgate_base_dir }}/routstr-vision"
+    - "{{ routstr_vision_data_dir }}"
+    - "{{ routstr_vision_log_dir }}"
+    - "{{ routstr_vision_tor_dir }}"
+
+- name: Save Routstr Vision config
+  copy:
+    content: "{{ { 'nsec': routstr_vision_nsec, 'domain': routstr_vision_domain, 'mint_url': routstr_vision_mint_url } | to_nice_json }}"
+    dest: "{{ tollgate_base_dir }}/routstr-vision/routstr.conf"
+    mode: '0600'
+
+- name: Deploy dedicated Routstr Vision mint
+  include_role:
+    name: cashu_mint
+  vars:
+    mint_name: "{{ routstr_vision_mint_subdomain }}"
+    mint_units: "{{ routstr_vision_mint_units }}"
+    custom_port: "{{ routstr_vision_mint_rest_port }}"
+    custom_grpc_port: "{{ routstr_vision_mint_grpc_port }}"
+    npub: "{{ routstr_vision_operator_npub }}"
+
+- name: Deploy Routstr Vision docker-compose
+  template:
+    src: docker-compose.routstr-vision.yml.j2
+    dest: "{{ tollgate_base_dir }}/routstr-vision/docker-compose.yml"
+    mode: '0644'
+
+- name: Start Routstr Vision containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/routstr-vision"
+    state: present
+  register: routstr_vision_deploy
+
+- name: Wait for Routstr Vision to start
+  uri:
+    url: "http://localhost:{{ routstr_vision_rest_port }}/v1/models"
+    return_content: yes
+  register: routstr_vision_health
+  until: routstr_vision_health.status == 200
+  retries: 30
+  delay: 3
+
+- name: Login to Routstr Vision admin API
+  uri:
+    url: "http://localhost:{{ routstr_vision_rest_port }}/admin/api/login"
+    method: POST
+    body:
+      password: "{{ routstr_vision_admin_password }}"
+    body_format: json
+    return_content: yes
+  register: routstr_vision_login
+
+- name: Configure Routstr Vision settings via admin API
+  uri:
+    url: "http://localhost:{{ routstr_vision_rest_port }}/admin/api/settings"
+    method: PATCH
+    headers:
+      Authorization: "Bearer {{ routstr_vision_login.json.token }}"
+    body:
+      receive_ln_address: "{{ routstr_vision_receive_ln_address }}"
+      cashu_mints:
+        - "{{ routstr_vision_mint_url }}"
+      upstream_provider_fee: "{{ routstr_vision_upstream_fee | default(1.10) }}"
+      exchange_fee: "{{ routstr_vision_exchange_fee | default(1.005) }}"
+      min_payout_sat: "{{ routstr_vision_min_payout_sat | default(210) }}"
+      payout_interval_seconds: "{{ routstr_vision_payout_interval | default(900) }}"
+      enable_analytics_sharing: true
+    body_format: json
+    return_content: yes
+  register: routstr_vision_settings_result
+
+- name: Verify Routstr Vision is accessible via Caddy
+  uri:
+    url: "https://{{ routstr_vision_domain }}/v1/info"
+    return_content: yes
+    validate_certs: no
+  register: routstr_vision_caddy_health
+  until: routstr_vision_caddy_health.status == 200
+  retries: 15
+  delay: 3
+
+- name: Get Tor onion address
+  shell: "cat {{ routstr_vision_tor_dir }}/ROUTER/hostname 2>/dev/null || echo 'pending'"
+  register: vision_tor_onion
+  changed_when: false
+
+- name: Display Routstr Vision deployment info
+  debug:
+    msg: |
+      Routstr Vision node deployed successfully!
+      URL: https://{{ routstr_vision_domain }}
+      Admin: https://{{ routstr_vision_domain }}/ (password-protected dashboard)
+      Dedicated Mint: {{ routstr_vision_mint_url }}
+      Accepted Mints: {{ routstr_vision_mint_url }}, https://mint.minibits.cash/Bitcoin
+      Lightning Payout: {{ routstr_vision_receive_ln_address }}
+      Upstream: {{ routstr_vision_upstream_base_url }}
+      Onion: {{ vision_tor_onion.stdout }}
+      Nsec: saved to {{ tollgate_base_dir }}/routstr-vision/routstr.conf

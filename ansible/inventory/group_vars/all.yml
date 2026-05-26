@@ -73,6 +73,11 @@ routstr_domain: "routstr.{{ base_domain }}"
 routstr_mint_rest_port: 8089
 routstr_mint_grpc_port: 50055
 
+routstr_vision_port: 8001
+routstr_vision_domain: "routstr-vision.{{ base_domain }}"
+routstr_vision_mint_rest_port: 8094
+routstr_vision_mint_grpc_port: 50056
+
 ngit_relay_port: 7778
 
 act_runner_port: 8095
@@ -157,6 +162,7 @@ cloudflare_subdomains:
   - ci
   - git
   - routstr
+  - routstr-vision
   - vote
   - ngit
   - services
