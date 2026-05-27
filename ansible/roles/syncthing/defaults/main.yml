@@ -7,6 +7,12 @@ syncthing_gui_port: 8384
 syncthing_local_listen_port: 22001
 syncthing_local_gui_port: 8385
 syncthing_local_config_dir: "{{ lookup('env', 'HOME') }}/.local/state/syncthing"
+
+syncthing_backup_machine_listen_port: 22002
+syncthing_backup_machine_gui_port: 8386
+syncthing_backup_machine_config_dir: "{{ lookup('env', 'HOME') }}/.local/state/syncthing"
+syncthing_backup_machine_backup_root: "{{ lookup('env', 'HOME') }}/backups/orangesync"
+
 syncthing_backup_dirs:
   - id: orangesync-strfry
     label: Strfry Relay Exports

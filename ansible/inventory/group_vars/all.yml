@@ -141,7 +141,7 @@ act_runner_repos:
   - url: "http://localhost:7334/npub12m5exm2uk3xa674cc5r0hlyvccs5xxn7qv83ezuteefv5972nquq4j4szl/tollgate-infrastructure-kit.git"
     branch: "master"
   - url: "http://localhost:7334/npub12m5exm2uk3xa674cc5r0hlyvccs5xxn7qv83ezuteefv5972nquq4j4szl/tollgate-module-basic-go.git"
-    branch: "master"
+    branch: "main"
   - url: "http://localhost:7334/npub12m5exm2uk3xa674cc5r0hlyvccs5xxn7qv83ezuteefv5972nquq4j4szl/tollgate-module-basic-go-set-hostname.git"
     branch: "master"
   - url: "http://localhost:7334/npub12m5exm2uk3xa674cc5r0hlyvccs5xxn7qv83ezuteefv5972nquq4j4szl/tollgate-quaterly-reports.git"

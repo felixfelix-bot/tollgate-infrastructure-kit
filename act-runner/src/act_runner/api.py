@@ -1,20 +1,27 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable, Awaitable
 
 from aiohttp import web
 
 from act_runner.config import RunnerConfig, RepoConfig
 from act_runner.db import BuildDB
+from act_runner.watcher import get_remote_head
 
 logger = logging.getLogger(__name__)
 
 
 class RunnerAPI:
-    def __init__(self, config: RunnerConfig, db: BuildDB):
+    def __init__(
+        self,
+        config: RunnerConfig,
+        db: BuildDB,
+        trigger_fn: Callable[[RepoConfig, str, str], Awaitable[int | None]] | None = None,
+    ):
         self.config = config
         self.db = db
+        self.trigger_fn = trigger_fn
         self.app = web.Application()
         self._setup_routes()
         self._runner: Optional[web.AppRunner] = None
@@ -25,6 +32,7 @@ class RunnerAPI:
         self.app.router.add_get("/api/builds", self._builds)
         self.app.router.add_get("/api/builds/{build_id}", self._build_detail)
         self.app.router.add_get("/api/builds/{build_id}/log", self._build_log)
+        self.app.router.add_post("/api/trigger", self._trigger)
 
     async def _health(self, request: web.Request) -> web.Response:
         return web.json_response(
@@ -115,6 +123,59 @@ class RunnerAPI:
         return web.Response(
             text=log_content,
             content_type="text/plain",
+        )
+
+    async def _trigger(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "invalid JSON"}, status=400)
+
+        repo_query = body.get("repo_url", "")
+        branch = body.get("branch", "")
+        commit_sha = body.get("commit_sha", "")
+
+        if not repo_query:
+            return web.json_response({"error": "repo_url is required"}, status=400)
+        if not branch:
+            return web.json_response({"error": "branch is required"}, status=400)
+
+        repo = None
+        for r in self.config.repos:
+            if repo_query in r.url or repo_query in r.sanitized_name:
+                repo = r
+                break
+
+        if repo is None:
+            return web.json_response(
+                {"error": f"no repo matching '{repo_query}'"}, status=404
+            )
+
+        if not commit_sha:
+            temp_repo = RepoConfig(url=repo.url, branch=branch)
+            resolved = await get_remote_head(temp_repo)
+            if resolved is None:
+                return web.json_response(
+                    {"error": f"could not resolve branch '{branch}' at {repo.url}"},
+                    status=422,
+                )
+            commit_sha = resolved
+
+        if self.trigger_fn is None:
+            return web.json_response({"error": "trigger not available"}, status=503)
+
+        result = await self.trigger_fn(repo, commit_sha, branch)
+        if result is None:
+            return web.json_response({"error": "build queue not ready"}, status=503)
+
+        return web.json_response(
+            {
+                "status": "queued",
+                "repo_url": repo.url,
+                "branch": branch,
+                "commit_sha": commit_sha,
+            },
+            status=202,
         )
 
     async def start(self):

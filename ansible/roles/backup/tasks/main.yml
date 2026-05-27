@@ -12,6 +12,12 @@
     - routstr
     - caddy
 
+- name: Deploy backup status generator
+  copy:
+    src: gen-backup-status.py
+    dest: /usr/local/bin/gen-backup-status.py
+    mode: '0755'
+
 - name: Deploy backup script
   template:
     src: tollgate-backup.sh.j2

@@ -19,6 +19,7 @@
     - "{{ tollgate_base_dir }}/act-runner"
     - "{{ tollgate_base_dir }}/act-runner/work"
     - "{{ tollgate_base_dir }}/act-runner/logs"
+    - "{{ tollgate_base_dir }}/act-runner/artifacts"
     - "{{ tollgate_base_dir }}/src/act-runner"
 
 - name: Install act binary

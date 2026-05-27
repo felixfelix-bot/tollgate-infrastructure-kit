@@ -8,25 +8,80 @@
         name: syncthing
         tasks_from: vps
 
-- name: Setup Syncthing on localhost
-  hosts: localhost
-  connection: local
+- name: Setup Syncthing on backup machine
+  hosts: tollgate-backup
   become: no
   gather_facts: yes
   tasks:
     - include_role:
         name: syncthing
-        tasks_from: localhost
+        tasks_from: backup-machine
 
-- name: Configure Syncthing peering
-  hosts: localhost
-  connection: local
+- name: Gather VPS syncthing info
+  hosts: tollgate-vps
+  become: yes
+  gather_facts: no
+  tasks:
+    - name: Get VPS syncthing device ID
+      shell: "syncthing --device-id --home=/var/lib/syncthing/.config/syncthing"
+      register: vps_device_id_raw
+      changed_when: false
+
+    - name: Get VPS syncthing API key
+      command: "grep -oP '(?<=<apikey>)[^<]+' /var/lib/syncthing/.config/syncthing/config.xml"
+      register: vps_api_key_raw
+      changed_when: false
+
+    - name: Pass VPS syncthing info to both hosts
+      add_host:
+        name: "{{ item }}"
+        vps_syncthing_id: "{{ vps_device_id_raw.stdout | trim }}"
+        vps_syncthing_api_key: "{{ vps_api_key_raw.stdout | trim }}"
+      loop:
+        - tollgate-backup
+        - tollgate-vps
+
+- name: Get backup machine syncthing info
+  hosts: tollgate-backup
   become: no
-  gather_facts: yes
+  gather_facts: no
+  tasks:
+    - name: Get backup machine device ID
+      command: syncthing --device-id
+      register: backup_device_id_raw
+      changed_when: false
+
+    - name: Get backup machine API key
+      command: "grep -oP '(?<=<apikey>)[^<]+' /home/c03rad0r/.local/state/syncthing/config.xml"
+      register: backup_api_key_raw
+      changed_when: false
+
+    - name: Pass backup machine syncthing info to VPS host
+      add_host:
+        name: tollgate-vps
+        backup_syncthing_id: "{{ backup_device_id_raw.stdout | trim }}"
+        backup_syncthing_api_key: "{{ backup_api_key_raw.stdout | trim }}"
+
+- name: Configure peering on backup machine (local API)
+  hosts: tollgate-backup
+  become: no
+  gather_facts: no
   vars:
-    vps_syncthing_id: "{{ hostvars[groups['tollgate-vps'][0]].vps_syncthing_id }}"
-    vps_syncthing_api_key: "{{ hostvars[groups['tollgate-vps'][0]].vps_syncthing_api_key }}"
+    vps_syncthing_id: "{{ hostvars['tollgate-backup'].vps_syncthing_id }}"
+    vps_syncthing_api_key: "{{ hostvars['tollgate-backup'].vps_syncthing_api_key }}"
   tasks:
     - include_role:
         name: syncthing
-        tasks_from: peering
+        tasks_from: peering-local
+
+- name: Configure peering on VPS (Ansible → SSH)
+  hosts: tollgate-vps
+  become: yes
+  gather_facts: no
+  vars:
+    backup_syncthing_id: "{{ hostvars['tollgate-vps'].backup_syncthing_id }}"
+    backup_syncthing_api_key: "{{ hostvars['tollgate-vps'].backup_syncthing_api_key }}"
+  tasks:
+    - include_role:
+        name: syncthing
+        tasks_from: peering-vps

@@ -88,18 +88,13 @@
     },
     {
       "name": "ngit-relay",
-      "url": "https://ngit.{{ base_domain }}",
+      "url": "https://ngit.orangesync.tech",
       "playbook": "19-ngit-relay.yml"
     },
     {
-      "name": "services-status",
-      "url": "https://services.{{ base_domain }}",
-      "playbook": "04-caddy.yml"
-    },
-    {
-      "name": "solix-nsite",
-      "url": "https://solix.orangesync.tech",
-      "playbook": "25-solix-nsite.yml"
+      "name": "grasp-mirror",
+      "url": "https://git.orangesync.tech",
+      "playbook": "30-grasp-mirror.yml"
     }
   ],
   "groups": {

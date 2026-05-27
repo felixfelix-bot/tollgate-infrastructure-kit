@@ -35,6 +35,7 @@ class RunnerConfig:
     db_path: str = "/opt/tollgate/act-runner/builds.db"
     work_dir: str = "/opt/tollgate/act-runner/work"
     log_dir: str = "/opt/tollgate/act-runner/logs"
+    artifact_dir: str = "/opt/tollgate/act-runner/artifacts"
     poll_interval: int = 30
     api_host: str = "0.0.0.0"
     api_port: int = 8095
@@ -44,6 +45,7 @@ class RunnerConfig:
     npub: str = ""
     log_level: str = "info"
     repos: list[RepoConfig] = field(default_factory=list)
+    secrets: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, config_path: Optional[str] = None) -> "RunnerConfig":
@@ -85,6 +87,8 @@ class RunnerConfig:
             cfg.work_dir = data["work_dir"]
         if "log_dir" in data:
             cfg.log_dir = data["log_dir"]
+        if "artifact_dir" in data:
+            cfg.artifact_dir = data["artifact_dir"]
         if "act_binary" in data:
             cfg.act_binary = data["act_binary"]
         if "relays" in data:
@@ -105,6 +109,7 @@ class RunnerConfig:
             "ACT_RUNNER_POLL_INTERVAL": "poll_interval",
             "ACT_RUNNER_DB_PATH": "db_path",
             "ACT_RUNNER_WORK_DIR": "work_dir",
+            "ACT_RUNNER_ARTIFACT_DIR": "artifact_dir",
         }
         for env_key, attr in env_map.items():
             val = os.environ.get(env_key)
@@ -113,3 +118,8 @@ class RunnerConfig:
                     setattr(self, attr, int(val))
                 else:
                     setattr(self, attr, val)
+
+        for env_key, secret_name in os.environ.items():
+            if env_key.startswith("ACT_RUNNER_SECRET_"):
+                key = env_key[len("ACT_RUNNER_SECRET_"):]
+                self.secrets[key] = os.environ[env_key]

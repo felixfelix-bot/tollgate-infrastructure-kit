@@ -1,0 +1,71 @@
+---
+- name: Get VPS syncthing API key
+  command: "grep -oP '(?<=<apikey>)[^<]+' /var/lib/syncthing/.config/syncthing/config.xml"
+  register: vps_api_key_resolved
+  changed_when: false
+
+- name: Set VPS API key
+  set_fact:
+    vps_syncthing_api_key: "{{ vps_api_key_resolved.stdout | trim }}"
+
+- name: Add backup machine device to VPS syncthing
+  uri:
+    url: "http://127.0.0.1:8384/rest/config/devices/{{ backup_syncthing_id }}"
+    method: PUT
+    headers:
+      X-API-Key: "{{ vps_syncthing_api_key }}"
+      Content-Type: application/json
+    body: |
+      {
+        "deviceID": "{{ backup_syncthing_id }}",
+        "name": "backup-machine",
+        "addresses": ["dynamic"]
+      }
+    body_format: raw
+  ignore_errors: yes
+
+- name: Create sendreceive folders on VPS syncthing
+  uri:
+    url: "http://127.0.0.1:8384/rest/config/folders/{{ item.id }}"
+    method: PUT
+    headers:
+      X-API-Key: "{{ vps_syncthing_api_key }}"
+      Content-Type: application/json
+    body: |
+      {
+        "id": "{{ item.id }}",
+        "label": "{{ item.label }}",
+        "path": "{{ item.vps_path }}",
+        "type": "sendreceive",
+        "devices": [{"deviceID": "{{ backup_syncthing_id }}"}],
+        "rescanIntervalS": 300,
+        "fsWatcherEnabled": true,
+        "fsWatcherDelayS": 10
+      }
+    body_format: raw
+  loop: "{{ syncthing_backup_dirs }}"
+  loop_control:
+    label: "{{ item.id }}"
+  ignore_errors: yes
+
+- name: Restart VPS syncthing to apply config
+  systemd:
+    name: syncthing@syncthing
+    state: restarted
+  ignore_errors: yes
+
+- name: Wait for VPS syncthing after restart
+  wait_for:
+    port: 8384
+    host: 127.0.0.1
+    delay: 3
+    timeout: 30
+  ignore_errors: yes
+
+- name: Show VPS peering status
+  debug:
+    msg: |
+      VPS peering configured:
+        Backup machine device: {{ backup_syncthing_id }}
+        Folders: {{ syncthing_backup_dirs | map(attribute='id') | list | join(', ') }}
+        VPS staging dir: {{ backup_staging_dir }}

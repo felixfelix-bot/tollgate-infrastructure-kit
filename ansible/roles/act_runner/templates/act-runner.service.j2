@@ -12,6 +12,12 @@ Environment=ACT_RUNNER_CONFIG={{ tollgate_base_dir }}/act-runner/config.yaml
 Environment=ACT_RUNNER_NSEC={{ act_runner_nsec }}
 Environment=ACT_RUNNER_NPUB={{ act_runner_npub }}
 Environment=BASE_DOMAIN={{ base_domain }}
+{% if tollgate_module_nsec_hex %}
+Environment=ACT_RUNNER_SECRET_NSEC_HEX={{ tollgate_module_nsec_hex }}
+{% endif %}
+{% if act_runner_artifact_dir %}
+Environment=ACT_RUNNER_ARTIFACT_DIR={{ act_runner_artifact_dir }}
+{% endif %}
 WorkingDirectory={{ tollgate_base_dir }}/act-runner
 Restart=on-failure
 RestartSec=10

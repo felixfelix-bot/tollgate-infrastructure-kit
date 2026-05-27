@@ -1,50 +1,72 @@
 ---
 - name: Fail if device IDs not available
   fail:
-    msg: "Run VPS and localhost syncthing setup first"
+    msg: "Run VPS and backup machine syncthing setup first"
   when: >
     vps_syncthing_id is not defined or
-    local_syncthing_id is not defined or
+    backup_syncthing_id is not defined or
     vps_syncthing_api_key is not defined or
-    local_syncthing_api_key is not defined
+    backup_syncthing_api_key is not defined
 
 - name: Get VPS connection details
   set_fact:
-    vps_ip: "{{ hostvars[groups['tollgate-vps'][0]].ansible_host | default(hostvars[groups['tollgate-vps'][0]].inventory_hostname) }}"
-    vps_ssh_user: "{{ hostvars[groups['tollgate-vps'][0]].ansible_user | default('debian') }}"
-    vps_ssh_key: "{{ hostvars[groups['tollgate-vps'][0]].ansible_ssh_private_key_file | default('') }}"
+    vps_ip: "{{ hostvars['tollgate-vps'].ansible_host | default(hostvars['tollgate-vps'].inventory_hostname) }}"
+    vps_ssh_user: "{{ hostvars['tollgate-vps'].ansible_user | default('debian') }}"
+    vps_ssh_key: "{{ hostvars['tollgate-vps'].ansible_ssh_private_key_file | default('') }}"
 
-- name: Add VPS device to local syncthing
-  shell: |
-    curl -sf -X PUT "http://127.0.0.1:{{ syncthing_local_gui_port }}/rest/config/devices/{{ vps_syncthing_id }}" \
-      -H "X-API-Key: {{ local_syncthing_api_key }}" \
-      -H "Content-Type: application/json" \
-      -d '{"deviceID":"{{ vps_syncthing_id }}","name":"vps-orangesync","addresses":["tcp://{{ vps_ip }}:{{ syncthing_listen_port }}"]}'
+- name: Add VPS device to backup machine syncthing
+  uri:
+    url: "http://127.0.0.1:{{ syncthing_backup_machine_gui_port }}/rest/config/devices/{{ vps_syncthing_id }}"
+    method: PUT
+    headers:
+      X-API-Key: "{{ backup_syncthing_api_key }}"
+      Content-Type: application/json
+    body: |
+      {
+        "deviceID": "{{ vps_syncthing_id }}",
+        "name": "vps-orangesync",
+        "addresses": ["tcp://{{ vps_ip }}:{{ syncthing_listen_port }}"]
+      }
+    body_format: raw
   ignore_errors: yes
 
-- name: Create receive-only folders on local syncthing
-  shell: |
-    curl -sf -X PUT "http://127.0.0.1:{{ syncthing_local_gui_port }}/rest/config/folders/{{ item.id }}" \
-      -H "X-API-Key: {{ local_syncthing_api_key }}" \
-      -H "Content-Type: application/json" \
-      -d '{"id":"{{ item.id }}","label":"{{ item.label }}","path":"{{ syncthing_local_backup_root }}/{{ item.label | lower | replace(' ', '-') }}","type":"receiveonly","devices":[{"deviceID":"{{ vps_syncthing_id }}"}],"rescanIntervalS":3600,"fsWatcherEnabled":true,"fsWatcherDelayS":10,"versioning":{"type":"staggered","params":{"maxAge":"2592000","cleanInterval":"3600"}}}'
+- name: Create sendreceive folders on backup machine syncthing
+  uri:
+    url: "http://127.0.0.1:{{ syncthing_backup_machine_gui_port }}/rest/config/folders/{{ item.id }}"
+    method: PUT
+    headers:
+      X-API-Key: "{{ backup_syncthing_api_key }}"
+      Content-Type: application/json
+    body: |
+      {
+        "id": "{{ item.id }}",
+        "label": "{{ item.label }}",
+        "path": "{{ syncthing_backup_machine_backup_root }}/{{ item.label | lower | replace(' ', '-') }}",
+        "type": "sendreceive",
+        "devices": [{"deviceID": "{{ vps_syncthing_id }}"}],
+        "rescanIntervalS": 3600,
+        "fsWatcherEnabled": true,
+        "fsWatcherDelayS": 10,
+        "versioning": {"type": "staggered", "params": {"maxAge": "2592000", "cleanInterval": "3600"}}
+      }
+    body_format: raw
   loop: "{{ syncthing_backup_dirs }}"
   loop_control:
     label: "{{ item.id }}"
   ignore_errors: yes
 
-- name: Add local device to VPS syncthing via SSH
+- name: Add backup machine device to VPS syncthing via SSH
   shell: |
     ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
       {{ '-i ' + vps_ssh_key if vps_ssh_key else '' }} \
       {{ vps_ssh_user }}@{{ vps_ip }} \
-      "curl -sf -X PUT 'http://127.0.0.1:{{ syncthing_gui_port }}/rest/config/devices/{{ local_syncthing_id }}' \
+      "curl -sf -X PUT 'http://127.0.0.1:{{ syncthing_gui_port }}/rest/config/devices/{{ backup_syncthing_id }}' \
         -H 'X-API-Key: {{ vps_syncthing_api_key }}' \
         -H 'Content-Type: application/json' \
-        -d '{\"deviceID\":\"{{ local_syncthing_id }}\",\"name\":\"backup-laptop\",\"addresses\":[\"dynamic\"]}'"
+        -d '{\"deviceID\":\"{{ backup_syncthing_id }}\",\"name\":\"backup-machine\",\"addresses\":[\"dynamic\"]}'"
   ignore_errors: yes
 
-- name: Create send-only folders on VPS syncthing via SSH
+- name: Create sendreceive folders on VPS syncthing via SSH
   shell: |
     ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
       {{ '-i ' + vps_ssh_key if vps_ssh_key else '' }} \
@@ -52,32 +74,40 @@
       "curl -sf -X PUT 'http://127.0.0.1:{{ syncthing_gui_port }}/rest/config/folders/{{ item.id }}' \
         -H 'X-API-Key: {{ vps_syncthing_api_key }}' \
         -H 'Content-Type: application/json' \
-        -d '{\"id\":\"{{ item.id }}\",\"label\":\"{{ item.label }}\",\"path\":\"{{ item.vps_path }}\",\"type\":\"sendonly\",\"devices\":[{\"deviceID\":\"{{ local_syncthing_id }}\"}],\"rescanIntervalS\":300,\"fsWatcherEnabled\":true,\"fsWatcherDelayS\":10}'"
+        -d '{\"id\":\"{{ item.id }}\",\"label\":\"{{ item.label }}\",\"path\":\"{{ item.vps_path }}\",\"type\":\"sendreceive\",\"devices\":[{\"deviceID\":\"{{ backup_syncthing_id }}\"}],\"rescanIntervalS\":300,\"fsWatcherEnabled\":true,\"fsWatcherDelayS\":10}'"
   loop: "{{ syncthing_backup_dirs }}"
   loop_control:
     label: "{{ item.id }}"
   ignore_errors: yes
 
-- name: Restart local syncthing to apply config
+- name: Restart backup machine syncthing to apply config
   systemd:
     name: syncthing
     scope: user
     state: restarted
   ignore_errors: yes
 
-- name: Wait for local syncthing after restart
+- name: Wait for backup machine syncthing after restart
   wait_for:
-    port: "{{ syncthing_local_gui_port }}"
+    port: "{{ syncthing_backup_machine_gui_port }}"
     host: 127.0.0.1
     delay: 3
     timeout: 30
   ignore_errors: yes
 
+- name: Restart VPS syncthing via SSH
+  shell: |
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+      {{ '-i ' + vps_ssh_key if vps_ssh_key else '' }} \
+      {{ vps_ssh_user }}@{{ vps_ip }} \
+      "sudo systemctl restart syncthing@syncthing"
+  ignore_errors: yes
+
 - name: Show peering status
   debug:
     msg: |
-      Syncthing peering configured:
+      Syncthing peering configured (bidirectional sendreceive):
         VPS device: {{ vps_syncthing_id }}
-        Local device: {{ local_syncthing_id }}
+        Backup machine device: {{ backup_syncthing_id }}
         Folders: {{ syncthing_backup_dirs | map(attribute='id') | list | join(', ') }}
-        Backup destination: {{ syncthing_local_backup_root }}
+        Backup destination: {{ syncthing_backup_machine_backup_root }}
