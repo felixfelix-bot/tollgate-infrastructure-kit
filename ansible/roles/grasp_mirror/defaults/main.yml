@@ -7,6 +7,8 @@ grasp_mirror_poll_interval: 300
 grasp_mirror_npubs: "{{ lookup('env', 'MIRROR_NPUBS') | default('', true) }}"
 grasp_mirror_npubs_list:
   - "npub12m5exm2uk3xa674cc5r0hlyvccs5xxn7qv83ezuteefv5972nquq4j4szl"
+  - "npub19jxm8d9lwp6lnujdkjwkgslpgnrcqgrv9v2kw8gdmt4uzzg3pruse3s0f3"
+  - "npub1c03rad0r6q833vh57kyd3ndu2jry30nkr0wepqfpsm05vq7he25slryrnw"
 grasp_mirror_servers:
   - "relay.ngit.dev"
   - "gitnostr.com"
@@ -20,3 +22,7 @@ grasp_mirror_servers:
 grasp_mirror_index_relays:
   - "wss://index.ngit.dev"
 grasp_mirror_signing_key_file: ""
+grasp_mirror_nip46_relays:
+  - "wss://relay.orangesync.tech"
+  - "wss://ngit.orangesync.tech"
+grasp_mirror_nip46_signing_timeout: 604800

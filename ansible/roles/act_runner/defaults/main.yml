@@ -14,3 +14,5 @@ act_runner_log_level: "info"
 act_runner_repos: []
 act_runner_venv: "{{ tollgate_base_dir }}/act-runner/venv"
 act_runner_pkg_dir: "{{ tollgate_base_dir }}/src/act-runner"
+act_runner_artifact_dir: "{{ tollgate_base_dir }}/act-runner/artifacts"
+tollgate_module_nsec_hex: "{{ lookup('env', 'TOLLGATE_MODULE_NSEC_HEX') | default('', true) }}"

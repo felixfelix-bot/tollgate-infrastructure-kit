@@ -27,6 +27,14 @@
   args:
     creates: "{{ grasp_mirror_source_dir }}/.git/HEAD"
 
+- name: Update grasp-mirror source
+  shell: |
+    cd {{ grasp_mirror_source_dir }}
+    git fetch origin
+    git reset --hard origin/master
+  register: grasp_mirror_source_update
+  changed_when: "'HEAD is now at' in grasp_mirror_source_update.stdout"
+
 - name: Ensure data directory exists
   file:
     path: "{{ item }}"

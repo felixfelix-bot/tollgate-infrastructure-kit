@@ -91,3 +91,10 @@ find "$BACKUP_DIR" -name '*.jsonl' -type f -mtime +$RETENTION_DAYS -delete 2>/de
 find "$BACKUP_DIR" -name '*.tmp' -type f -mtime +1 -delete 2>/dev/null || true
 
 log "Backup complete."
+
+# --- Write backup-status.json for dashboard ---
+if [ -x /usr/local/bin/gen-backup-status.py ]; then
+    /usr/local/bin/gen-backup-status.py > /dev/null 2>&1 && log "Wrote backup-status.json" || log "WARN: gen-backup-status.py failed"
+else
+    log "SKIP: /usr/local/bin/gen-backup-status.py not found"
+fi

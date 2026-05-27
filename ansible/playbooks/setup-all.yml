@@ -30,6 +30,7 @@
     - backup
     - gitworkshop
     - grasp_mirror
+    - cloud_lab_runner
 
 - name: Deploy VPS watchdog (local health monitor + auto-redeploy)
   hosts: localhost

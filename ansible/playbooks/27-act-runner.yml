@@ -4,4 +4,4 @@
   become: yes
   gather_facts: yes
   roles:
-    - act_runner
+    - role: ../../roles/act_runner

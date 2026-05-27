@@ -34,6 +34,21 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .recheck:hover{border-color:var(--orange);color:var(--orange)}
 .rechecking{animation:spin 1s linear infinite}
 @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.dot.synced{background:var(--up);box-shadow:0 0 6px var(--up)}
+.dot.syncing{background:var(--pending);animation:pulse 1s infinite}
+.dot.problem{background:var(--down);box-shadow:0 0 6px var(--down);animation:pulse 2s infinite}
+.backup-folder{display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.75rem 0.5rem 1.5rem;border:1px solid var(--border);border-radius:6px;margin-bottom:0.3rem;background:var(--card);font-size:0.85rem}
+.backup-folder .pct{font-size:0.75rem;color:var(--dim);min-width:40px;text-align:right}
+.backup-folder .local-info{font-size:0.7rem;color:var(--dim);margin-left:0.5rem}
+.machine-row{display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0.75rem 0.3rem 2.5rem;font-size:0.75rem;color:var(--dim);border-left:1px solid var(--border);margin-left:1rem;margin-bottom:0.1rem}
+.machine-row .machine-name{min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.machine-row .machine-size{color:var(--text);font-weight:500}
+.machine-row .machine-status{font-size:0.65rem}
+.backup-status-bar{display:flex;align-items:center;gap:0.75rem;padding:0.7rem 0.75rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.4rem;background:var(--card);transition:border-color 0.2s;cursor:pointer}
+.backup-status-bar:hover{border-color:var(--orange)}
+.backup-status-bar .backup-time{font-size:0.7rem;color:var(--dim)}
+.backup-detail{overflow:hidden;max-height:0;transition:max-height 0.3s ease}
+.backup-detail.open{max-height:600px}
 footer{text-align:center;padding:1rem;color:var(--dim);font-size:0.7rem;border-top:1px solid var(--border)}
 footer .next-check{color:var(--orange)}
 @media(max-width:600px){.meta .ms{display:none}.service{padding:0.6rem}}
@@ -50,6 +65,11 @@ footer .next-check{color:var(--orange)}
 <div class="stat"><div class="num" id="s-total">-</div><div class="label">Total</div></div>
 </div>
 <div class="container" id="services"></div>
+<div class="container" id="backup-section" style="display:none">
+<div class="group-title" style="border-left-color:var(--orange);margin-top:0">Backup Sync Status</div>
+<div id="backup-overview"></div>
+<div class="backup-detail" id="backup-detail"></div>
+</div>
 <footer>Status checks run from your browser. Services showing down may be blocked by CORS policy (service is up but browser cannot probe it). <span class="next-check" id="next-check"></span></footer>
 <script>
 const SERVICES=[
@@ -171,6 +191,78 @@ for(let i=0;i<SERVICES.length;i++)checkService(i);
 
 render();
 checkAll();
+fetchBackupStatus();
+setInterval(fetchBackupStatus,60000);
+
+async function fetchBackupStatus(){
+try{
+const r=await fetch("backup-status.json?_="+Date.now());
+if(!r.ok)return;
+const data=await r.json();
+renderBackupStatus(data);
+}catch(e){console.warn("backup status fetch failed",e)}
+}
+
+function renderBackupStatus(data){
+const section=document.getElementById("backup-section");
+const overview=document.getElementById("backup-overview");
+const detail=document.getElementById("backup-detail");
+section.style.display="block";
+
+const statusMap={synced:"up",syncing:"syncing",problem:"down"};
+const dotClass=statusMap[data.overall_status]||"pending";
+const statusLabel={synced:"All Synced",syncing:"Syncing...",problem:"Problem"}[data.overall_status]||data.overall_status;
+const statusColor={synced:"var(--up)",syncing:"var(--pending)",problem:"var(--down)"}[data.overall_status]||"var(--dim)";
+
+const timeAgo=data.last_backup?timeSince(new Date(data.last_backup)):"never";
+
+overview.innerHTML=`
+<div class="backup-status-bar" onclick="toggleBackupDetail()">
+<div class="dot ${dotClass}"></div>
+<div class="info">
+<div class="name">VPS ↔ Backup Machine</div>
+<span class="backup-time">Last backup: ${timeAgo}</span>
+</div>
+<div class="meta">
+<span style="font-size:0.85rem;font-weight:600;color:${statusColor}">${statusLabel}</span>
+</div>
+</div>`;
+
+  let detailHtml="";
+  for(const[id,f] of Object.entries(data.folders||{})){
+    const fDot=statusMap[f.state]||"pending";
+    detailHtml+=`<div class="backup-folder">
+  <div class="dot ${fDot}"></div>
+  <div class="info"><div class="name">${f.label||id}</div></div>
+  <span class="local-info">${f.local_size_human||""}</span>
+  <span class="pct">${f.completion}%</span>
+</div>`;
+    for(const[mname,m] of Object.entries(f.machines||{})){
+      const connIcon=m.connected?"●":"○";
+      const mDot=m.state==="synced"?"up":m.state==="syncing"?"syncing":"down";
+      detailHtml+=`<div class="machine-row">
+  <span class="dot ${mDot}" style="width:6px;height:6px"></span>
+  <span class="machine-name">${connIcon} ${mname}</span>
+  <span class="machine-size">${m.global_size_human||"?"}</span>
+  <span class="machine-status">${m.completion===100?"✓":m.need_size_human+" left"}</span>
+</div>`;
+    }
+  }
+  detail.innerHTML=detailHtml;
+}
+
+function toggleBackupDetail(){
+const d=document.getElementById("backup-detail");
+d.classList.toggle("open");
+}
+
+function timeSince(date){
+const s=Math.floor((Date.now()-date.getTime())/1000);
+if(s<60)return s+"s ago";
+if(s<3600)return Math.floor(s/60)+"m ago";
+if(s<86400)return Math.floor(s/3600)+"h ago";
+return Math.floor(s/86400)+"d ago";
+}
 </script>
 </body>
 </html>

@@ -165,3 +165,124 @@ def test_build_log_endpoint(api_and_db):
         asyncio.get_event_loop().run_until_complete(go())
     finally:
         os.unlink(log_path)
+
+
+def test_trigger_missing_repo_url(api_and_db):
+    api, db = api_and_db
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+
+    async def go():
+        server = TestServer(api.app)
+        async with TestClient(server) as client:
+            resp = await client.post("/api/trigger", json={"branch": "main"})
+            assert resp.status == 400
+            data = await resp.json()
+            assert "repo_url" in data["error"]
+
+    asyncio.get_event_loop().run_until_complete(go())
+
+
+def test_trigger_missing_branch(api_and_db):
+    api, db = api_and_db
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+
+    async def go():
+        server = TestServer(api.app)
+        async with TestClient(server) as client:
+            resp = await client.post(
+                "/api/trigger", json={"repo_url": "https://git.example.com/repo1.git"}
+            )
+            assert resp.status == 400
+            data = await resp.json()
+            assert "branch" in data["error"]
+
+    asyncio.get_event_loop().run_until_complete(go())
+
+
+def test_trigger_repo_not_found(api_and_db):
+    api, db = api_and_db
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+
+    async def go():
+        server = TestServer(api.app)
+        async with TestClient(server) as client:
+            resp = await client.post(
+                "/api/trigger",
+                json={"repo_url": "nonexistent", "branch": "main"},
+            )
+            assert resp.status == 404
+
+    asyncio.get_event_loop().run_until_complete(go())
+
+
+def test_trigger_with_explicit_sha(api_and_db):
+    api, db = api_and_db
+    import asyncio
+    from unittest.mock import AsyncMock
+    from aiohttp.test_utils import TestClient, TestServer
+
+    triggered = []
+
+    async def mock_trigger(repo, sha, branch):
+        triggered.append((repo.url, sha, branch))
+        return 0
+
+    api.trigger_fn = mock_trigger
+
+    async def go():
+        server = TestServer(api.app)
+        async with TestClient(server) as client:
+            resp = await client.post(
+                "/api/trigger",
+                json={
+                    "repo_url": "repo1",
+                    "branch": "feature-branch",
+                    "commit_sha": "abcdef1234567890",
+                },
+            )
+            assert resp.status == 202
+            data = await resp.json()
+            assert data["status"] == "queued"
+            assert data["commit_sha"] == "abcdef1234567890"
+            assert data["branch"] == "feature-branch"
+            assert len(triggered) == 1
+            assert triggered[0] == (
+                "https://git.example.com/repo1.git",
+                "abcdef1234567890",
+                "feature-branch",
+            )
+
+    asyncio.get_event_loop().run_until_complete(go())
+
+
+def test_trigger_substring_match(api_and_db):
+    api, db = api_and_db
+    import asyncio
+    from aiohttp.test_utils import TestClient, TestServer
+
+    triggered = []
+
+    async def mock_trigger(repo, sha, branch):
+        triggered.append(repo.url)
+        return 0
+
+    api.trigger_fn = mock_trigger
+
+    async def go():
+        server = TestServer(api.app)
+        async with TestClient(server) as client:
+            resp = await client.post(
+                "/api/trigger",
+                json={
+                    "repo_url": "repo2",
+                    "branch": "develop",
+                    "commit_sha": "aabbccdd",
+                },
+            )
+            assert resp.status == 202
+            assert triggered[0] == "https://git.example.com/repo2.git"
+
+    asyncio.get_event_loop().run_until_complete(go())
