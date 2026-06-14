@@ -2,29 +2,37 @@
 syncthing_user: syncthing
 syncthing_home: "/var/lib/{{ syncthing_user }}"
 syncthing_config_dir: "{{ syncthing_home }}/.config/syncthing"
+syncthing_state_dir: "{{ syncthing_home }}/.local/state/syncthing"
 syncthing_listen_port: 22000
 syncthing_gui_port: 8384
 syncthing_local_listen_port: 22001
 syncthing_local_gui_port: 8385
 syncthing_local_config_dir: "{{ lookup('env', 'HOME') }}/.local/state/syncthing"
+
+syncthing_backup_machine_listen_port: 22002
+syncthing_backup_machine_gui_port: 8386
+syncthing_backup_machine_config_dir: "{{ lookup('env', 'HOME') }}/.local/state/syncthing"
+syncthing_backup_machine_backup_root: "{{ lookup('env', 'HOME') }}/backups/orangesync"
+
 syncthing_backup_dirs:
-  - id: orangesync-strfry
-    label: Strfry Relay Exports
-    vps_path: "{{ backup_staging_dir }}/strfry"
-  - id: orangesync-ngit-relay
-    label: ngit Relay Exports
-    vps_path: "{{ backup_staging_dir }}/ngit-relay"
   - id: orangesync-grasp
-    label: GRASP Git Repos
-    vps_path: "{{ backup_staging_dir }}/grasp"
+    label: GRASP Snapshot
+    vps_path: /opt/tollgate/snapshots/grasp
   - id: orangesync-mints
     label: Mint Databases
-    vps_path: "{{ backup_staging_dir }}/mints"
+    vps_path: "{{ tollgate_base_dir | default('/opt/tollgate') }}/mints"
   - id: orangesync-routstr
     label: Routstr Data
-    vps_path: "{{ backup_staging_dir }}/routstr"
+    vps_path: "{{ tollgate_base_dir | default('/opt/tollgate') }}/routstr"
   - id: orangesync-caddy
     label: Caddy Certs
-    vps_path: "{{ backup_staging_dir }}/caddy"
+    vps_path: "{{ tollgate_base_dir | default('/opt/tollgate') }}/caddy/data"
+  - id: orangesync-act-runner
+    label: Act Runner State
+    vps_path: "{{ tollgate_base_dir | default('/opt/tollgate') }}/act-runner"
+  - id: orangesync-static
+    label: Static Sites
+    vps_path: /srv/tollgate
+
 syncthing_local_backup_root: "{{ lookup('env', 'HOME') }}/backups/orangesync"
 backup_staging_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/backups"

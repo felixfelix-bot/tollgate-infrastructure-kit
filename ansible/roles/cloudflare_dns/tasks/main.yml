@@ -20,17 +20,30 @@
 - name: Set zone ID from API response
   set_fact:
     cloudflare_zone_id_resolved: "{{ cloudflare_zone_id if cloudflare_zone_id != '' else (cf_zone_response.json.result[0].id) }}"
-  when: cloudflare_zone_id != '' or (cf_zone_response.json.result | length > 0)
+  when: cloudflare_zone_id != '' or (cf_zone_response.json is defined and cf_zone_response.json.result | length > 0)
 
 - name: Get existing DNS records
   uri:
-    url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id_resolved }}/dns_records?type=A"
+    url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id_resolved }}/dns_records?per_page=500"
     headers:
       Authorization: "Bearer {{ cloudflare_api_token }}"
     return_content: yes
   register: cf_existing_records
 
-- name: Create A records for service subdomains
+- name: Build record map from existing DNS records (name → list of {id, content})
+  set_fact:
+    cf_record_map: >-
+      {{ cf_record_map | default({}) | combine({item.name: (cf_record_map | default({})).get(item.name, []) + [{"id": item.id, "content": item.content}]}) }}
+  loop: "{{ cf_existing_records.json.result }}"
+  when: item.type == 'A'
+  no_log: true
+
+- name: Set empty record map if no records
+  set_fact:
+    cf_record_map: "{}"
+  when: cf_record_map is not defined
+
+- name: Create/update A records for shared subdomains (both VPS IPs)
   uri:
     url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id_resolved }}/dns_records"
     method: POST
@@ -40,16 +53,42 @@
     body:
       type: A
       name: "{{ item }}.{{ base_domain }}"
-      content: "{{ vps_ip }}"
+      content: "{{ machine_ip }}"
       ttl: 300
       proxied: false
     body_format: json
     status_code: [200, 400]
-  loop: "{{ cloudflare_subdomains }}"
-  register: cf_create_result
-  changed_when: cf_create_result.json.success is defined and cf_create_result.json.success
+  loop: "{{ cloudflare_shared_subdomains | default([]) }}"
+  register: cf_shared_result
+  when: >
+    (cf_record_map | default({})).get(item + '.' + base_domain, []) |
+    selectattr('content', 'equalto', machine_ip) |
+    list | length == 0
 
-- name: Create A record for bare domain
+- name: Create/update A records for per-machine numbered subdomains
+  uri:
+    url: >-
+      {{ "https://api.cloudflare.com/client/v4/zones/" + cloudflare_zone_id_resolved + "/dns_records/" +
+         ((cf_record_map | default({})).get(item.prefix + machine_number|string + '.' + base_domain, []) | first).id
+         if ((cf_record_map | default({})).get(item.prefix + machine_number|string + '.' + base_domain, []) | length > 0)
+         else "https://api.cloudflare.com/client/v4/zones/" + cloudflare_zone_id_resolved + "/dns_records" }}
+    method: >-
+      {{ 'PUT' if ((cf_record_map | default({})).get(item.prefix + machine_number|string + '.' + base_domain, []) | length > 0) else 'POST' }}
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: "application/json"
+    body:
+      type: A
+      name: "{{ item.prefix }}{{ machine_number }}.{{ base_domain }}"
+      content: "{{ machine_ip }}"
+      ttl: 300
+      proxied: false
+    body_format: json
+    status_code: [200, 400]
+  loop: "{{ cloudflare_per_machine_subdomains | default([]) }}"
+  register: cf_numbered_result
+
+- name: Create/update A record for bare domain (both VPS IPs)
   uri:
     url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id_resolved }}/dns_records"
     method: POST
@@ -59,26 +98,97 @@
     body:
       type: A
       name: "{{ base_domain }}"
-      content: "{{ vps_ip }}"
+      content: "{{ machine_ip }}"
       ttl: 300
       proxied: false
     body_format: json
     status_code: [200, 400]
   register: cf_bare_result
+  when: >
+    (cf_record_map | default({})).get(base_domain, []) |
+    selectattr('content', 'equalto', machine_ip) |
+    list | length == 0
 
-- name: Create wildcard A record for mints subdomain
+- name: Upsert wildcard A record for mints subdomain (active VPS only)
   uri:
-    url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id_resolved }}/dns_records"
-    method: POST
+    url: >-
+      {{ "https://api.cloudflare.com/client/v4/zones/" + cloudflare_zone_id_resolved + "/dns_records/" +
+         ((cf_record_map | default({})).get('*.' + mint_domain, []) | first).id
+         if ((cf_record_map | default({})).get('*.' + mint_domain, []) | length > 0)
+         else "https://api.cloudflare.com/client/v4/zones/" + cloudflare_zone_id_resolved + "/dns_records" }}
+    method: >-
+      {{ 'PUT' if ((cf_record_map | default({})).get('*.' + mint_domain, []) | length > 0) else 'POST' }}
     headers:
       Authorization: "Bearer {{ cloudflare_api_token }}"
       Content-Type: "application/json"
     body:
       type: A
       name: "*.{{ mint_domain }}"
-      content: "{{ vps_ip }}"
+      content: "{{ machine_ip }}"
       ttl: 300
       proxied: false
     body_format: json
     status_code: [200, 400]
   register: cf_wildcard_result
+  when: machine_active | default(true)
+
+- name: Create/update VPN A record
+  uri:
+    url: >-
+      {{ "https://api.cloudflare.com/client/v4/zones/" + cloudflare_zone_id_resolved + "/dns_records/" +
+         ((cf_record_map | default({})).get('vpn.' + base_domain, []) | first).id
+         if ((cf_record_map | default({})).get('vpn.' + base_domain, []) | length > 0)
+         else "https://api.cloudflare.com/client/v4/zones/" + cloudflare_zone_id_resolved + "/dns_records" }}
+    method: >-
+      {{ 'PUT' if ((cf_record_map | default({})).get('vpn.' + base_domain, []) | length > 0) else 'POST' }}
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: "application/json"
+    body:
+      type: A
+      name: "vpn.{{ base_domain }}"
+      content: "{{ machine_ip }}"
+      ttl: 300
+      proxied: false
+    body_format: json
+    status_code: [200, 400]
+  register: cf_vpn_result
+  when: "'vpn' in (machine_cloudflare_subdomains | default([]))"
+
+- name: Create/update machine wildcard A record (*.mN.base_domain)
+  uri:
+    url: >-
+      {{ "https://api.cloudflare.com/client/v4/zones/" + cloudflare_zone_id_resolved + "/dns_records/" +
+         ((cf_record_map | default({})).get('*.' + 'm' + machine_number|string + '.' + base_domain, []) | first).id
+         if ((cf_record_map | default({})).get('*.' + 'm' + machine_number|string + '.' + base_domain, []) | length > 0)
+         else "https://api.cloudflare.com/client/v4/zones/" + cloudflare_zone_id_resolved + "/dns_records" }}
+    method: >-
+      {{ 'PUT' if ((cf_record_map | default({})).get('*.' + 'm' + machine_number|string + '.' + base_domain, []) | length > 0) else 'POST' }}
+    headers:
+      Authorization: "Bearer {{ cloudflare_api_token }}"
+      Content-Type: "application/json"
+    body:
+      type: A
+      name: "*.m{{ machine_number }}.{{ base_domain }}"
+      content: "{{ machine_ip }}"
+      ttl: 300
+      proxied: false
+    body_format: json
+    status_code: [200, 400]
+  register: cf_machine_wildcard_result
+
+- name: Display DNS update summary
+  debug:
+    msg: |
+      DNS records updated for {{ machine_id | default('unknown') }} ({{ machine_ip }}):
+      {% for sub in (cloudflare_shared_subdomains | default([])) %}
+        {{ sub }}.{{ base_domain }} (shared)
+      {% endfor %}
+      {% for sub in (cloudflare_per_machine_subdomains | default([])) %}
+        {{ sub.prefix }}{{ machine_number }}.{{ base_domain }} (per-machine)
+      {% endfor %}
+        {{ base_domain }} (shared)
+      {% if machine_active | default(true) %}
+        *.{{ mint_domain }} (active VPS only)
+      {% endif %}
+        *.m{{ machine_number }}.{{ base_domain }} (machine wildcard)

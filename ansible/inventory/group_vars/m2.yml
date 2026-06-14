@@ -1,0 +1,57 @@
+machine_id: vps2
+machine_number: 2
+machine_domain: "vps2.orangesync.tech"
+machine_ip: "{{ lookup('env', 'VPS2_IP') }}"
+other_vps_ip: "{{ lookup('env', 'VPS_IP') }}"
+machine_active: false
+
+machine_roles:
+  - system
+  - docker
+  - cloudflare_dns
+  - caddy
+  - strfry
+  - obelisk_relay
+  - blossom
+  - nsite_gateway
+  - release_explorer
+  - hive_ci
+  - mint_orchestrator
+  - cashu_brrr
+  - mint_operator_proxy
+  - mptcp_server
+  - fips
+  - nsyte_cli
+  - grasp
+  - grasp_snapshot
+  - act_runner
+  - routstr
+  - auditable_voting
+  - ngit_relay
+  - backup
+  - gitworkshop
+  - grasp_mirror
+  - cloud_lab_runner
+  - relatr
+  - micro_vpn
+  - jitsi_meet
+  - bitcoin_knots
+
+machine_cloudflare_subdomains:
+  - relay2
+  - ngit2
+  - blossom2
+  - nsite
+  - chat
+  - git
+  - services
+  - routstr
+  - vote
+  - workshop
+  - releases
+  - ci
+  - runner
+  - solix
+  - wot
+  - vpn
+  - meet

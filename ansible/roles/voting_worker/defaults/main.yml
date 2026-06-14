@@ -4,8 +4,10 @@ voting_worker_binary: "{{ tollgate_base_dir }}/auditable-voting/worker/auditable
 voting_worker_state_dir: "{{ tollgate_base_dir }}/auditable-voting/worker-state"
 voting_worker_coordinator_npub: "{{ lookup('env', 'VOTING_WORKER_COORDINATOR_NPUB') | default('', true) }}"
 voting_worker_relays:
-  - "wss://relay.{{ base_domain }}"
-  - "wss://ngit.{{ base_domain }}"
   - "wss://relay.nostr.net"
   - "wss://nos.lol"
   - "wss://relay.damus.io"
+  - "wss://relay.nostr.info"
+  - "wss://relay.nos.social"
+  - "wss://relay.momostr.pink"
+  - "wss://relay.azzamo.net"

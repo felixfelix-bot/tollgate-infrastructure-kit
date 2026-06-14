@@ -1,0 +1,8 @@
+---
+- name: Deploy Bitcoin Knots node
+  hosts: vps2
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - bitcoin_knots

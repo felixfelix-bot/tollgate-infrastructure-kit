@@ -202,7 +202,23 @@
 
 ## In Progress
 
-### 5. Backup Infrastructure (Syncthing + strfry export)
+### Dual-Machine Architecture (m1/m2)
+- [x] VPS Stats UI rendering JS added to `static/services/index.html`
+- [x] Inventory split: m1 (226) + m2 (51) groups with `machine_id`, `machine_domain`, `machine_roles`
+- [x] Caddyfile template conditional: `{% if 'role' in machine_roles %}`
+- [x] DNS role: per-machine wildcards, `in` operator for dict key checks
+- [x] `setup-m1.yml` and `setup-m2.yml` playbooks
+- [x] `setup-all.yml` imports both machine playbooks
+- [x] Deployed Caddy + VPS stats to m1 (VPS 226) — services operational
+- [x] VPS 226 back online (was unreachable, now responding)
+- [ ] Full m1 deploy (all roles) to VPS 226
+- [ ] Deploy m2 config to VPS 51
+- [ ] Create `*.m1.orangesync.tech` DNS wildcard → 226
+- [ ] Create `*.m2.orangesync.tech` DNS wildcard → 51
+- [ ] Services dashboard dual-machine view
+- [x] Committed and pushed (9f0326a)
+
+### Backup Infrastructure (Syncthing + strfry export)
 - [x] `backup` Ansible role created — daily systemd timer at 02:00 UTC
   - [x] `ansible/roles/backup/defaults/main.yml`
   - [x] `ansible/roles/backup/tasks/main.yml`
@@ -268,6 +284,25 @@
 - [x] Verified: individual nsites load (e.g. `npub1d88s....nsite.orangesync.tech` → HTTP 200)
 - [x] Verified: status page still works at `nsite.orangesync.tech/status`
 
+### 11. nsite URL Fix (plebeian-testing-nsite-actions)
+- [x] **Root cause diagnosed**: two bugs in `publish.sh`
+  - URL format: path-based `nsite.orangesync.tech/<hex>/` — gateway only resolves subdomains
+  - npub encoding: `nak key public` outputs 64-char hex — gateway expects bech32 `npub1...` in subdomain
+- [x] **Fix `publish.sh`**: `nak encode npub <hex>` → bech32, `https://<npub>.nsite.orangesync.tech/`
+- [x] **Test script**: `test-publish-url.sh` — 10/10 assertions pass (bech32 format, subdomain URL, hex≠bech32)
+- [x] **DNS wildcard fix**: `*.nsite.orangesync.tech` A record created → `23.182.128.51` (VPS 51)
+- [x] **DNS cleanup**: removed dead A records for `nsite.orangesync.tech` (66.92.204.38, 23.182.128.226)
+- [x] **Verified**: wildcard resolves correctly, nsite-gateway processes subdomain requests
+- [x] **E2E verification**: CI run #27241295341 on `feat/nsite-e2e-dashboard` — nsite URL loads successfully
+  - URL: `https://npub14e674qmj0xh5604qu6c5sftr84c8nlm27mt5j36uv9fa63wjy7pqz2yymj.nsite.orangesync.tech/`
+  - Dashboard renders with 130 test results (87 passed, 32 failed, 11 skipped)
+  - Kind 1985 announcement published with correct bech32 npub in tags
+- [x] **Upstream PR**: cherry-picked 7 CI commits onto clean branch, opened PlebeianApp/market#1004
+  - Made `announce-nsec` optional in composite action (commit `c76aad7`)
+  - Branch: `ci/nsite-e2e-dashboard-sharding`, 4 files changed (+478/-12)
+  - All cherry-picks applied with zero conflicts
+  - Plan doc: `docs/nsite-upstream-pr-plan.md`
+
 ### 10. Solix C1000 BLE Bridge nsite (`solix.orangesync.tech`)
 - [x] `solix_nsite` Ansible role created
   - [x] `ansible/roles/solix_nsite/defaults/main.yml` — relays, blossom servers, repo URL
@@ -323,6 +358,42 @@
 8. [x] **Verify FIPS mesh** — `curl http://[fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149]:80/` returns "Tollgate Infrastructure Kit - FIPS Mesh"
 9. [ ] **Custom pipeline E2E** — push `pr/*` branch to market repo, verify act-runner picks it up
 10. [ ] **Dinner vote walkthrough** — 5 voters, 5 private invite links (manual, interactive)
+11. [x] **Auditable Voting VPS2 migration** — update to latest tidley code, fix DNS, verify
+
+### Auditable Voting v0.1.64 Redeploy (tidley's Latest)
+- [x] **Rebuilt** from `tidley/auditable-voting.git` main (`3ab3079`) on VPS
+- [x] **New entry points** — `simple.html` (voter) and `simple-coordinator.html` (coordinator) built and deployed
+- [x] **Verified** — all 5 HTML pages return HTTP 200 (`index.html`, `vote.html`, `dashboard.html`, `simple.html`, `simple-coordinator.html`)
+- [x] **Onboarding guide** — `docs/auditable-voting-onboarding-guide.md` (coordinator + voter step-by-step)
+- [x] **Plan doc** — `docs/auditable-voting-family-test-plan.md` with checklist
+- [x] **Nostr DM sent** — context package sent to `npub1vc8y8836f2sjsamt8tsms74gygf7ff9z7k7m75hv7yl8uysajweqs5u87k` via NIP-04 DM
+
+### Auditable Voting VPS2 Migration (Jun 2026)
+- [x] **Diagnosed**: VPS1 (66.92.204.38) down, DNS round-robin with 3 IPs causes ~2/3 failures
+- [x] **Confirmed VPS2** (23.182.128.51) has correct source + build + Caddy config
+- [x] **Cloudflare DNS**: identified 3 A records — 2 dead, 1 alive
+- [x] **Updated VPS2** to latest `tidley/auditable-voting` main (`3ab3079` → `272fb95`)
+- [x] **Removed dead DNS A records** (66.92.204.38, 23.182.128.226) from Cloudflare
+- [x] **Verified** `vote.orangesync.tech` loads reliably — all HTML pages + JS/CSS/WASM assets return 200
+- [x] **Deployed audit proxy worker on VPS2** — built from source v0.1.16, nsec `nsec1dwj0vg...`, npub `npub1crzlqjp...`
+- [x] **Worker running** — connected to 7 relays, heartbeating, polling for coordinator delegation
+- [x] **Coordinator npub** set to `npub159dan6t2v84xa4ert70w6fvtp8s5v05jfdztp0w8h3dgyxcv0ywq53vu8h`
+- [x] **Updated Ansible role** — playbook targets `vps2`, relay list uses public relays (VPS-agnostic)
+- [ ] **Deploy audit proxy worker on VPS1** — when VPS1 comes back online (separate nsec, same coordinator)
+- [ ] **Verify worker announces** in coordinator browser UI (requires coordinator to open session and delegate)
+- [x] **CSS fix PR** — fork tidley/auditable-voting, fix `.simple-delegate-command` overflow, PR #2 opened
+- [x] **Hot-fix deployed** on VPS2 (rebuilt from fix branch, tidley latest `b62502e` + our CSS fix)
+- [ ] **Test election** — open coordinator app in browser, create questionnaire, generate invite codes, test voter flow
+- [ ] **Family test** — 75-year-old votes via unique invite link (we coordinate)
+
+### Auditable Voting Observer UX Fixes (Jun 2026)
+- [x] **Plan doc** — added to PLAN.md with three fixes
+- [x] **Fix 1: Loading indicator** — show "Loading questionnaires from Nostr relays..." instead of empty state during initial Nostr relay fetch
+- [x] **Fix 2: URL sync** — write `?q=<id>` to URL bar when questionnaire selected, so sharing preserves selection
+- [x] **Fix 3: Response loading state** — show "Loading submitted responses from Nostr relays..." while responses fetch
+- [x] **Tests pass** — 2/2 vitest tests pass (`SimpleAuditorApp.test.tsx`, `SimpleAuditorApp.search.test.ts`)
+- [x] **TypeScript clean** — no errors in `SimpleAuditorApp.tsx`
+- [ ] **Redeploy** to VPS2 via Ansible playbook
 
 ## Blocked / Upstream
 - [ ] True custom unit support (MB, KB, GB, min in keyset) — requires gRPC payment processor or CDK upstream fix

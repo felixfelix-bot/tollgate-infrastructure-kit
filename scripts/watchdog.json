@@ -3,107 +3,55 @@
   "ssh_timeout": 10,
   "http_timeout": 10,
   "cooldown": 600,
-  "ssh": {
-    "host_env": "VPS_IP",
-    "user_env": "VPS_USER",
-    "key_env": "SSH_PRIVATE_KEY_FILE",
-    "port": 22,
-    "redeploy": ["02-docker.yml"]
+  "machines": {
+    "vps-1": {
+      "ssh_host_env": "VPS_IP",
+      "ssh_user_env": "VPS_USER",
+      "ssh_key_env": "SSH_PRIVATE_KEY_FILE",
+      "ssh_become_env": "VPS_PASSWORD",
+      "ansible_host": "vps-1"
+    },
+    "vps-2": {
+      "ssh_host_env": "VPS2_IP",
+      "ssh_user_env": "VPS2_USER",
+      "ssh_key_env": "SSH_PRIVATE_KEY_FILE",
+      "ssh_become_env": "VPS2_PASSWORD",
+      "ansible_host": "vps-2"
+    }
   },
   "services": [
-    {
-      "name": "caddy",
-      "url": "https://orangesync.tech",
-      "playbook": "04-caddy.yml"
-    },
-    {
-      "name": "strfry",
-      "url": "https://relay.orangesync.tech",
-      "playbook": "05-strfry.yml"
-    },
-    {
-      "name": "obelisk",
-      "url": "https://chat.orangesync.tech",
-      "playbook": "06-obelisk-relay.yml"
-    },
-    {
-      "name": "blossom",
-      "url": "https://blossom.orangesync.tech",
-      "playbook": "07-blossom.yml"
-    },
-    {
-      "name": "nsite-gateway",
-      "url": "https://nsite.orangesync.tech",
-      "playbook": "08-nsite-gateway.yml"
-    },
-    {
-      "name": "releases",
-      "url": "https://releases.orangesync.tech",
-      "playbook": "09-release-explorer.yml"
-    },
-    {
-      "name": "grasp",
-      "url": "https://git.orangesync.tech",
-      "playbook": "15-grasp.yml"
-    },
-    {
-      "name": "test-mb-mint",
-      "url": "https://test-mb.mints.orangesync.tech/v1/info",
-      "playbook": "deploy-test-mints.yml"
-    },
-    {
-      "name": "test-kb-mint",
-      "url": "https://test-kb.mints.orangesync.tech/v1/info",
-      "playbook": "deploy-test-mints.yml"
-    },
-    {
-      "name": "test-gb-mint",
-      "url": "https://test-gb.mints.orangesync.tech/v1/info",
-      "playbook": "deploy-test-mints.yml"
-    },
-    {
-      "name": "test-min-mint",
-      "url": "https://test-min.mints.orangesync.tech/v1/info",
-      "playbook": "deploy-test-mints.yml"
-    },
-    {
-      "name": "cashu-brrr",
-      "url": "https://print.mints.orangesync.tech",
-      "playbook": "16-cashu-brrr.yml"
-    },
-    {
-      "name": "mint-operator-proxy",
-      "url": "https://print.mints.orangesync.tech/api/health",
-      "playbook": "17-mint-operator-proxy.yml"
-    },
-    {
-      "name": "auditable-voting",
-      "url": "https://vote.orangesync.tech",
-      "playbook": "17-auditable-voting.yml"
-    },
-    {
-      "name": "routstr",
-      "url": "https://routstr.orangesync.tech/v1/models",
-      "playbook": "18-routstr.yml"
-    },
-    {
-      "name": "ngit-relay",
-      "url": "https://ngit.{{ base_domain }}",
-      "playbook": "19-ngit-relay.yml"
-    },
-    {
-      "name": "services-status",
-      "url": "https://services.{{ base_domain }}",
-      "playbook": "04-caddy.yml"
-    },
-    {
-      "name": "solix-nsite",
-      "url": "https://solix.orangesync.tech",
-      "playbook": "25-solix-nsite.yml"
-    }
+    {"name": "caddy-vps1",       "url": "https://orangesync.tech",                               "playbook": "04-caddy.yml",            "machine": "vps-1"},
+    {"name": "relay1",           "url": "https://relay1.orangesync.tech",                        "playbook": "05-strfry.yml",           "machine": "vps-1"},
+    {"name": "relay2",           "url": "https://relay2.orangesync.tech",                        "playbook": "05-strfry.yml",           "machine": "vps-2"},
+    {"name": "obelisk",          "url": "https://chat.orangesync.tech",                          "playbook": "06-obelisk-relay.yml",    "machine": "vps-1"},
+    {"name": "blossom1",         "url": "https://blossom1.orangesync.tech",                      "playbook": "07-blossom.yml",          "machine": "vps-1"},
+    {"name": "blossom2",         "url": "https://blossom2.orangesync.tech",                      "playbook": "07-blossom.yml",          "machine": "vps-2"},
+    {"name": "nsite-gateway",    "url": "https://nsite.orangesync.tech",                         "playbook": "08-nsite-gateway.yml",    "machine": "vps-1"},
+    {"name": "releases",         "url": "https://releases.orangesync.tech",                      "playbook": "09-release-explorer.yml", "machine": "vps-1"},
+    {"name": "grasp",            "url": "https://git.orangesync.tech",                           "playbook": "15-grasp.yml",            "machine": "vps-1"},
+    {"name": "test-mb-mint",     "url": "https://test-mb.mints.orangesync.tech/v1/info",         "playbook": "deploy-test-mints.yml",   "machine": "vps-1"},
+    {"name": "test-kb-mint",     "url": "https://test-kb.mints.orangesync.tech/v1/info",         "playbook": "deploy-test-mints.yml",   "machine": "vps-1"},
+    {"name": "test-gb-mint",     "url": "https://test-gb.mints.orangesync.tech/v1/info",         "playbook": "deploy-test-mints.yml",   "machine": "vps-1"},
+    {"name": "test-min-mint",    "url": "https://test-min.mints.orangesync.tech/v1/info",        "playbook": "deploy-test-mints.yml",   "machine": "vps-1"},
+    {"name": "cashu-brrr",       "url": "https://print.mints.orangesync.tech",                   "playbook": "16-cashu-brrr.yml",       "machine": "vps-1"},
+    {"name": "mint-operator-proxy","url":"https://print.mints.orangesync.tech/api/health",        "playbook": "17-mint-operator-proxy.yml","machine":"vps-1"},
+    {"name": "auditable-voting", "url": "https://vote.orangesync.tech",                          "playbook": "17-auditable-voting.yml", "machine": "vps-1"},
+    {"name": "routstr",          "url": "https://routstr.orangesync.tech/v1/models",             "playbook": "18-routstr.yml",          "machine": "vps-1"},
+    {"name": "ngit1",            "url": "https://ngit1.orangesync.tech",                         "playbook": "19-ngit-relay.yml",       "machine": "vps-1"},
+    {"name": "ngit2",            "url": "https://ngit2.orangesync.tech",                         "playbook": "19-ngit-relay.yml",       "machine": "vps-2"},
+    {"name": "grasp-mirror",     "url": "https://git.orangesync.tech/api/mirror-health",         "playbook": "30-grasp-mirror.yml",     "machine": "vps-1"},
+    {"name": "relatr",           "url": "https://wot.orangesync.tech",                           "playbook": "32-relatr.yml",           "machine": "vps-1"},
+    {"name": "caddy-vps2",       "url": "https://vps2.orangesync.tech",                          "playbook": "04-caddy.yml",            "machine": "vps-2"},
+    {"name": "vpn",              "url": "https://vpn.orangesync.tech/api/v1/status",             "playbook": "31-micro-vpn.yml",        "machine": "vps-2"}
   ],
+  "failover": {
+    "detection_threshold": 3,
+    "failback_delay_seconds": 300,
+    "auto_failback": false
+  },
   "groups": {
     "mints": ["test-mb-mint", "test-kb-mint", "test-gb-mint", "test-min-mint"],
-    "core": ["caddy", "strfry", "blossom"]
+    "vps-1-core": ["caddy-vps1", "relay1", "blossom1", "grasp"],
+    "vps-2-core": ["caddy-vps2", "relay2", "ngit2", "vpn"]
   }
 }

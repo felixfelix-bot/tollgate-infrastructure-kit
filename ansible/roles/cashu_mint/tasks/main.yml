@@ -112,6 +112,7 @@
     state: present
     build: always
   register: mint_deploy
+  when: machine_active | default(true)
 
 - name: Wait for mint to start
   uri:
@@ -121,6 +122,7 @@
   until: mint_health.status == 200
   retries: 30
   delay: 2
+  when: machine_active | default(true)
 
 - name: Verify mint is accessible via Caddy
   uri:
@@ -131,10 +133,12 @@
   until: mint_caddy_health.status == 200
   retries: 15
   delay: 2
+  when: machine_active | default(true)
 
 - name: Reload Caddy to pick up new routes
   shell: docker exec tollgate-caddy caddy reload --config /etc/caddy/Caddyfile 2>&1
   register: caddy_reload
+  when: machine_active | default(true)
 
 - name: Update mint registry
   shell: |

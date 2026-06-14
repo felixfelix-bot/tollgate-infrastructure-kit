@@ -1,6 +1,8 @@
 ---
 - name: Deploy Auditable Voting Worker
-  hosts: tollgate-vps
+  hosts: vps2
+  ignore_unreachable: true
+  serial: 1
   become: yes
   gather_facts: yes
   roles:

@@ -1,0 +1,23 @@
+services:
+  {{ relatr_container_name }}:
+    image: ghcr.io/contextvm/relatr:latest
+    container_name: {{ relatr_container_name }}
+    restart: unless-stopped
+    user: "{{ relatr_uid }}:{{ relatr_gid }}"
+    environment:
+      SERVER_SECRET_KEY: "{{ relatr_server_secret }}"
+      DEFAULT_SOURCE_PUBKEY: "{{ relatr_source_pubkey }}"
+      NOSTR_RELAYS: "{{ relatr_nostr_relays }}"
+      SERVER_RELAYS: "{{ relatr_server_relays }}"
+      NUMBER_OF_HOPS: "{{ relatr_number_of_hops }}"
+      DECAY_FACTOR: "{{ relatr_decay_factor }}"
+      CACHE_TTL_HOURS: "{{ relatr_cache_ttl_hours }}"
+      SYNC_INTERVAL_HOURS: "{{ relatr_sync_interval_hours }}"
+      TA_ENABLED: "{{ 'true' if relatr_ta_enabled else 'false' }}"
+      IS_PUBLIC_SERVER: "{{ 'true' if relatr_is_public_server else 'false' }}"
+      DATABASE_PATH: "./data/relatr.db"
+    volumes:
+      - {{ relatr_data_dir }}:/usr/src/app/data
+      - {{ relatr_plugins_dir }}:/usr/src/app/plugins
+    ports:
+      - 127.0.0.1:{{ relatr_port }}:3000

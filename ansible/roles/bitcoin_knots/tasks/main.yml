@@ -1,0 +1,153 @@
+---
+- name: Install build dependencies
+  apt:
+    name:
+      - git
+      - cmake
+      - build-essential
+      - libtool
+      - autotools-dev
+      - automake
+      - pkg-config
+      - bsdmainutils
+      - python3
+      - libevent-dev
+      - libboost-dev
+      - libboost-system-dev
+      - libboost-filesystem-dev
+      - libboost-test-dev
+      - libboost-thread-dev
+    state: present
+    update_cache: yes
+
+- name: Create data directory
+  file:
+    path: "{{ bitcoin_knots_data_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Check if bitcoind binary already installed
+  stat:
+    path: /usr/local/bin/bitcoind
+  register: knots_binary
+
+- name: Clone Bitcoin Knots source
+  shell: |
+    git clone --depth 1 --branch {{ bitcoin_knots_version }} {{ bitcoin_knots_repo }} {{ tollgate_base_dir }}/src/bitcoin-knots
+  args:
+    creates: "{{ tollgate_base_dir }}/src/bitcoin-knots/CMakeLists.txt"
+  when: not knots_binary.stat.exists
+
+- name: Check if CMakeLists.txt exists (CMake vs Autotools)
+  stat:
+    path: "{{ tollgate_base_dir }}/src/bitcoin-knots/CMakeLists.txt"
+  register: knots_cmake
+  when: not knots_binary.stat.exists
+
+- name: Build Bitcoin Knots with CMake
+  block:
+    - name: Configure Bitcoin Knots (CMake, no wallet, no GUI)
+      shell: |
+        cmake -B build \
+          -DENABLE_WALLET=OFF \
+          -DBUILD_GUI=OFF \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DRDTS_CONSENT=IMPLICIT
+      args:
+        chdir: "{{ tollgate_base_dir }}/src/bitcoin-knots"
+
+    - name: Build Bitcoin Knots (single core)
+      shell: cmake --build build -j1
+      args:
+        chdir: "{{ tollgate_base_dir }}/src/bitcoin-knots"
+
+    - name: Install Bitcoin Knots (CMake)
+      shell: cmake --install build
+      args:
+        chdir: "{{ tollgate_base_dir }}/src/bitcoin-knots"
+  when: 
+    - not knots_binary.stat.exists
+    - knots_cmake.stat.exists
+
+- name: Build Bitcoin Knots with Autotools
+  block:
+    - name: Run autogen.sh
+      shell: ./autogen.sh
+      args:
+        chdir: "{{ tollgate_base_dir }}/src/bitcoin-knots"
+        creates: "{{ tollgate_base_dir }}/src/bitcoin-knots/configure"
+
+    - name: Configure Bitcoin Knots (Autotools)
+      shell: |
+        ./configure --disable-wallet --without-gui --without-miniupnpc
+      args:
+        chdir: "{{ tollgate_base_dir }}/src/bitcoin-knots"
+
+    - name: Build Bitcoin Knots (single core)
+      shell: make -j1
+      args:
+        chdir: "{{ tollgate_base_dir }}/src/bitcoin-knots"
+
+    - name: Install Bitcoin Knots (Autotools)
+      shell: make install
+      args:
+        chdir: "{{ tollgate_base_dir }}/src/bitcoin-knots"
+  when: 
+    - not knots_binary.stat.exists
+    - not knots_cmake.stat.exists
+
+- name: Deploy bitcoin.conf
+  template:
+    src: bitcoin-knots.conf.j2
+    dest: "{{ bitcoin_knots_data_dir }}/bitcoin.conf"
+    mode: '0600'
+  notify: restart bitcoind-knots
+
+- name: Deploy bitcoind-knots systemd service
+  template:
+    src: bitcoind-knots.service.j2
+    dest: /etc/systemd/system/bitcoind-knots.service
+    mode: '0644'
+  notify: restart bitcoind-knots
+
+- name: Deploy logrotate for bitcoind-knots
+  copy:
+    dest: /etc/logrotate.d/bitcoind-knots
+    content: |
+      {{ bitcoin_knots_data_dir }}/debug.log {
+          daily
+          rotate 3
+          copytruncate
+          compress
+          missingok
+          notifempty
+      }
+    mode: '0644'
+
+- name: Enable bitcoind-knots service
+  systemd:
+    name: bitcoind-knots
+    enabled: yes
+    daemon_reload: yes
+
+- name: Start bitcoind-knots (triggers IBD)
+  systemd:
+    name: bitcoind-knots
+    state: started
+
+- name: Wait for bitcoind-knots to begin initialization
+  wait_for:
+    port: "{{ bitcoin_knots_rpc_port }}"
+    host: 127.0.0.1
+    delay: 10
+    timeout: 120
+  ignore_errors: yes
+
+- name: Display Bitcoin Knots info
+  debug:
+    msg: |
+      Bitcoin Knots {{ bitcoin_knots_version }} deployed on port {{ bitcoin_knots_port }}
+      Data dir: {{ bitcoin_knots_data_dir }}
+      Pruned: {{ bitcoin_knots_prune_mb }} MB (~{{ (bitcoin_knots_prune_mb / 1000) | round(0) }} GB)
+      RAM limit: {{ bitcoin_knots_memory_max }}
+      IBD status: bitcoin-cli -conf={{ bitcoin_knots_data_dir }}/bitcoin.conf getblockchaininfo

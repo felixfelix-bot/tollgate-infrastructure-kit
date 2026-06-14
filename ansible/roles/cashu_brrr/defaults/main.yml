@@ -1,5 +1,5 @@
 cashu_brrr_repo_url: "https://github.com/gandlafbtc/cashu-brrr.git"
-cashu_brrr_repo_branch: "master"
+cashu_brrr_repo_branch: "feat/operator-mint-mode"
 cashu_brrr_local_repo: ""
 cashu_brrr_domain: "print.{{ mint_domain }}"
 cashu_brrr_static_dir: "{{ tollgate_static_dir }}/cashu-brrr"

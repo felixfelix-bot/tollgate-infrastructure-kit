@@ -1,0 +1,73 @@
+services:
+  {{ micro_vpn_wireguard_container_name }}:
+    image: {{ micro_vpn_wireguard_image }}
+    container_name: {{ micro_vpn_wireguard_container_name }}
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    volumes:
+      - {{ micro_vpn_config_dir }}/wg0.conf:/config/wg0.conf:ro
+      - {{ micro_vpn_config_dir }}/server_public.key:/config/server_public.key:ro
+      - /lib/modules:/lib/modules:ro
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - PEERS=0
+      - SERVERPORT={{ micro_vpn_wireguard_port }}
+      - INTERNAL_SUBNET={{ micro_vpn_subnet_base }}.0.0/16
+
+  {{ micro_vpn_container_name }}:
+    build:
+      context: {{ micro_vpn_data_dir }}/api
+      dockerfile: Dockerfile
+    image: {{ micro_vpn_image }}
+    container_name: {{ micro_vpn_container_name }}
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - {{ micro_vpn_db_dir }}:/var/lib/vpn-api
+      - {{ micro_vpn_config_dir }}:/config
+    environment:
+      - VPN_SERVER_IP={{ micro_vpn_server_public_ip }}
+      - VPN_SUBNET_BASE={{ micro_vpn_subnet_base }}
+      - SERVER_VPN_IP={{ micro_vpn_server_vpn_ip }}
+      - WIREGUARD_PORT={{ micro_vpn_wireguard_port }}
+      - CASHU_MINT_URL={{ micro_vpn_cashu_mint_url }}
+      - CASHU_MINT_UNIT={{ micro_vpn_cashu_mint_unit }}
+      - SUBSCRIPTION_PRICE_PER_PORT_SATS={{ micro_vpn_price_per_port_sats }}
+      - SUBSCRIPTION_DURATION_DAYS={{ micro_vpn_duration_days }}
+      - PORT_POOL_RANGES={{ micro_vpn_port_pool_ranges }}
+      - RESERVED_PORTS={{ micro_vpn_reserved_ports }}
+      - DB_PATH=/var/lib/vpn-api/vpn.db
+      - SERVER_PUBLIC_KEY_PATH=/config/server_public.key
+      - FLASK_PORT={{ micro_vpn_api_port }}
+    depends_on:
+      - {{ micro_vpn_wireguard_container_name }}
+
+  {{ micro_vpn_worker_container_name }}:
+    build:
+      context: {{ micro_vpn_data_dir }}/api
+      dockerfile: Dockerfile
+    image: {{ micro_vpn_image }}
+    container_name: {{ micro_vpn_worker_container_name }}
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - {{ micro_vpn_db_dir }}:/var/lib/vpn-api
+      - {{ micro_vpn_config_dir }}:/config
+    environment:
+      - VPN_API_URL=http://localhost:{{ micro_vpn_api_port }}
+      - WORKER_MODE=true
+      - WORKER_CHECK_INTERVAL={{ micro_vpn_worker_check_interval }}
+      - WIREGUARD_INTERFACE=wg0
+      - DB_PATH=/var/lib/vpn-api/vpn.db
+    depends_on:
+      - {{ micro_vpn_container_name }}
+    entrypoint: ["python", "worker.py"]

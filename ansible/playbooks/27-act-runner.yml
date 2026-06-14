@@ -1,7 +1,9 @@
 ---
 - name: Deploy ACT Runner (CI/CD for GRASP repos)
-  hosts: tollgate-vps
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
   become: yes
   gather_facts: yes
   roles:
-    - act_runner
+    - role: ../../roles/act_runner

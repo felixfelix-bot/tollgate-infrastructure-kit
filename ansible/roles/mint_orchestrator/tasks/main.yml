@@ -7,6 +7,7 @@
   loop:
     - "{{ tollgate_base_dir }}/mints"
     - "{{ tollgate_base_dir }}/mints-dashboard"
+    - "{{ tollgate_base_dir }}/src/mint-orchestrator"
     - "/var/log/tollgate"
 
 - name: Create empty registry if not exists
@@ -16,16 +17,27 @@
     force: no
     mode: "0644"
 
+- name: Set repo root path
+  set_fact:
+    repo_root: "{{ inventory_dir | dirname | dirname }}"
+
 - name: Copy dashboard files
-  copy:
-    src: "{{ playbook_dir }}/../../../mint-dashboard/"
+  synchronize:
+    src: "{{ repo_root }}/mint-dashboard/"
     dest: "{{ tollgate_base_dir }}/mints-dashboard/"
-    mode: "0644"
-  failed_when: false
+    delete: yes
+  ignore_errors: yes
+
+- name: Copy mint-orchestrator source
+  synchronize:
+    src: "{{ repo_root }}/mint-orchestrator/"
+    dest: "{{ tollgate_base_dir }}/src/mint-orchestrator/"
+    delete: yes
+  ignore_errors: yes
 
 - name: Install Python venv and dependencies
   pip:
-    name: "file://{{ playbook_dir }}/../../../mint-orchestrator"
+    name: "file://{{ tollgate_base_dir }}/src/mint-orchestrator"
     virtualenv: "{{ tollgate_base_dir }}/mint-orchestrator-venv"
     virtualenv_command: python3 -m venv
 
@@ -42,3 +54,4 @@
     state: started
     enabled: yes
     daemon_reload: yes
+  when: machine_active | default(true)

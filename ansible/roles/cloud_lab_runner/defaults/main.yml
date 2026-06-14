@@ -1,0 +1,10 @@
+---
+cloud_lab_runner_enabled: false
+cloud_lab_workdir: "{{ ansible_env.HOME }}/tollgate-virtual-lab"
+cloud_lab_openwrt_version: "24.10.1"
+cloud_lab_openwrt_image: "openwrt-{{ cloud_lab_openwrt_version }}-x86-64-generic-ext4-rootfs.img.gz"
+cloud_lab_openwrt_url: "https://downloads.openwrt.org/releases/{{ cloud_lab_openwrt_version }}/targets/x86/64/{{ cloud_lab_openwrt_image }}"
+cloud_lab_debian_image: "debian-12-nocloud-amd64.qcow2"
+cloud_lab_debian_url: "https://cloud.debian.org/images/cloud/bookworm/latest/{{ cloud_lab_debian_image }}"
+cloud_lab_debian_disk_size: "10G"
+cloud_lab_bake_playwright: false

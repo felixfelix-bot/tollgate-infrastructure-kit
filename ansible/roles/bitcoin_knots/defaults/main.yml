@@ -1,0 +1,12 @@
+bitcoin_knots_version: "v29.3.knots20260508"
+bitcoin_knots_repo: "https://github.com/bitcoinknots/bitcoin.git"
+bitcoin_knots_data_dir: "/opt/tollgate/bitcoin-knots"
+bitcoin_knots_port: 8334
+bitcoin_knots_prune_mb: 10000
+bitcoin_knots_dbcache_mb: 100
+bitcoin_knots_max_connections: 15
+bitcoin_knots_memory_high: "700M"
+bitcoin_knots_memory_max: "800M"
+bitcoin_knots_rpc_port: 8335
+bitcoin_knots_rpc_user: "tollgate"
+bitcoin_knots_rpc_password: "changeme-use-vault"

@@ -1,0 +1,8 @@
+[Unit]
+Description=Tollgate VPS Stats Generator
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gen-vps-stats.py
+StandardOutput=journal
+StandardError=journal

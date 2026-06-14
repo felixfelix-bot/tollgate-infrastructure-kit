@@ -8,7 +8,11 @@ WorkingDirectory={{ tollgate_base_dir }}/src/cashu-brrr/server
 ExecStart=/usr/bin/npx tsx src/index.ts
 Environment=PORT={{ mint_operator_proxy_port }}
 Environment=CDK_MINTD_REST_URL={{ mint_operator_proxy_cdk_url }}
+Environment=CDK_MINTD_GRPC_URL=127.0.0.1:50051
+Environment=CDK_MINTD_GRPC_API_KEY={{ mint_operator_proxy_grpc_api_key }}
 Environment=OPERATOR_NPUBS={{ mint_operator_proxy_npubs }}
+Environment=MINT_REGISTRY_PATH={{ mint_operator_proxy_registry_path }}
+Environment=MINT_DOMAIN={{ mint_operator_proxy_mint_domain }}
 Restart=on-failure
 RestartSec=5
 

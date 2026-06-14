@@ -1,3 +1,4 @@
+{% if 'mint_orchestrator' in machine_roles and machine_active | default(true) %}
 *.{{ mint_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
@@ -5,47 +6,50 @@
 
     @test-mb host test-mb.{{ mint_domain }}
     handle @test-mb {
-        reverse_proxy localhost:8085
+        reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
     }
 
     @test-kb host test-kb.{{ mint_domain }}
     handle @test-kb {
-        reverse_proxy localhost:8086
+        reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
     }
 
     @test-gb host test-gb.{{ mint_domain }}
     handle @test-gb {
-        reverse_proxy localhost:8087
+        reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
     }
 
     @test-min host test-min.{{ mint_domain }}
     handle @test-min {
-        reverse_proxy localhost:8088
+        reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
     }
 
     @testnut-cdk host testnut-cdk.{{ mint_domain }}
     handle @testnut-cdk {
-        reverse_proxy localhost:8091
+        reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
     }
 
     @testnut-nutshell host testnut-nutshell.{{ mint_domain }}
     handle @testnut-nutshell {
-        reverse_proxy localhost:8092
+        reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
     }
 
     @testnut-compat host testnut-compat.{{ mint_domain }}
     handle @testnut-compat {
-        reverse_proxy localhost:8093
+        reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
     }
 
     @routstr-mint host routstr-mint.{{ mint_domain }}
     handle @routstr-mint {
-        reverse_proxy localhost:{{ routstr_mint_rest_port | default(8089) }}
+        reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
     }
 
     @print host print.{{ mint_domain }}
     handle @print {
         handle /api/* {
+            reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
+        }
+        handle /v1/* {
             reverse_proxy localhost:{{ mint_operator_proxy_port | default(3000) }}
         }
         handle {
@@ -70,76 +74,39 @@
         respond "Mint not found" 404
     }
 }
+{% endif %}
 
-routstr.{{ base_domain }} {
-    tls {
-        dns cloudflare {env.CF_API_TOKEN}
-    }
-
-    reverse_proxy localhost:{{ routstr_port | default(8000) }}
-}
-
-ngit.{{ base_domain }} {
-    tls {
-        dns cloudflare {env.CF_API_TOKEN}
-    }
-
-    reverse_proxy localhost:{{ ngit_relay_port | default(7778) }}
-}
-
-services.{{ base_domain }} {
-    tls {
-        dns cloudflare {env.CF_API_TOKEN}
-    }
-
-    root * {{ tollgate_static_dir }}/services
-    file_server
-}
-
-vote.{{ base_domain }} {
-    tls {
-        dns cloudflare {env.CF_API_TOKEN}
-    }
-
-    root * {{ tollgate_static_dir }}/auditable-voting
-    file_server
-    try_files {path} /index.html
-}
-
-solix.{{ base_domain }} {
-    tls {
-        dns cloudflare {env.CF_API_TOKEN}
-    }
-
-    root * {{ tollgate_static_dir }}/solix
-    file_server
-    try_files {path} /index.html
-}
-
-relay.{{ base_domain }} {
+{% if 'strfry' in machine_roles %}
+relay{{ machine_number }}.{{ base_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
 
     reverse_proxy localhost:{{ strfry_port }}
 }
+{% endif %}
 
-chat.{{ base_domain }} {
+{% if 'ngit_relay' in machine_roles %}
+ngit{{ machine_number }}.{{ base_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
 
-    reverse_proxy localhost:{{ obelisk_port }}
+    reverse_proxy localhost:{{ ngit_relay_port | default(7778) }}
 }
+{% endif %}
 
-blossom.{{ base_domain }} {
+{% if 'blossom' in machine_roles %}
+blossom{{ machine_number }}.{{ base_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
 
     reverse_proxy localhost:{{ blossom_port }}
 }
+{% endif %}
 
+{% if 'nsite_gateway' in machine_roles %}
 *.nsite.{{ base_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
@@ -155,27 +122,19 @@ nsite.{{ base_domain }} {
 
     reverse_proxy localhost:{{ nsite_gateway_port }}
 }
+{% endif %}
 
-releases.{{ base_domain }} {
+{% if 'obelisk_relay' in machine_roles %}
+chat.{{ base_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
 
-    root * {{ tollgate_static_dir }}/releases
-    file_server
-    try_files {path} /index.html
+    reverse_proxy localhost:{{ obelisk_port }}
 }
+{% endif %}
 
-ci.{{ base_domain }} {
-    tls {
-        dns cloudflare {env.CF_API_TOKEN}
-    }
-
-    root * {{ tollgate_static_dir }}/hive-ci
-    file_server
-    try_files {path} /index.html
-}
-
+{% if 'grasp' in machine_roles and machine_active | default(true) %}
 git.{{ base_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
@@ -189,7 +148,67 @@ git.{{ base_domain }} {
         reverse_proxy localhost:{{ grasp_port }}
     }
 }
+{% endif %}
 
+{% if 'routstr' in machine_roles and machine_active | default(true) %}
+routstr.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    reverse_proxy localhost:{{ routstr_port | default(8000) }}
+}
+{% endif %}
+
+{% if 'release_explorer' in machine_roles %}
+releases.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    root * {{ tollgate_static_dir }}/releases
+    file_server
+    try_files {path} /index.html
+}
+{% endif %}
+
+{% if 'hive_ci' in machine_roles %}
+ci.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    root * {{ tollgate_static_dir }}/hive-ci
+    file_server
+    try_files {path} /index.html
+}
+{% endif %}
+
+{% if 'auditable_voting' in machine_roles %}
+vote.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    root * {{ tollgate_static_dir }}/auditable-voting
+    file_server
+    try_files {path} /index.html
+}
+{% endif %}
+
+{% if 'solix_nsite' in machine_roles %}
+solix.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    root * {{ tollgate_static_dir }}/solix
+    file_server
+    try_files {path} /index.html
+}
+{% endif %}
+
+{% if 'gitworkshop' in machine_roles %}
 {{ gitworkshop_subdomain | default('workshop') }}.{{ base_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
@@ -199,7 +218,9 @@ git.{{ base_domain }} {
     file_server
     try_files {path} /index.html
 }
+{% endif %}
 
+{% if 'act_runner' in machine_roles and machine_active | default(true) %}
 runner.{{ base_domain }} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
@@ -215,6 +236,45 @@ runner.{{ base_domain }} {
         try_files {path} /index.html
     }
 }
+{% endif %}
+
+{% if 'backup' in machine_roles %}
+services.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    handle /api/mirror-health* {
+        reverse_proxy localhost:{{ grasp_mirror_health_port | default(7335) }}
+    }
+
+    handle {
+        root * {{ tollgate_static_dir }}/services
+        file_server
+        try_files {path} /index.html
+    }
+}
+{% endif %}
+
+{% if 'relatr' in machine_roles %}
+wot.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    reverse_proxy localhost:{{ relatr_port | default(3000) }}
+}
+{% endif %}
+
+{% if 'micro_vpn' in machine_roles %}
+vpn.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    reverse_proxy localhost:{{ micro_vpn_api_port | default(5010) }}
+}
+{% endif %}
 
 {{ base_domain }} {
     tls {
@@ -224,45 +284,76 @@ runner.{{ base_domain }} {
     log {
         output stdout
     }
-
+{% if 'strfry' in machine_roles %}
     handle /relay/* {
         reverse_proxy localhost:{{ strfry_port }}
     }
-
+{% endif %}
+{% if 'obelisk_relay' in machine_roles %}
     handle /chat/* {
         reverse_proxy localhost:{{ obelisk_port }}
     }
-
+{% endif %}
+{% if 'blossom' in machine_roles %}
     handle /blossom/* {
         reverse_proxy localhost:{{ blossom_port }}
     }
-
+{% endif %}
+{% if 'nsite_gateway' in machine_roles %}
     handle /nsite/* {
         reverse_proxy localhost:{{ nsite_gateway_port }}
     }
-
+{% endif %}
+{% if 'release_explorer' in machine_roles %}
     handle /releases/* {
         root * {{ tollgate_static_dir }}/releases
         file_server
         try_files {path} /index.html
     }
-
+{% endif %}
+{% if 'hive_ci' in machine_roles %}
     handle /ci/* {
         root * {{ tollgate_static_dir }}/hive-ci
         file_server
         try_files {path} /index.html
     }
-
+{% endif %}
+{% if 'grasp' in machine_roles %}
     handle /git/* {
         reverse_proxy localhost:{{ grasp_port }}
     }
-
+{% endif %}
+{% if 'act_runner' in machine_roles %}
     handle /runner/* {
         reverse_proxy localhost:{{ act_runner_port | default(8095) }}
     }
+{% endif %}
+{% if 'auditable_voting' in machine_roles %}
+    handle /vote/* {
+        root * {{ tollgate_static_dir }}/auditable-voting
+        file_server
+        try_files {path} /index.html
+    }
+{% endif %}
+{% if 'backup' in machine_roles %}
+    handle /services/* {
+        root * {{ tollgate_static_dir }}/services
+        file_server
+    }
+{% endif %}
+{% if 'routstr' in machine_roles %}
+    handle /routstr/* {
+        reverse_proxy localhost:{{ routstr_port | default(8000) }}
+    }
+{% endif %}
+{% if 'ngit_relay' in machine_roles %}
+    handle /ngit/* {
+        reverse_proxy localhost:{{ ngit_relay_port | default(7778) }}
+    }
+{% endif %}
 
     handle / {
-        respond "Tollgate Infrastructure Kit - Running" 200
+        respond "Tollgate Infrastructure Kit - {{ machine_id | default('unknown') }} - Running" 200
     }
 
     handle {
@@ -272,63 +363,91 @@ runner.{{ base_domain }} {
 
 {% if fips_mesh_ipv6 is defined %}
 [{{ fips_mesh_ipv6 }}]:80 {
+{% if 'strfry' in machine_roles %}
     handle /relay/* {
         reverse_proxy localhost:{{ strfry_port }}
     }
-
+{% endif %}
+{% if 'obelisk_relay' in machine_roles %}
     handle /chat/* {
         reverse_proxy localhost:{{ obelisk_port }}
     }
-
+{% endif %}
+{% if 'blossom' in machine_roles %}
     handle /blossom/* {
         reverse_proxy localhost:{{ blossom_port }}
     }
-
+{% endif %}
+{% if 'nsite_gateway' in machine_roles %}
     handle /nsite/* {
         reverse_proxy localhost:{{ nsite_gateway_port }}
     }
-
+{% endif %}
+{% if 'release_explorer' in machine_roles %}
     handle /releases/* {
         root * {{ tollgate_static_dir }}/releases
         file_server
         try_files {path} /index.html
     }
-
+{% endif %}
+{% if 'hive_ci' in machine_roles %}
     handle /ci/* {
         root * {{ tollgate_static_dir }}/hive-ci
         file_server
         try_files {path} /index.html
     }
-
+{% endif %}
+{% if 'grasp' in machine_roles %}
     handle /git/* {
         reverse_proxy localhost:{{ grasp_port }}
     }
-
+{% endif %}
+{% if 'act_runner' in machine_roles %}
     handle /runner/* {
         reverse_proxy localhost:{{ act_runner_port | default(8095) }}
     }
-
+{% endif %}
+{% if 'auditable_voting' in machine_roles %}
     handle /vote/* {
         root * {{ tollgate_static_dir }}/auditable-voting
         file_server
         try_files {path} /index.html
     }
-
+{% endif %}
+{% if 'backup' in machine_roles %}
     handle /services/* {
         root * {{ tollgate_static_dir }}/services
         file_server
     }
-
+{% endif %}
+{% if 'routstr' in machine_roles %}
     handle /routstr/* {
         reverse_proxy localhost:{{ routstr_port | default(8000) }}
     }
-
+{% endif %}
+{% if 'ngit_relay' in machine_roles %}
     handle /ngit/* {
         reverse_proxy localhost:{{ ngit_relay_port | default(7778) }}
     }
+{% endif %}
 
     handle {
-        respond "Tollgate Infrastructure Kit - FIPS Mesh" 200
+        respond "Tollgate Infrastructure Kit - FIPS Mesh - {{ machine_id | default('unknown') }}" 200
+    }
+}
+{% endif %}
+
+{% if 'jitsi_meet' in machine_roles %}
+{{ jitsi_meet_subdomain }}.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    reverse_proxy localhost:{{ jitsi_meet_http_port | default(8080) }} {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
     }
 }
 {% endif %}

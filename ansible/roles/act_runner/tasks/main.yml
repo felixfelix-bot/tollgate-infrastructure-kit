@@ -19,6 +19,7 @@
     - "{{ tollgate_base_dir }}/act-runner"
     - "{{ tollgate_base_dir }}/act-runner/work"
     - "{{ tollgate_base_dir }}/act-runner/logs"
+    - "{{ tollgate_base_dir }}/act-runner/artifacts"
     - "{{ tollgate_base_dir }}/src/act-runner"
 
 - name: Install act binary
@@ -94,6 +95,7 @@
     state: started
     enabled: yes
     daemon_reload: yes
+  when: machine_active | default(true)
 
 - name: Wait for act-runner API
   uri:
@@ -103,6 +105,7 @@
   until: runner_health.status == 200
   retries: 30
   delay: 3
+  when: machine_active | default(true)
 
 - name: Verify act-runner is accessible via Caddy
   uri:
@@ -113,6 +116,7 @@
   until: runner_caddy_health.status == 200
   retries: 15
   delay: 3
+  when: machine_active | default(true)
 
 - name: Display act-runner deployment info
   debug:

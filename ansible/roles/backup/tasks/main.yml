@@ -11,6 +11,14 @@
     - mints
     - routstr
     - caddy
+    - blossom
+    - act-runner
+
+- name: Deploy backup status generator
+  copy:
+    src: gen-backup-status.py
+    dest: /usr/local/bin/gen-backup-status.py
+    mode: '0755'
 
 - name: Deploy backup script
   template:
@@ -37,6 +45,83 @@
 - name: Enable and start backup timer
   systemd:
     name: tollgate-backup.timer
+    state: started
+    enabled: yes
+
+- name: Deploy backup status systemd service
+  template:
+    src: tollgate-backup-status.service.j2
+    dest: /etc/systemd/system/tollgate-backup-status.service
+    mode: '0644'
+
+- name: Deploy backup status systemd timer
+  template:
+    src: tollgate-backup-status.timer.j2
+    dest: /etc/systemd/system/tollgate-backup-status.timer
+    mode: '0644'
+
+- name: Reload systemd for status timer
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start backup status timer
+  systemd:
+    name: tollgate-backup-status.timer
+    state: started
+    enabled: yes
+
+- name: Write machine ID file
+  copy:
+    content: "{{ machine_id | default('unknown') }}"
+    dest: /etc/tollgate-machine-id
+    mode: '0644'
+
+- name: Install Python deps for Nostr publishing
+  pip:
+    name:
+      - coincurve>=20.0.0
+      - bech32>=1.2.0
+      - websockets>=12.0
+    state: present
+    executable: pip3
+    extra_args: --break-system-packages
+
+- name: Ensure Nostr status env vars in tollgate env
+  lineinfile:
+    path: /opt/tollgate/.env
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+    create: yes
+  loop:
+    - { key: "TOLLGATE_STATUS_NSEC_HEX", value: "{{ tollgate_status_nsec_hex }}" }
+    - { key: "TOLLGATE_STATUS_NPUB", value: "{{ tollgate_status_npub }}" }
+  no_log: yes
+
+- name: Deploy VPS stats generator
+  copy:
+    src: gen-vps-stats.py
+    dest: /usr/local/bin/gen-vps-stats.py
+    mode: '0755'
+
+- name: Deploy VPS stats systemd service
+  template:
+    src: tollgate-vps-stats.service.j2
+    dest: /etc/systemd/system/tollgate-vps-stats.service
+    mode: '0644'
+
+- name: Deploy VPS stats systemd timer
+  template:
+    src: tollgate-vps-stats.timer.j2
+    dest: /etc/systemd/system/tollgate-vps-stats.timer
+    mode: '0644'
+
+- name: Reload systemd for VPS stats timer
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start VPS stats timer
+  systemd:
+    name: tollgate-vps-stats.timer
     state: started
     enabled: yes
 

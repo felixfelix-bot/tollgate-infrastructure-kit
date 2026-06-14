@@ -1,0 +1,9 @@
+---
+- name: Deploy Relatr Web of Trust service
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - relatr

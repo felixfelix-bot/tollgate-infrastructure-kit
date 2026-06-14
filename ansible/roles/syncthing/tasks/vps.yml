@@ -5,6 +5,13 @@
     state: present
     update_cache: yes
 
+- name: Stop syncthing running under debian user if present
+  systemd:
+    name: syncthing@debian
+    state: stopped
+    enabled: no
+  ignore_errors: yes
+
 - name: Create syncthing user
   user:
     name: "{{ syncthing_user }}"
@@ -15,7 +22,7 @@
     groups: docker
     append: yes
 
-- name: Ensure syncthing state directories exist
+- name: Ensure syncthing config and state directories exist
   file:
     path: "{{ item }}"
     state: directory
@@ -24,10 +31,10 @@
     mode: '0700'
   loop:
     - "{{ syncthing_config_dir }}"
-    - "{{ syncthing_home }}/.local/state/syncthing"
+    - "{{ syncthing_state_dir }}"
 
 - name: Generate initial Syncthing config
-  command: syncthing --generate="{{ syncthing_config_dir }}"
+  command: "syncthing --generate='{{ syncthing_config_dir }}'"
   args:
     creates: "{{ syncthing_config_dir }}/config.xml"
   environment:
@@ -101,7 +108,7 @@
     timeout: 30
 
 - name: Get VPS syncthing device ID
-  shell: "syncthing --device-id --home={{ syncthing_home }}"
+  shell: "syncthing --device-id --home={{ syncthing_config_dir }}"
   register: vps_device_id_raw
   changed_when: false
 

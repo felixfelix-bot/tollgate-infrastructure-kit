@@ -1,0 +1,17 @@
+[Unit]
+Description=Bitcoin Knots Node (Pruned, Low RAM)
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/bitcoind -conf={{ bitcoin_knots_data_dir }}/bitcoin.conf -datadir={{ bitcoin_knots_data_dir }}
+Restart=always
+RestartSec=10
+
+MemoryHigh={{ bitcoin_knots_memory_high }}
+MemoryMax={{ bitcoin_knots_memory_max }}
+TasksMax=100
+Nice=15
+OOMScoreAdjust=500
+
+[Install]
+WantedBy=multi-user.target

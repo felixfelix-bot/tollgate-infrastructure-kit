@@ -32,7 +32,7 @@ A single Ansible-based repository that deploys all Tollgate-related infrastructu
 | 15 | Routstr AI inference node | `routstr.` | 8000 | Docker (ghcr.io/routstr/proxy) |
 | 16 | Routstr Tor hidden service | `.onion` | 80 | Docker (tor-hidden-service) |
 | 17 | Auditable Voting (static) | `vote.` | — | Static build (React+Vite+WASM), Caddy file_server |
-| 18 | Auditable Voting (nsite) | `nsite./<npub>/` | — | Nostr static site via blossom + nsyte |
+| 18 | Auditable Voting (nsite) | `<npub>.nsite./` | — | Nostr static site via blossom + nsyte |
 | 19 | ngit Relay (git-optimized Nostr) | `ngit.` | 7778 | Docker (strfry, 10MB event limit) |
 | 20 | VPS Watchdog | N/A (local) | N/A | Systemd user service (Python) |
 | 21 | Syncthing (backup sync) | none | 22000/8384 | Systemd (send-only on VPS) |
@@ -289,6 +289,27 @@ The `gonuts-tollgate` Go library uses the old Cashu keyset ID derivation: `SHA-2
 | testnut-cdk | CDK v0.16.0 | 64-char hex (new) | No |
 | testnut-nutshell | Nutshell v0.20.0 | 64-char hex (new) | No |
 | testnut-compat | Nutshell v0.18.2 | 16-char hex "00"+14 (old) | Yes |
+
+## Auditable Voting Observer UX Fixes
+
+Two issues reported after family testing on mobile:
+
+### Problem 1: No loading indicator on initial fetch
+`SimpleAuditorApp.tsx` fetches questionnaire definitions from Nostr relays on mount. While loading, the UI shows a misleading empty state ("No public questionnaire rounds discovered yet.") instead of a loading indicator. On slow mobile connections, users see this and think nothing exists.
+
+**Fix**: Show "Loading questionnaires from Nostr relays..." when `questionnaires.length === 0 && refreshInFlight` is true. Add a `initialLoadDone` ref to distinguish first load from subsequent refreshes.
+
+### Problem 2: URL doesn't reflect selected questionnaire
+The observer page reads `?q=` / `?questionnaire=` URL params on load (`readInitialQuestionnaireIdFromUrl()`), but never writes the selected questionnaire ID back to the URL when the user picks from the dropdown. Sharing the URL always shows the newest questionnaire to recipients.
+
+**Fix**: Add a `useEffect` that calls `history.replaceState` when `selectedQuestionnaireId` changes, writing `?q=<id>` to the URL. This mirrors `writeRoleToUrl()` in `SimpleAppShell.tsx`. The existing `readInitialQuestionnaireIdFromUrl()` already handles reading `q` on load.
+
+### Problem 3: No loading state for response panel
+When a questionnaire is selected but responses haven't loaded yet, the panel shows "No submitted responses found for this round yet." which is misleading during the fetch.
+
+**Fix**: Track response loading state and show a loading message while responses are being fetched.
+
+All changes are in `web/src/SimpleAuditorApp.tsx` only.
 
 ## Testing Strategy
 

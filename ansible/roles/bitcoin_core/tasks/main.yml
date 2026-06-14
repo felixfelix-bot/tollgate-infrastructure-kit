@@ -1,0 +1,138 @@
+---
+- name: Install build dependencies
+  apt:
+    name:
+      - git
+      - cmake
+      - build-essential
+      - libtool
+      - autotools-dev
+      - automake
+      - pkg-config
+      - bsdmainutils
+      - python3
+      - libevent-dev
+      - libboost-dev
+      - libboost-system-dev
+      - libboost-filesystem-dev
+      - libboost-test-dev
+      - libboost-thread-dev
+    state: present
+    update_cache: yes
+
+- name: Create swap file (2G safety net for build)
+  shell: |
+    if [ ! -f /swapfile ]; then
+      fallocate -l 2G /swapfile
+      chmod 600 /swapfile
+      mkswap /swapfile
+      swapon /swapfile
+      echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+  args:
+    creates: /swapfile
+
+- name: Create data directory
+  file:
+    path: "{{ bitcoin_core_data_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Check if bitcoind binary already installed
+  stat:
+    path: /usr/local/bin/bitcoind
+  register: core_binary
+
+- name: Clone Bitcoin Core source
+  git:
+    repo: "{{ bitcoin_core_repo }}"
+    dest: "{{ tollgate_base_dir }}/src/bitcoin-core"
+    version: "{{ bitcoin_core_version }}"
+    depth: 1
+    force: yes
+  when: not core_binary.stat.exists
+
+- name: Configure Bitcoin Core (no wallet, no GUI)
+  shell: |
+    cmake -B build \
+      -DENABLE_WALLET=OFF \
+      -DBUILD_GUI=OFF \
+      -DCMAKE_BUILD_TYPE=Release
+  args:
+    chdir: "{{ tollgate_base_dir }}/src/bitcoin-core"
+    creates: "{{ tollgate_base_dir }}/src/bitcoin-core/build/Makefile"
+  when: not core_binary.stat.exists
+
+- name: Build Bitcoin Core (single core to save RAM)
+  shell: cmake --build build -j1
+  args:
+    chdir: "{{ tollgate_base_dir }}/src/bitcoin-core"
+  register: bitcoin_build
+  failed_when: bitcoin_build.rc != 0
+  changed_when: "'Building' in bitcoin_build.stdout or bitcoin_build.rc == 0"
+  when: not core_binary.stat.exists
+
+- name: Install Bitcoin Core
+  shell: cmake --install build
+  args:
+    chdir: "{{ tollgate_base_dir }}/src/bitcoin-core"
+  register: bitcoin_install
+  changed_when: "'Installing' in bitcoin_install.stdout or bitcoin_install.rc == 0"
+  when: not core_binary.stat.exists
+
+- name: Deploy bitcoin.conf
+  template:
+    src: bitcoin.conf.j2
+    dest: "{{ bitcoin_core_data_dir }}/bitcoin.conf"
+    mode: '0600'
+  notify: restart bitcoind
+
+- name: Deploy bitcoind systemd service
+  template:
+    src: bitcoind.service.j2
+    dest: /etc/systemd/system/bitcoind.service
+    mode: '0644'
+  notify: restart bitcoind
+
+- name: Deploy logrotate for bitcoind
+  copy:
+    dest: /etc/logrotate.d/bitcoind
+    content: |
+      {{ bitcoin_core_data_dir }}/debug.log {
+          daily
+          rotate 3
+          copytruncate
+          compress
+          missingok
+          notifempty
+      }
+    mode: '0644'
+
+- name: Enable bitcoind service
+  systemd:
+    name: bitcoind
+    enabled: yes
+    daemon_reload: yes
+
+- name: Start bitcoind (triggers IBD)
+  systemd:
+    name: bitcoind
+    state: started
+  register: bitcoind_start
+
+- name: Wait for bitcoind to begin initialization
+  wait_for:
+    port: "{{ bitcoin_core_rpc_port }}"
+    host: 127.0.0.1
+    delay: 10
+    timeout: 120
+  ignore_errors: yes
+
+- name: Display Bitcoin Core info
+  debug:
+    msg: |
+      Bitcoin Core {{ bitcoin_core_version }} deployed on port {{ bitcoin_core_port }}
+      Data dir: {{ bitcoin_core_data_dir }}
+      Pruned: {{ bitcoin_core_prune_mb }} MB (~{{ (bitcoin_core_prune_mb / 1000) | round(0) }} GB)
+      RAM limit: {{ bitcoin_core_memory_max }}
+      IBD status: bitcoin-cli -conf={{ bitcoin_core_data_dir }}/bitcoin.conf getblockchaininfo

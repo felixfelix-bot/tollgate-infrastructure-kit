@@ -6,18 +6,27 @@
 <title>Tollgate Services</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--orange:#f7931a;--purple:#7c3aed;--bg:#0a0a0f;--card:#12121a;--border:#1e1e2e;--text:#e2e2e8;--dim:#6b6b7b;--up:#22c55e;--down:#ef4444;--pending:#eab308}
+:root{--orange:#f7931a;--purple:#7c3aed;--bg:#0a0a0f;--card:#12121a;--border:#1e1e2e;--text:#e2e2e8;--dim:#6b6b7b;--up:#22c55e;--down:#ef4444;--pending:#eab308;--nostr:#8b5cf6}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh}
 .header{background:linear-gradient(135deg,rgba(247,147,26,0.08),rgba(124,58,237,0.08));border-bottom:1px solid var(--border);padding:2rem 1rem;text-align:center}
 .header h1{font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,var(--orange),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .header .subtitle{color:var(--dim);font-size:0.85rem;margin-top:0.25rem}
-.summary{display:flex;justify-content:center;gap:2rem;padding:1rem;flex-wrap:wrap}
+.nostr-badge{display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.6rem;border-radius:4px;font-size:0.7rem;font-weight:600;margin-top:0.4rem}
+.nostr-badge.live{background:rgba(139,92,246,0.15);color:var(--nostr);border:1px solid rgba(139,92,246,0.3)}
+.nostr-badge.fallback{background:rgba(234,179,8,0.15);color:var(--pending);border:1px solid rgba(234,179,8,0.3)}
+.nostr-badge .pulse{width:6px;height:6px;border-radius:50%;background:var(--nostr);animation:pulse 2s infinite}
+.machine-tabs{display:flex;justify-content:center;gap:0.5rem;padding:1rem;flex-wrap:wrap}
+.machine-tab{padding:0.5rem 1.5rem;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--dim);cursor:pointer;font-size:0.85rem;font-weight:600;transition:all 0.2s}
+.machine-tab:hover{border-color:var(--purple)}
+.machine-tab.active{border-color:var(--orange);color:var(--orange);background:rgba(247,147,26,0.08)}
+.machine-tab .tab-count{font-size:0.7rem;margin-left:0.4rem}
+.container{max-width:900px;margin:0 auto;padding:0 1rem 1rem}
+.summary{display:flex;justify-content:center;gap:2rem;padding:0.5rem 1rem;flex-wrap:wrap}
 .summary .stat{text-align:center}
 .summary .stat .num{font-size:1.8rem;font-weight:700}
 .summary .stat .label{font-size:0.75rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.05em}
-.container{max-width:900px;margin:0 auto;padding:0 1rem 3rem}
-.group-title{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--dim);margin:1.5rem 0 0.5rem;padding-left:0.25rem;border-left:2px solid var(--purple)}
-.service{display:flex;align-items:center;gap:0.75rem;padding:0.7rem 0.75rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.4rem;background:var(--card);transition:border-color 0.2s}
+.group-title{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--dim);margin:1.2rem 0 0.5rem;padding-left:0.25rem;border-left:2px solid var(--purple)}
+.service{display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.35rem;background:var(--card);transition:border-color 0.2s}
 .service:hover{border-color:var(--purple)}
 .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;transition:background 0.3s}
 .dot.up{background:var(--up);box-shadow:0 0 6px var(--up)}
@@ -25,152 +34,386 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .dot.pending{background:var(--pending);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 .info{flex:1;min-width:0}
-.info .name{font-weight:600;font-size:0.9rem}
-.info .url{font-size:0.75rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;text-decoration:none}
+.info .name{font-weight:600;font-size:0.85rem}
+.info .url{font-size:0.7rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;text-decoration:none}
 .info .url:hover{color:var(--purple)}
-.meta{display:flex;align-items:center;gap:0.75rem;flex-shrink:0}
-.ms{font-size:0.7rem;color:var(--dim);min-width:40px;text-align:right}
-.recheck{background:none;border:1px solid var(--border);color:var(--dim);border-radius:4px;padding:0.2rem 0.5rem;font-size:0.7rem;cursor:pointer;transition:all 0.2s}
-.recheck:hover{border-color:var(--orange);color:var(--orange)}
-.rechecking{animation:spin 1s linear infinite}
-@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-footer{text-align:center;padding:1rem;color:var(--dim);font-size:0.7rem;border-top:1px solid var(--border)}
+.meta{display:flex;align-items:center;gap:0.5rem;flex-shrink:0;font-size:0.7rem;color:var(--dim)}
+.vps-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:10px}
+.vps-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+.vps-card .val{font-size:1.4rem;font-weight:700}
+.vps-card .lbl{font-size:0.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px}
+.vps-bar{height:5px;background:var(--border);border-radius:3px;margin-top:4px;overflow:hidden}
+.vps-bar .fill{height:100%;border-radius:3px;transition:width 0.5s}
+.vps-procs{width:100%;border-collapse:collapse;font-size:0.65rem;margin-top:6px}
+.vps-procs th{text-align:left;color:var(--dim);padding:3px 5px;border-bottom:1px solid var(--border)}
+.vps-procs td{padding:2px 5px;border-bottom:1px solid var(--border)}
+.vps-procs tr:hover{background:rgba(124,58,237,0.08)}
+.backup-folder{display:flex;align-items:center;gap:0.75rem;padding:0.4rem 0.75rem 0.4rem 1.5rem;border:1px solid var(--border);border-radius:6px;margin-bottom:0.25rem;background:var(--card);font-size:0.8rem}
+.backup-folder .pct{font-size:0.7rem;color:var(--dim);min-width:40px;text-align:right}
+.backup-folder .local-info{font-size:0.65rem;color:var(--dim);margin-left:0.5rem}
+.machine-row{display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0.75rem 0.25rem 2.5rem;font-size:0.7rem;color:var(--dim);border-left:1px solid var(--border);margin-left:1rem;margin-bottom:0.05rem}
+.machine-row .machine-name{min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.machine-row .machine-size{color:var(--text);font-weight:500}
+.machine-row .machine-status{font-size:0.6rem}
+.backup-status-bar{display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.35rem;background:var(--card);cursor:pointer;transition:border-color 0.2s}
+.backup-status-bar:hover{border-color:var(--orange)}
+.backup-status-bar .backup-time{font-size:0.65rem;color:var(--dim)}
+.backup-detail{overflow:hidden;max-height:0;transition:max-height 0.3s ease}
+.backup-detail.open{max-height:600px}
+.relay-status{display:flex;justify-content:center;gap:0.5rem;padding:0.25rem 0;flex-wrap:wrap}
+.relay-dot{width:6px;height:6px;border-radius:50%;background:var(--up);box-shadow:0 0 4px var(--up)}
+.relay-dot.disconnected{background:var(--down);box-shadow:0 0 4px var(--down)}
+.relay-dot.connecting{background:var(--pending);box-shadow:0 0 4px var(--pending);animation:pulse 1s infinite}
+footer{text-align:center;padding:1rem;color:var(--dim);font-size:0.65rem;border-top:1px solid var(--border)}
 footer .next-check{color:var(--orange)}
-@media(max-width:600px){.meta .ms{display:none}.service{padding:0.6rem}}
+.hidden{display:none}
+@media(max-width:600px){.meta{display:none}.service{padding:0.5rem}.vps-stats{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
 <div class="header">
 <h1>Tollgate Services</h1>
-<div class="subtitle">Real-time status of all infrastructure services on orangesync.tech</div>
+<div class="subtitle">Infrastructure status for orangesync.tech</div>
+<div id="nostr-badge" class="nostr-badge live"><span class="pulse"></span> Connecting via Nostr...</div>
+<div class="relay-status" id="relay-status"></div>
 </div>
-<div class="summary">
-<div class="stat"><div class="num" id="s-up" style="color:var(--up)">-</div><div class="label">Operational</div></div>
-<div class="stat"><div class="num" id="s-down" style="color:var(--down)">-</div><div class="label">Down</div></div>
-<div class="stat"><div class="num" id="s-total">-</div><div class="label">Total</div></div>
+<div class="machine-tabs" id="machine-tabs"></div>
+<div class="summary" id="summary"></div>
+<div class="container">
+<div id="machine-content"></div>
+<div id="backup-section" class="hidden">
+<div class="group-title" style="border-left-color:var(--orange);margin-top:1rem">Backup Sync Status</div>
+<div id="backup-overview"></div>
+<div class="backup-detail open" id="backup-detail"></div>
 </div>
-<div class="container" id="services"></div>
-<footer>Status checks run from your browser. Services showing down may be blocked by CORS policy (service is up but browser cannot probe it). <span class="next-check" id="next-check"></span></footer>
+</div>
+<footer>Status via Nostr relay subscription (kind 31998). <span class="next-check" id="next-check"></span></footer>
 <script>
-const SERVICES=[
-{group:"Core",name:"Caddy Gateway",url:"https://orangesync.tech"},
-{group:"Core",name:"strfry (Nostr Relay)",url:"https://relay.orangesync.tech"},
-{group:"Core",name:"Obelisk (Group Chat)",url:"https://chat.orangesync.tech"},
-{group:"Core",name:"Blossom (Blob Storage)",url:"https://blossom.orangesync.tech"},
-{group:"Core",name:"Nsite Gateway",url:"https://nsite.orangesync.tech"},
-{group:"Core",name:"GRASP (Git Server)",url:"https://git.orangesync.tech"},
-{group:"Mints",name:"test-mb Mint",url:"https://test-mb.mints.orangesync.tech/v1/info"},
-{group:"Mints",name:"test-kb Mint",url:"https://test-kb.mints.orangesync.tech/v1/info"},
-{group:"Mints",name:"test-gb Mint",url:"https://test-gb.mints.orangesync.tech/v1/info"},
-{group:"Mints",name:"test-min Mint",url:"https://test-min.mints.orangesync.tech/v1/info"},
-{group:"Mints",name:"testnut-cdk Mint",url:"https://testnut-cdk.mints.orangesync.tech/v1/info"},
-{group:"Mints",name:"testnut-nutshell Mint (0.20)",url:"https://testnut-nutshell.mints.orangesync.tech/v1/info"},
-{group:"Mints",name:"testnut-compat Mint (0.18)",url:"https://testnut-compat.mints.orangesync.tech/v1/info"},
-{group:"Mints",name:"Routstr Mint",url:"https://routstr-mint.mints.orangesync.tech/v1/info"},
-{group:"Frontend",name:"cashu-brrr (Money Printer)",url:"https://print.mints.orangesync.tech"},
-{group:"Frontend",name:"Mint Operator Proxy",url:"https://print.mints.orangesync.tech/api/health"},
-{group:"Frontend",name:"Mint Dashboard",url:"https://dashboard.mints.orangesync.tech"},
-{group:"Frontend",name:"Releases",url:"https://releases.orangesync.tech"},
-{group:"Frontend",name:"Hive CI Site",url:"https://ci.orangesync.tech"},
-{group:"AI",name:"Routstr (AI Inference)",url:"https://routstr.orangesync.tech/v1/models"},
-{group:"Other",name:"Auditable Voting",url:"https://vote.orangesync.tech"},
-{group:"Other",name:"ngit Relay (Git Events)",url:"https://ngit.orangesync.tech"},
-{group:"Other",name:"GitWorkshop",url:"https://workshop.orangesync.tech"},
-{group:"IoT",name:"Solix C1000 BLE Bridge",url:"https://solix.orangesync.tech"},
-{group:"CI",name:"Act Runner Daemon",url:"https://runner.orangesync.tech/api/health"},
-{group:"CI",name:"CI Dashboard",url:"https://runner.orangesync.tech"},
-{group:"Mirroring",name:"GRASP Mirror Daemon",url:"https://git.orangesync.tech/api/mirror-health"}
+const STATUS_NPUB="{{ tollgate_status_npub }}";
+const RELAYS=[
+  "wss://relay1.orangesync.tech",
+  "wss://relay2.orangesync.tech",
+  "wss://relay.damus.io",
+  "wss://nos.lol"
 ];
+const STATUS_KIND=31998;
+const STATUS_DTAG="tollgate-vps-status";
+const MACHINES={
+  vps1:{label:"vps-1 (Primary)",ip:"66.92.204.38"},
+  vps2:{label:"vps-2 (Secondary)",ip:"23.182.128.51"}
+};
 
-const state=SERVICES.map(()=>({status:"pending",ms:null,retryTimer:null}));
-const DOWN_RECHECK=60000;
+let currentMachine="vps1";
+let machineData={};
+let relayStates={};
+let nostrConnected=false;
+let usingFallback=false;
+let subId="tg-status-"+Math.random().toString(36).substr(2,8);
 
-function render(){
-const container=document.getElementById("services");
-let html="";
-let lastGroup="";
-let up=0,down=0;
+function barColor(pct){if(pct<60)return"var(--up)";if(pct<85)return"var(--pending)";return"var(--down)"}
+function fmtBytes(b){if(!b)return"0B";if(b<1024)return b+"B";if(b<1048576)return(b/1024).toFixed(1)+"K";if(b<1073741824)return(b/1048576).toFixed(1)+"M";return(b/1073741824).toFixed(1)+"G"}
 
-for(let i=0;i<SERVICES.length;i++){
-const s=SERVICES[i];
-const st=state[i];
-if(s.group!==lastGroup){html+=`<div class="group-title">${s.group}</div>`;lastGroup=s.group}
-if(st.status==="up")up++;else if(st.status==="down")down++;
-html+=`<div class="service" id="svc-${i}">
-<div class="dot ${st.status}"></div>
-<div class="info">
-<div class="name">${s.name}</div>
-<a class="url" href="${s.url}" target="_blank" rel="noopener">${s.url}</a>
-</div>
-<div class="meta">
-${st.ms!==null?`<span class="ms">${st.ms}ms</span>`:'<span class="ms"></span>'}
-<button class="recheck" onclick="checkOne(${i})" title="Recheck">&#x21bb;</button>
-</div>
-</div>`;
+class NostrRelay{
+  constructor(url){
+    this.url=url;
+    this.ws=null;
+    this.connected=false;
+    this.reconnectTimer=null;
+    this.name=url.replace("wss://","").replace(".orangesync.tech","").replace(".damus.io","").replace(".lol","");
+  }
+  connect(){
+    try{
+      this.ws=new WebSocket(this.url);
+      relayStates[this.name]="connecting";
+      this.ws.onopen=()=>{
+        this.connected=true;
+        relayStates[this.name]="connected";
+        this.subscribe();
+        renderRelayStatus();
+      };
+      this.ws.onmessage=(e)=>{
+        this.onMessage(e);
+      };
+      this.ws.onclose=()=>{
+        this.connected=false;
+        relayStates[this.name]="disconnected";
+        renderRelayStatus();
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer=setTimeout(()=>this.connect(),5000);
+      };
+      this.ws.onerror=()=>{
+        this.connected=false;
+        relayStates[this.name]="disconnected";
+      };
+    }catch(e){
+      relayStates[this.name]="disconnected";
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer=setTimeout(()=>this.connect(),10000);
+    }
+  }
+  subscribe(){
+    if(!this.connected)return;
+    const filter={
+      kinds:[STATUS_KIND],
+      authors:[STATUS_NPUB],
+      "#d":[STATUS_DTAG],
+      limit:2
+    };
+    this.ws.send(JSON.stringify(["REQ",subId,filter]));
+  }
+  onMessage(e){
+    try{
+      const msg=JSON.parse(e.data);
+      if(msg[0]==="EVENT"&&msg[2]){
+        const event=msg[2];
+        if(event.kind===STATUS_KIND){
+          const data=JSON.parse(event.content);
+          const mid=data.machine_id;
+          if(mid&&MACHINES[mid]){
+            data._nostr_ts=event.created_at;
+            data._nostr_id=event.id;
+            machineData[mid]=data;
+            nostrConnected=true;
+            renderNostrBadge();
+            renderTabs();
+            renderSummary();
+            renderContent();
+            updateTimestamp(data);
+          }
+        }
+      }else if(msg[0]==="EOSE"&&msg[1]===subId){
+        // initial sync done for this relay
+      }else if(msg[0]==="OK"){
+        // event publish confirmation (not applicable here, we only subscribe)
+      }
+    }catch(err){}
+  }
+  close(){
+    clearTimeout(this.reconnectTimer);
+    if(this.ws)this.ws.close();
+  }
 }
 
-container.innerHTML=html;
-document.getElementById("s-up").textContent=up;
-document.getElementById("s-down").textContent=down;
-document.getElementById("s-total").textContent=SERVICES.length;
+const relayClients=RELAYS.map(u=>new NostrRelay(u));
+
+function startNostr(){
+  relayClients.forEach(r=>r.connect());
 }
 
-async function checkService(i){
-const el=document.getElementById(`svc-${i}`);
-if(!el)return;
-const dot=el.querySelector(".dot");
-dot.className="dot pending";
-const recheckBtn=el.querySelector(".recheck");
-recheckBtn.classList.add("rechecking");
-
-const start=performance.now();
-try{
-const controller=new AbortController();
-const tid=setTimeout(()=>controller.abort(),10000);
-const resp=await fetch(SERVICES[i].url,{method:"GET",mode:"no-cors",signal:controller.signal});
-clearTimeout(tid);
-const ms=Math.round(performance.now()-start);
-state[i].ms=ms;
-state[i].status="up";
-dot.className="dot up";
-recheckBtn.classList.remove("rechecking");
-if(state[i].retryTimer){clearInterval(state[i].retryTimer);state[i].retryTimer=null}
-updateMeta(el,i);
-}catch(e){
-const ms=Math.round(performance.now()-start);
-state[i].ms=ms;
-state[i].status="down";
-dot.className="dot down";
-recheckBtn.classList.remove("rechecking");
-updateMeta(el,i);
-if(!state[i].retryTimer){
-state[i].retryTimer=setInterval(()=>checkService(i),DOWN_RECHECK);
-}
-}
-updateSummary();
+function renderRelayStatus(){
+  const el=document.getElementById("relay-status");
+  let html="";
+  for(const[name,state] of Object.entries(relayStates)){
+    const cls=state==="connected"?"":state==="connecting"?"connecting":"disconnected";
+    html+=`<span class="relay-dot ${cls}" title="${name}: ${state}"></span>`;
+  }
+  el.innerHTML=html;
 }
 
-function updateMeta(el,i){
-const msSpan=el.querySelector(".ms");
-msSpan.textContent=state[i].ms!==null?`${state[i].ms}ms`:"";
+function renderNostrBadge(){
+  const badge=document.getElementById("nostr-badge");
+  if(nostrConnected){
+    badge.className="nostr-badge live";
+    badge.innerHTML='<span class="pulse"></span> Live via Nostr';
+  }else if(usingFallback){
+    badge.className="nostr-badge fallback";
+    badge.innerHTML='JSON fallback (no Nostr events)';
+  }
 }
 
-function updateSummary(){
-let up=0,down=0;
-for(const s of state){if(s.status==="up")up++;else if(s.status==="down")down++}
-document.getElementById("s-up").textContent=up;
-document.getElementById("s-down").textContent=down;
-document.getElementById("s-total").textContent=SERVICES.length;
+function renderTabs(){
+  const tabs=document.getElementById("machine-tabs");
+  let html="";
+  for(const[mid,cfg] of Object.entries(MACHINES)){
+    const data=machineData[mid];
+    let upCount="-",downCount="-";
+    if(data&&data.services){
+      const svcs=Object.values(data.services);
+      upCount=svcs.filter(s=>s.healthy).length;
+      downCount=svcs.length-upCount;
+    }
+    const active=mid===currentMachine?" active":"";
+    html+=`<div class="machine-tab${active}" onclick="switchMachine('${mid}')">${cfg.label}<span class="tab-count">${data?"("+upCount+" up / "+downCount+" down)":""}</span></div>`;
+  }
+  tabs.innerHTML=html;
 }
 
-function checkOne(i){checkService(i)}
-
-function checkAll(){
-for(let i=0;i<SERVICES.length;i++)checkService(i);
+function switchMachine(mid){
+  currentMachine=mid;
+  renderTabs();
+  renderContent();
 }
 
-render();
-checkAll();
+function renderSummary(){
+  const summary=document.getElementById("summary");
+  let totalUp=0,totalDown=0,totalSvc=0;
+  for(const data of Object.values(machineData)){
+    if(!data||!data.services)continue;
+    const svcs=Object.values(data.services);
+    totalUp+=svcs.filter(s=>s.healthy).length;
+    totalDown+=svcs.length-svcs.filter(s=>s.healthy).length;
+    totalSvc+=svcs.length;
+  }
+  summary.innerHTML=`
+  <div class="stat"><div class="num" style="color:var(--up)">${totalUp}</div><div class="label">Operational</div></div>
+  <div class="stat"><div class="num" style="color:var(--down)">${totalDown}</div><div class="label">Down</div></div>
+  <div class="stat"><div class="num">${totalSvc}</div><div class="label">Total</div></div>`;
+}
+
+function renderContent(){
+  const container=document.getElementById("machine-content");
+  const data=machineData[currentMachine];
+  const cfg=MACHINES[currentMachine];
+  if(!data){
+    container.innerHTML=`<div style="text-align:center;padding:3rem;color:var(--dim)">Waiting for ${cfg.label} status event...</div>`;
+    return;
+  }
+
+  const mem=data.memory||{};
+  const disk=data.disk||{};
+  const load=data.load||[0,0,0];
+  const cpuPct=data.cpu_percent||0;
+  const memPct=mem.percent||0;
+  const diskPct=disk.percent||0;
+  const uptime=data.uptime||{};
+  const services=data.services||{};
+  const procs=data.top_processes||[];
+  const docker=data.docker_containers||[];
+
+  let html=`
+  <div class="group-title" style="border-left-color:var(--up)">Resources — ${cfg.label} (${data.hostname||"?"})</div>
+  <div class="vps-stats">
+  <div class="vps-card"><div class="val" style="color:${barColor(cpuPct)}">${cpuPct}%</div><div class="lbl">CPU (${data.cpu_cores||"?"} cores)</div><div class="vps-bar"><div class="fill" style="width:${cpuPct}%;background:${barColor(cpuPct)}"></div></div></div>
+  <div class="vps-card"><div class="val" style="color:${barColor(memPct)}">${memPct}%</div><div class="lbl">RAM (${fmtBytes(mem.used_bytes)} / ${fmtBytes(mem.total_bytes)})</div><div class="vps-bar"><div class="fill" style="width:${memPct}%;background:${barColor(memPct)}"></div></div></div>
+  <div class="vps-card"><div class="val" style="color:${barColor(diskPct)}">${diskPct}%</div><div class="lbl">Disk (${fmtBytes(disk.used_bytes)} / ${fmtBytes(disk.total_bytes)})</div><div class="vps-bar"><div class="fill" style="width:${diskPct}%;background:${barColor(diskPct)}"></div></div></div>
+  <div class="vps-card"><div class="val">${load[0].toFixed(2)}</div><div class="lbl">Load (1/5/15m)</div><div style="font-size:0.6rem;color:var(--dim)">${load.map(l=>l.toFixed(2)).join(" / ")}</div></div>
+  <div class="vps-card"><div class="val">${uptime.human||"?"}</div><div class="lbl">Uptime</div></div>
+  </div>`;
+
+  const svcNames=Object.keys(services);
+  if(svcNames.length){
+    const upSvcs=svcNames.filter(n=>services[n].healthy);
+    const downSvcs=svcNames.filter(n=>!services[n].healthy);
+    html+=`<div class="group-title" style="border-left-color:var(--purple)">Services (${upSvcs.length}/${svcNames.length})</div>`;
+    for(const name of upSvcs){
+      const s=services[name];
+      html+=`<div class="service"><div class="dot up"></div><div class="info"><div class="name">${name}</div></div><div class="meta">${s.ms?s.ms+"ms":""}</div></div>`;
+    }
+    for(const name of downSvcs){
+      const s=services[name];
+      html+=`<div class="service"><div class="dot down"></div><div class="info"><div class="name">${name}</div></div><div class="meta">${s.status?"status: "+s.status:"unreachable"}</div></div>`;
+    }
+  }
+
+  if(docker.length){
+    html+=`<div class="group-title" style="border-left-color:var(--dim)">Docker Containers</div><table class="vps-procs"><thead><tr><th>Container</th><th>CPU</th><th>Memory</th><th>Mem%</th></tr></thead><tbody>`;
+    for(const c of docker){html+=`<tr><td>${c.name}</td><td>${c.cpu_pct}</td><td>${c.mem_usage}</td><td>${c.mem_pct}</td></tr>`}
+    html+=`</tbody></table>`;
+  }
+
+  if(procs.length){
+    html+=`<div class="group-title" style="border-left-color:var(--dim)">Top Processes</div><table class="vps-procs"><thead><tr><th>PID</th><th>CPU%</th><th>MEM%</th><th>RSS</th><th>Command</th></tr></thead><tbody>`;
+    for(const p of procs.slice(0,8)){html+=`<tr><td>${p.pid}</td><td>${p.cpu_pct}</td><td>${p.mem_pct}</td><td>${p.rss_mb}M</td><td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.command}</td></tr>`}
+    html+=`</tbody></table>`;
+  }
+
+  container.innerHTML=html;
+}
+
+function updateTimestamp(data){
+  const ts=data.timestamp;
+  if(ts){
+    const ago=Math.floor((Date.now()-new Date(ts).getTime())/1000);
+    document.getElementById("next-check").textContent=`Last update: ${ago<0?"just now":ago+"s ago"} (via Nostr relay subscription)`;
+  }
+}
+
+async function fetchJSONStatus(){
+  const fetches=Object.entries(MACHINES).map(async([mid,cfg])=>{
+    try{
+      let r=await fetch(mid+"-status.json?_="+Date.now());
+      if(!r.ok)return;
+      const data=await r.json();
+      if(!data.machine_id)data.machine_id=mid;
+      if(!data.services)data.services={};
+      machineData[mid]=data;
+    }catch(e){}
+  });
+  await Promise.all(fetches);
+  renderTabs();
+  renderSummary();
+  renderContent();
+}
+
+async function fetchBackupStatus(){
+  try{
+    const r=await fetch("backup-status.json?_="+Date.now());
+    if(!r.ok)return;
+    const data=await r.json();
+    renderBackupStatus(data);
+  }catch(e){}
+}
+
+function renderBackupStatus(data){
+  const section=document.getElementById("backup-section");
+  const overview=document.getElementById("backup-overview");
+  const detail=document.getElementById("backup-detail");
+  section.classList.remove("hidden");
+  const statusMap={synced:"up",syncing:"syncing",problem:"down"};
+  const dotClass=statusMap[data.overall_status]||"pending";
+  const statusLabel={synced:"All Synced",syncing:"Syncing...",problem:"Problem"}[data.overall_status]||data.overall_status;
+  const statusColor={synced:"var(--up)",syncing:"var(--pending)",problem:"var(--down)"}[data.overall_status]||"var(--dim)";
+  const timeAgo=data.last_backup?timeSince(new Date(data.last_backup)):"never";
+  const host=data.source_host||"?";
+  overview.innerHTML=`<div class="backup-status-bar" onclick="toggleBackupDetail()"><div class="dot ${dotClass}"></div><div class="info"><div class="name">Backup Sync — ${host}</div><span class="backup-time">Last backup: ${timeAgo}</span></div><div class="meta"><span style="font-size:0.8rem;font-weight:600;color:${statusColor}">${statusLabel}</span></div></div>`;
+  let detailHtml="";
+  for(const[id,f] of Object.entries(data.folders||{})){
+    const fDot=statusMap[f.state]||"pending";
+    detailHtml+=`<div class="backup-folder"><div class="dot ${fDot}"></div><div class="info"><div class="name">${f.label||id}</div></div><span class="local-info">${f.local_size_human||""}</span><span class="pct">${f.completion}%</span></div>`;
+    for(const[mname,m] of Object.entries(f.machines||{})){
+      const connIcon=m.connected?"●":"○";
+      const mDot=m.state==="synced"?"up":m.state==="syncing"?"syncing":"down";
+      detailHtml+=`<div class="machine-row"><span class="dot ${mDot}" style="width:6px;height:6px"></span><span class="machine-name">${connIcon} ${mname}</span><span class="machine-size">${m.global_size_human||"?"}</span><span class="machine-status">${m.completion===100?"✓":m.need_size_human+" left"}</span></div>`;
+    }
+  }
+  detail.innerHTML=detailHtml;
+}
+
+function toggleBackupDetail(){document.getElementById("backup-detail").classList.toggle("open")}
+
+function timeSince(date){
+  const s=Math.floor((Date.now()-date.getTime())/1000);
+  if(s<60)return s+"s ago";
+  if(s<3600)return Math.floor(s/60)+"m ago";
+  if(s<86400)return Math.floor(s/3600)+"h ago";
+  return Math.floor(s/86400)+"d ago";
+}
+
+// Start Nostr connections
+startNostr();
+fetchBackupStatus();
+
+// JSON fallback after 15s if no Nostr events received
+setTimeout(()=>{
+  if(Object.keys(machineData).length===0){
+    console.warn("No Nostr events received within 15s, falling back to JSON");
+    usingFallback=true;
+    nostrConnected=false;
+    renderNostrBadge();
+    fetchJSONStatus();
+    setInterval(fetchJSONStatus,10000);
+  }
+},15000);
+
+// Periodic timestamp update
+setInterval(()=>{
+  for(const data of Object.values(machineData)){
+    updateTimestamp(data);
+  }
+},5000);
+
+// Refresh backup status every 60s
+setInterval(fetchBackupStatus,60000);
 </script>
 </body>
 </html>

@@ -1,0 +1,52 @@
+---
+- name: Deploy vps2 (secondary) infrastructure
+  hosts: vps2
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
+  roles:
+    - system
+    - docker
+    - cloudflare_dns
+    - caddy
+    - strfry
+    - obelisk_relay
+    - blossom
+    - nsite_gateway
+    - release_explorer
+    - hive_ci
+    - mint_orchestrator
+    - cashu_brrr
+    - mint_operator_proxy
+    - mptcp_server
+    - fips
+    - nsyte_cli
+    - grasp
+    - grasp_snapshot
+    - act_runner
+    - routstr
+    - auditable_voting
+    - ngit_relay
+    - backup
+    - gitworkshop
+    - grasp_mirror
+    - cloud_lab_runner
+    - relatr
+    - micro_vpn
+    - jitsi_meet
+    - bitcoin_knots
+
+- name: Deploy VPS watchdog (local health monitor + auto-redeploy)
+  hosts: localhost
+  connection: local
+  become: no
+  gather_facts: yes
+  roles:
+    - watchdog
+
+- name: Deploy Syncthing on VPS and localhost
+  import_playbook: 21-syncthing.yml
+
+- name: Publish relay advertisement events
+  import_playbook: 23-relay-advertisement.yml

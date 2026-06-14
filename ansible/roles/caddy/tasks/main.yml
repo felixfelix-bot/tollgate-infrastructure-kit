@@ -28,7 +28,7 @@
     mode: '0755'
 
 - name: Deploy services status page
-  copy:
+  template:
     src: "{{ playbook_dir }}/../../static/services/index.html"
     dest: "{{ tollgate_static_dir }}/services/index.html"
     mode: '0644'

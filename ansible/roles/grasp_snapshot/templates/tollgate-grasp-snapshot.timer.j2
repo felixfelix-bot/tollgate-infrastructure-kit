@@ -1,0 +1,10 @@
+[Unit]
+Description=Run GRASP snapshot every 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

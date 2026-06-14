@@ -16,3 +16,7 @@ health_port = {{ grasp_mirror_health_port }}
 [signing]
 key_file = "{{ grasp_mirror_signing_key_file }}"
 {% endif %}
+
+[nip46]
+relays = [{% for r in grasp_mirror_nip46_relays %}"{{ r }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+signing_timeout_secs = {{ grasp_mirror_nip46_signing_timeout }}

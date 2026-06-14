@@ -1,32 +1,103 @@
 ---
 - name: Deploy Syncthing on VPS
-  hosts: tollgate-vps
+  hosts: vps
   become: yes
   gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
   tasks:
     - include_role:
         name: syncthing
         tasks_from: vps
 
-- name: Setup Syncthing on localhost
-  hosts: localhost
-  connection: local
+- name: Setup Syncthing on backup machine
+  hosts: backup
   become: no
   gather_facts: yes
+  ignore_unreachable: true
   tasks:
     - include_role:
         name: syncthing
-        tasks_from: localhost
+        tasks_from: backup-machine
 
-- name: Configure Syncthing peering
-  hosts: localhost
-  connection: local
-  become: no
-  gather_facts: yes
+- name: Gather VPS syncthing info
+  hosts: vps
+  become: yes
+  gather_facts: no
+  ignore_unreachable: true
+  serial: 1
   vars:
-    vps_syncthing_id: "{{ hostvars[groups['tollgate-vps'][0]].vps_syncthing_id }}"
-    vps_syncthing_api_key: "{{ hostvars[groups['tollgate-vps'][0]].vps_syncthing_api_key }}"
+    syncthing_user: syncthing
+    syncthing_config_dir: "/var/lib/{{ syncthing_user }}/.config/syncthing"
+  tasks:
+    - name: Get VPS syncthing device ID
+      shell: "syncthing --device-id --home={{ syncthing_config_dir }}"
+      register: vps_device_id_raw
+      changed_when: false
+
+    - name: Get VPS syncthing API key
+      command: "grep -oP '(?<=<apikey>)[^<]+' {{ syncthing_config_dir }}/config.xml"
+      register: vps_api_key_raw
+      changed_when: false
+
+    - name: Pass VPS syncthing info to both hosts
+      add_host:
+        name: "{{ item }}"
+        vps_syncthing_id: "{{ vps_device_id_raw.stdout | trim }}"
+        vps_syncthing_api_key: "{{ vps_api_key_raw.stdout | trim }}"
+      loop:
+        - backup
+        - vps1
+        - vps2
+
+- name: Get backup machine syncthing info
+  hosts: backup
+  become: no
+  gather_facts: no
+  ignore_unreachable: true
+  tasks:
+    - name: Get backup machine device ID
+      command: syncthing --device-id
+      register: backup_device_id_raw
+      changed_when: false
+
+    - name: Get backup machine API key
+      command: "grep -oP '(?<=<apikey>)[^<]+' /home/c03rad0r/.local/state/syncthing/config.xml"
+      register: backup_api_key_raw
+      changed_when: false
+
+    - name: Pass backup machine syncthing info to VPS hosts
+      add_host:
+        name: "{{ item }}"
+        backup_syncthing_id: "{{ backup_device_id_raw.stdout | trim }}"
+        backup_syncthing_api_key: "{{ backup_api_key_raw.stdout | trim }}"
+      loop:
+        - vps1
+        - vps2
+
+- name: Configure peering on backup machine (local API)
+  hosts: backup
+  become: no
+  gather_facts: no
+  ignore_unreachable: true
+  vars:
+    vps_syncthing_id: "{{ hostvars['backup'].vps_syncthing_id }}"
+    vps_syncthing_api_key: "{{ hostvars['backup'].vps_syncthing_api_key }}"
   tasks:
     - include_role:
         name: syncthing
-        tasks_from: peering
+        tasks_from: peering-local
+
+- name: Configure peering on VPS
+  hosts: vps
+  become: yes
+  gather_facts: no
+  ignore_unreachable: true
+  serial: 1
+  vars:
+    backup_syncthing_id: "{{ hostvars[inventory_hostname].backup_syncthing_id }}"
+    backup_syncthing_api_key: "{{ hostvars[inventory_hostname].backup_syncthing_api_key }}"
+  tasks:
+    - include_role:
+        name: syncthing
+        tasks_from: peering-vps

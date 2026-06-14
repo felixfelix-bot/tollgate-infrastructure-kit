@@ -1,15 +1,25 @@
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail
 
 BACKUP_DIR="{{ backup_staging_dir }}"
 TIMESTAMP=$(date +%F_%H%M%S)
 RETENTION_DAYS={{ backup_retention_days }}
+ERRORS=0
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+bail() {
+    log "ERROR: $1"
+    ERRORS=$((ERRORS + 1))
+}
+
 mkdir -p "$BACKUP_DIR"/{strfry,ngit-relay,grasp,mints,routstr,caddy}
+
+if [ -x /usr/local/bin/gen-backup-status.py ]; then
+    /usr/local/bin/gen-backup-status.py > /dev/null 2>&1 && log "Pre-backup status written" || bail "gen-backup-status.py pre-run failed"
+fi
 
 log "Starting tollgate backup..."
 
@@ -23,7 +33,7 @@ if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^{{ backup_st
         log "strfry export done: $FINAL"
     else
         rm -f "$TMPFILE"
-        log "ERROR: strfry export failed"
+        bail "strfry export failed"
     fi
 else
     log "SKIP: strfry container not running"
@@ -39,17 +49,30 @@ if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^{{ backup_ng
         log "ngit-relay export done: $FINAL"
     else
         rm -f "$TMPFILE"
-        log "ERROR: ngit-relay export failed"
+        bail "ngit-relay export failed"
     fi
 else
     log "SKIP: ngit-relay container not running"
 fi
 
-# --- GRASP git mirror ---
+# --- GRASP git mirror (incremental via rsync) ---
 if [ -d "{{ backup_grasp_git_dir }}" ]; then
-    log "Mirroring GRASP git repos..."
-    rm -rf "$BACKUP_DIR/grasp/git"
-    cp -a "{{ backup_grasp_git_dir }}" "$BACKUP_DIR/grasp/git"
+    log "Mirroring GRASP git repos (incremental rsync)..."
+    GRASP_PREV="$BACKUP_DIR/grasp/git.prev"
+    GRASP_CUR="$BACKUP_DIR/grasp/git"
+    if [ -d "$GRASP_CUR" ]; then
+        if [ -d "$GRASP_PREV" ]; then
+            rm -rf "$GRASP_PREV"
+        fi
+        mv "$GRASP_CUR" "$GRASP_PREV"
+    fi
+    mkdir -p "$GRASP_CUR"
+    if [ -d "$GRASP_PREV" ]; then
+        rsync -a --delete --link-dest="$GRASP_PREV" "{{ backup_grasp_git_dir }}/" "$GRASP_CUR/"
+    else
+        rsync -a --delete "{{ backup_grasp_git_dir }}/" "$GRASP_CUR/"
+    fi
+    rm -rf "$GRASP_PREV"
     log "GRASP git mirror done"
 else
     log "SKIP: GRASP git dir not found"
@@ -90,4 +113,13 @@ log "Cleaning up backups older than $RETENTION_DAYS days..."
 find "$BACKUP_DIR" -name '*.jsonl' -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
 find "$BACKUP_DIR" -name '*.tmp' -type f -mtime +1 -delete 2>/dev/null || true
 
-log "Backup complete."
+# --- Final status update ---
+if [ -x /usr/local/bin/gen-backup-status.py ]; then
+    /usr/local/bin/gen-backup-status.py > /dev/null 2>&1 && log "Post-backup status written" || bail "gen-backup-status.py post-run failed"
+fi
+
+if [ "$ERRORS" -gt 0 ]; then
+    log "Backup complete with $ERRORS error(s)"
+else
+    log "Backup complete."
+fi

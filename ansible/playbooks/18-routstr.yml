@@ -1,6 +1,8 @@
 ---
 - name: Deploy Routstr AI inference node with dedicated Cashu mint
-  hosts: tollgate-vps
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
   become: yes
   gather_facts: yes
   roles:

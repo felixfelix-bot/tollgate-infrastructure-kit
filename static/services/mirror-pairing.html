@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRASP Mirror — NIP-46 Pairing</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--orange:#f7931a;--purple:#7c3aed;--bg:#0a0a0f;--card:#12121a;--border:#1e1e2e;--text:#e2e2e8;--dim:#6b6b7b;--up:#22c55e;--down:#ef4444;--pending:#eab308}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh}
+.header{background:linear-gradient(135deg,rgba(247,147,26,0.08),rgba(124,58,237,0.08));border-bottom:1px solid var(--border);padding:2rem 1rem;text-align:center}
+.header h1{font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,var(--orange),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header .subtitle{color:var(--dim);font-size:0.85rem;margin-top:0.25rem}
+.container{max-width:700px;margin:0 auto;padding:1.5rem 1rem 3rem}
+.status-bar{display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1rem;border:1px solid var(--border);border-radius:8px;margin-bottom:1.5rem;background:var(--card)}
+.status-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.status-dot.ok{background:var(--up);box-shadow:0 0 8px var(--up)}
+.status-dot.err{background:var(--down);box-shadow:0 0 8px var(--down);animation:pulse 2s infinite}
+.status-dot.loading{background:var(--pending);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.status-text{font-size:0.85rem}
+.status-text .label{color:var(--dim);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em}
+.selector{margin-bottom:1.5rem}
+.selector label{display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--dim);margin-bottom:0.5rem}
+.selector select{width:100%;padding:0.75rem 1rem;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:0.9rem;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b6b7b'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 1rem center}
+.selector select:focus{outline:none;border-color:var(--purple)}
+.pairing-card{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:1.5rem;text-align:center}
+.pairing-card .npub-label{font-family:monospace;font-size:0.75rem;color:var(--dim);margin-bottom:0.5rem;word-break:break-all}
+.pairing-card .connection-status{display:inline-flex;align-items:center;gap:0.4rem;padding:0.3rem 0.75rem;border-radius:20px;font-size:0.75rem;font-weight:600;margin-bottom:1rem}
+.pairing-card .connection-status.connected{background:rgba(34,197,94,0.15);color:var(--up)}
+.pairing-card .connection-status.disconnected{background:rgba(234,179,8,0.15);color:var(--pending)}
+.qr-container{display:flex;justify-content:center;margin:1rem 0}
+.qr-container canvas{border-radius:8px}
+.uri-box{margin-top:1rem;padding:0.75rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:0.7rem;color:var(--dim);word-break:break-all;max-height:80px;overflow-y:auto;text-align:left}
+.uri-box a{color:var(--purple);text-decoration:none}
+.uri-box a:hover{text-decoration:underline}
+.instructions{margin-top:1rem;font-size:0.8rem;color:var(--dim);line-height:1.6}
+.instructions ol{padding-left:1.5rem}
+.instructions li{margin-bottom:0.3rem}
+.error-msg{padding:1rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:#fca5a5;font-size:0.85rem}
+.refresh-btn{display:inline-flex;align-items:center;gap:0.5rem;margin-top:1rem;padding:0.5rem 1rem;background:none;border:1px solid var(--border);color:var(--dim);border-radius:6px;font-size:0.8rem;cursor:pointer;transition:all 0.2s}
+.refresh-btn:hover{border-color:var(--orange);color:var(--orange)}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>GRASP Mirror — NIP-46 Pairing</h1>
+  <div class="subtitle">Link Amber to authorize event signing</div>
+</div>
+<div class="container">
+  <div class="status-bar" id="daemonStatus">
+    <div class="status-dot loading" id="statusDot"></div>
+    <div class="status-text">
+      <div class="label">Daemon</div>
+      <div id="statusText">Connecting...</div>
+    </div>
+  </div>
+
+  <div id="errorArea" class="error-msg hidden"></div>
+
+  <div id="mainContent" class="hidden">
+    <div class="selector">
+      <label>Select Npub to Pair</label>
+      <select id="npubSelect">
+        <option value="">Loading...</option>
+      </select>
+    </div>
+
+    <div class="pairing-card" id="pairingCard">
+      <div class="npub-label" id="npubHex"></div>
+      <div class="connection-status disconnected" id="connectionBadge">
+        <span id="badgeDot">&#9679;</span>
+        <span id="badgeText">Not Paired</span>
+      </div>
+      <div class="qr-container" id="qrContainer"></div>
+      <div class="uri-box" id="uriBox"></div>
+      <div class="instructions">
+        <ol>
+          <li>Open <strong>Amber</strong> on your phone</li>
+          <li>Tap <strong>Scan QR</strong> or go to <strong>Connections</strong></li>
+          <li>Scan the QR code above</li>
+          <li><strong>Approve</strong> the connection request in Amber</li>
+          <li>Status will update to <span style="color:var(--up)">Connected</span> automatically</li>
+        </ol>
+      </div>
+    </div>
+    <button class="refresh-btn" id="refreshBtn" onclick="fetchHealth()">&#8635; Refresh Status</button>
+  </div>
+</div>
+<script>
+const HEALTH_URL = '/api/mirror-health';
+const NPUB_MAP = {
+  'c3e23eb5e3d00f18b2f4f588d8cdbc548648be761bdd90812186df4603d7caa9': 'npub12m5e...4j4szl',
+  '2c8db3b4bf7075f9f24db49d6443e144c780206c2b15671d0ddaebc1091108f9': 'npub1c03ra...ryrnw',
+  '56e9936d5cb44ddd7ab8c506fbfc8cc621431a7e030f1c8b8bce52ca17ca9838': 'npub19jxm8...s3s0f3',
+};
+const FALLBACK_SESSIONS = [
+  {npub:'c3e23eb5e3d00f18b2f4f588d8cdbc548648be761bdd90812186df4603d7caa9',connected:false,pairing_uri:'nostrconnect://2839411006e06e1c83b9cbd29a63ae7f58444e2fe03fa04e720e4eaff6e28fd2?metadata=%7B%22name%22%3A%22grasp-mirror%22%7D&relay=wss://relay.orangesync.tech&relay=wss://ngit.orangesync.tech'},
+  {npub:'2c8db3b4bf7075f9f24db49d6443e144c780206c2b15671d0ddaebc1091108f9',connected:false,pairing_uri:'nostrconnect://92d7842be1b30c4ea627447c30ec6fe555b6b0139136436233e2ee0aaa72990f?metadata=%7B%22name%22%3A%22grasp-mirror%22%7D&relay=wss://relay.orangesync.tech&relay=wss://ngit.orangesync.tech'},
+  {npub:'56e9936d5cb44ddd7ab8c506fbfc8cc621431a7e030f1c8b8bce52ca17ca9838',connected:false,pairing_uri:'nostrconnect://9c273012cd08569fe3e8081643243b58a863707dff90c06cf156cf65703f50a4?metadata=%7B%22name%22%3A%22grasp-mirror%22%7D&relay=wss://relay.orangesync.tech&relay=wss://ngit.orangesync.tech'},
+];
+
+let sessions = [];
+let refreshInterval = null;
+
+async function fetchHealth() {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  const errArea = document.getElementById('errorArea');
+  const mainContent = document.getElementById('mainContent');
+
+  dot.className = 'status-dot loading';
+  text.textContent = 'Checking...';
+  errArea.classList.add('hidden');
+
+  try {
+    const resp = await fetch(HEALTH_URL);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    dot.className = 'status-dot ok';
+    text.textContent = `Up ${formatUptime(data.uptime_secs)} · Cycle #${data.cycle_count}`;
+
+    if (data.nip46 && data.nip46.length > 0) {
+      sessions = data.nip46;
+      mainContent.classList.remove('hidden');
+      populateSelect();
+      updateSelectedSession();
+    } else {
+      mainContent.classList.remove('hidden');
+      errArea.textContent = 'No NIP-46 sessions found. Is the daemon running with NIP-46 configured?';
+      errArea.classList.remove('hidden');
+    }
+  } catch (e) {
+    dot.className = 'status-dot err';
+    text.textContent = 'Daemon offline (showing cached URIs)';
+    sessions = FALLBACK_SESSIONS;
+    mainContent.classList.remove('hidden');
+    errArea.textContent = 'Cannot reach grasp-mirror daemon live status. Showing last known pairing URIs — QR codes are still valid.';
+    errArea.classList.remove('hidden');
+    populateSelect();
+    updateSelectedSession();
+  }
+}
+
+function populateSelect() {
+  const select = document.getElementById('npubSelect');
+  select.innerHTML = '';
+  sessions.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    const short = NPUB_MAP[s.npub] || s.npub.slice(0, 12) + '...';
+    opt.textContent = `${short} ${s.connected ? '✓' : '○'}`;
+    if (!s.connected && select.selectedIndex < 0) opt.selected = true;
+    select.appendChild(opt);
+  });
+  select.addEventListener('change', updateSelectedSession);
+}
+
+function updateSelectedSession() {
+  const idx = document.getElementById('npubSelect').value;
+  const session = sessions[parseInt(idx)];
+  if (!session) return;
+
+  const npubHex = document.getElementById('npubHex');
+  const badge = document.getElementById('connectionBadge');
+  const badgeText = document.getElementById('badgeText');
+  const qrContainer = document.getElementById('qrContainer');
+  const uriBox = document.getElementById('uriBox');
+
+  npubHex.textContent = session.npub;
+
+  if (session.connected) {
+    badge.className = 'connection-status connected';
+    badgeText.textContent = 'Connected';
+    qrContainer.innerHTML = '<p style="color:var(--up);font-size:0.9rem;margin:2rem 0">Session is active and ready to sign</p>';
+    uriBox.innerHTML = 'Connected — no pairing needed';
+  } else if (session.pairing_uri) {
+    badge.className = 'connection-status disconnected';
+    badgeText.textContent = 'Not Paired';
+    qrContainer.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    qrContainer.appendChild(canvas);
+    QRCode.toCanvas(canvas, session.pairing_uri, {
+      width: 256,
+      margin: 2,
+      color: { dark: '#000000', light: '#ffffff' }
+    }, function(error) {
+      if (error) console.error('QR error:', error);
+    });
+    const uriLink = document.createElement('a');
+    uriLink.href = session.pairing_uri;
+    uriLink.textContent = session.pairing_uri;
+    uriBox.innerHTML = '';
+    uriBox.appendChild(uriLink);
+  } else {
+    badge.className = 'connection-status disconnected';
+    badgeText.textContent = 'No URI';
+    qrContainer.innerHTML = '<p style="color:var(--pending);margin:2rem 0">Waiting for pairing URI...</p>';
+    uriBox.textContent = 'No pairing URI available yet';
+  }
+}
+
+function formatUptime(secs) {
+  if (!secs) return '?';
+  if (secs < 60) return `${secs}s`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`;
+  return `${Math.floor(secs / 86400)}d ${Math.floor((secs % 86400) / 3600)}h`;
+}
+
+fetchHealth();
+refreshInterval = setInterval(fetchHealth, 15000);
+</script>
+</body>
+</html>

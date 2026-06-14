@@ -1,0 +1,23 @@
+---
+micro_vpn_enabled: true
+micro_vpn_domain: "vpn.{{ base_domain }}"
+micro_vpn_api_port: 5010
+micro_vpn_wireguard_port: 51820
+micro_vpn_subnet_base: "10.254"
+micro_vpn_server_vpn_ip: "10.254.0.1"
+micro_vpn_max_clients: 253
+micro_vpn_container_name: tollgate-micro-vpn-api
+micro_vpn_worker_container_name: tollgate-micro-vpn-worker
+micro_vpn_wireguard_container_name: tollgate-micro-vpn-wg
+micro_vpn_image: "micro-vpn-api:latest"
+micro_vpn_wireguard_image: "linuxserver/wireguard:latest"
+micro_vpn_data_dir: "{{ tollgate_base_dir }}/micro-vpn"
+micro_vpn_db_dir: "{{ tollgate_base_dir }}/micro-vpn/db"
+micro_vpn_config_dir: "{{ tollgate_base_dir }}/micro-vpn/config"
+micro_vpn_cashu_mint_url: "https://test-mb.mints.orangesync.tech"
+micro_vpn_cashu_mint_unit: "sat"
+micro_vpn_price_per_port_sats: 1000
+micro_vpn_duration_days: 30
+micro_vpn_port_pool_ranges: "10000-20000,30000-40000"
+micro_vpn_reserved_ports: "80,443,7777,7778,8080,3001,3002,7334,8000,8085-8095,50055,22000,8384,65101,65001,2019,22,53,51820,5010"
+micro_vpn_worker_check_interval: 300

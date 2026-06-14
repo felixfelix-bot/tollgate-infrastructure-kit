@@ -1,0 +1,19 @@
+---
+relatr_enabled: true
+relatr_port: 3000
+relatr_domain: "wot.{{ base_domain }}"
+relatr_container_name: tollgate-relatr
+relatr_data_dir: "{{ tollgate_base_dir }}/relatr/data"
+relatr_plugins_dir: "{{ tollgate_base_dir }}/relatr/plugins"
+relatr_source_pubkey: "c3e23eb5e3d00f18b2f4f588d8cdbc548648be761bdd90812186df4603d7caa9"
+relatr_nostr_relays: "wss://relay.{{ base_domain }},wss://ngit.{{ base_domain }},wss://relay.damus.io"
+relatr_server_relays: "wss://relay.{{ base_domain }},wss://ngit.{{ base_domain }}"
+relatr_number_of_hops: 2
+relatr_decay_factor: 0.1
+relatr_cache_ttl_hours: 72
+relatr_sync_interval_hours: 21
+relatr_trust_threshold: 0.1
+relatr_ta_enabled: false
+relatr_is_public_server: false
+relatr_uid: 1000
+relatr_gid: 1000

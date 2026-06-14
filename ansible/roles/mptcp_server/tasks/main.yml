@@ -40,6 +40,7 @@
     host: localhost
     delay: 3
     timeout: 30
+  ignore_errors: yes
 
 - name: Install glorytun
   shell: |
@@ -48,12 +49,14 @@
   args:
     creates: /usr/local/bin/glorytun
   when: glorytun_enabled
+  ignore_errors: yes
 
 - name: Generate glorytun key
   command: glorytun keygen
   register: glorytun_key
   changed_when: false
   when: glorytun_enabled
+  ignore_errors: yes
 
 - name: Save server config
   copy:

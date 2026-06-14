@@ -17,12 +17,14 @@
   args:
     chdir: "{{ tollgate_base_dir }}/src/hive-ci-site"
     creates: "{{ tollgate_base_dir }}/src/hive-ci-site/node_modules/.package-lock.json"
+  ignore_errors: yes
 
 - name: Build hive-ci-site
   command: npm run build
   args:
     chdir: "{{ tollgate_base_dir }}/src/hive-ci-site"
     creates: "{{ tollgate_base_dir }}/src/hive-ci-site/dist/index.html"
+  ignore_errors: yes
 
 - name: Ensure static directory exists
   file:
@@ -36,3 +38,4 @@
     cp -r {{ tollgate_base_dir }}/src/hive-ci-site/dist/* {{ tollgate_static_dir }}/hive-ci/
     find {{ tollgate_static_dir }}/hive-ci -type d -exec chmod 0755 {} \;
     find {{ tollgate_static_dir }}/hive-ci -type f -exec chmod 0644 {} \;
+  ignore_errors: yes

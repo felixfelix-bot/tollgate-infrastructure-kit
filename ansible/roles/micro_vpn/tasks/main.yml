@@ -1,0 +1,110 @@
+---
+- name: Check if micro-vpn is enabled
+  block:
+    - name: Install wireguard-tools
+      apt:
+        name: wireguard-tools
+        state: present
+
+    - name: Create micro-vpn directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ micro_vpn_data_dir }}"
+        - "{{ micro_vpn_db_dir }}"
+        - "{{ micro_vpn_config_dir }}"
+
+    - name: Set micro-vpn facts from env
+      set_fact:
+        micro_vpn_server_public_ip: "{{ lookup('env', 'VPS_IP') | default(ansible_default_ipv4.address, true) }}"
+
+    - name: Generate WireGuard server keys
+      block:
+        - name: Check for existing server keys
+          stat:
+            path: "{{ micro_vpn_config_dir }}/server_private.key"
+          register: wg_server_key
+
+        - name: Generate WireGuard server private key
+          shell: wg genkey > {{ micro_vpn_config_dir }}/server_private.key
+          when: not wg_server_key.stat.exists
+          changed_when: true
+
+        - name: Generate WireGuard server public key
+          shell: wg pubkey < {{ micro_vpn_config_dir }}/server_private.key > {{ micro_vpn_config_dir }}/server_public.key
+          args:
+            creates: "{{ micro_vpn_config_dir }}/server_public.key"
+
+        - name: Set key permissions
+          file:
+            path: "{{ micro_vpn_config_dir }}/server_private.key"
+            mode: "0600"
+
+    - name: Read server public key
+      slurp:
+        src: "{{ micro_vpn_config_dir }}/server_public.key"
+      register: wg_pub_key_data
+
+    - name: Set server public key fact
+      set_fact:
+        micro_vpn_server_public_key: "{{ wg_pub_key_data.content | b64decode | trim }}"
+
+    - name: Read server private key
+      slurp:
+        src: "{{ micro_vpn_config_dir }}/server_private.key"
+      register: wg_priv_key_data
+
+    - name: Set server private key fact
+      set_fact:
+        micro_vpn_server_private_key: "{{ wg_priv_key_data.content | b64decode | trim }}"
+
+    - name: Deploy WireGuard config
+      template:
+        src: wg0.conf.j2
+        dest: "{{ micro_vpn_config_dir }}/wg0.conf"
+        mode: "0600"
+
+    - name: Deploy docker-compose
+      template:
+        src: docker-compose.micro-vpn.yml.j2
+        dest: "{{ micro_vpn_data_dir }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Start micro-vpn containers
+      community.docker.docker_compose_v2:
+        project_src: "{{ micro_vpn_data_dir }}"
+        state: present
+        build: policy
+      register: micro_vpn_deploy
+
+    - name: Wait for VPN API to start
+      uri:
+        url: "http://localhost:{{ micro_vpn_api_port }}/api/v1/status"
+        return_content: yes
+      register: micro_vpn_health
+      until: micro_vpn_health.status == 200
+      retries: 30
+      delay: 3
+
+    - name: Verify micro-vpn is accessible via Caddy
+      uri:
+        url: "https://{{ micro_vpn_domain }}/api/v1/status"
+        return_content: yes
+        validate_certs: no
+      register: micro_vpn_caddy_health
+      until: micro_vpn_caddy_health.status == 200
+      retries: 15
+      delay: 3
+
+    - name: Display micro-vpn deployment info
+      debug:
+        msg: |
+          Micro VPN deployed successfully!
+          API: https://{{ micro_vpn_domain }}
+          WireGuard: {{ micro_vpn_server_public_ip }}:{{ micro_vpn_wireguard_port }}
+          Price: {{ micro_vpn_price_per_port_sats }} sats/port/{{ micro_vpn_duration_days }} days
+          Port pool: {{ micro_vpn_port_pool_ranges }}
+          Cashu mint: {{ micro_vpn_cashu_mint_url }}
+  when: "'micro_vpn' in machine_roles | default([])"

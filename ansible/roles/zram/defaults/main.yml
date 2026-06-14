@@ -1,0 +1,3 @@
+---
+zram_algo: zstd
+zram_swappiness: 180

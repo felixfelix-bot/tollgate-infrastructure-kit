@@ -41,6 +41,11 @@
     - grasp_repo_url is regex('^nostr://')
     - grasp_version is not defined or grasp_version | length == 0
 
+- name: Check if ngit-grasp staging directory exists
+  stat:
+    path: /tmp/ngit-grasp-upgrade
+  register: grasp_staging
+
 - name: Copy ngit-grasp source from staging
   shell: |
     rm -rf {{ tollgate_base_dir }}/src/ngit-grasp/*
@@ -49,6 +54,26 @@
   when:
     - grasp_version is defined
     - grasp_version | length > 0
+    - grasp_staging.stat.exists
+
+- name: Remove broken ngit-grasp directory
+  file:
+    path: "{{ tollgate_base_dir }}/src/ngit-grasp"
+    state: absent
+  when:
+    - grasp_repo_url is not regex('^https?://')
+    - grasp_version is defined
+    - not grasp_staging.stat.exists
+
+- name: Clone ngit-grasp from GitHub
+  git:
+    repo: "https://github.com/danconwaydev/ngit-grasp.git"
+    dest: "{{ tollgate_base_dir }}/src/ngit-grasp"
+    depth: 1
+    force: yes
+  when:
+    - grasp_repo_url is not regex('^https?://')
+    - grasp_version is defined
 
 - name: Clone ngit-grasp (HTTPS URL)
   git:
@@ -62,7 +87,10 @@
   shell: |
     cd {{ tollgate_base_dir }}/src/ngit-grasp
     git checkout {{ grasp_version }}
-  when: grasp_version is defined and grasp_version | length > 0
+  when:
+    - grasp_version is defined
+    - grasp_version | length > 0
+    - grasp_staging.stat.exists | default(false)
 
 - name: Build ngit-grasp (release)
   shell: |
@@ -94,3 +122,4 @@
     state: started
     enabled: yes
     daemon_reload: yes
+  when: machine_active | default(true)

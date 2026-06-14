@@ -1,0 +1,11 @@
+---
+- name: Reload systemd for bitcoin-knots
+  systemd:
+    daemon_reload: yes
+  listen: restart bitcoind-knots
+
+- name: Restart bitcoind-knots
+  systemd:
+    name: bitcoind-knots
+    state: restarted
+  listen: restart bitcoind-knots

@@ -7,13 +7,21 @@
       - libssl-dev
       - git
       - libsqlite3-dev
+      - rsync
     state: present
 
 - name: Ensure Rust is installed
   shell: |
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   args:
-    creates: /root/.cargo/bin/rustup
+    creates: "{{ ansible_env.HOME }}/.cargo/bin/rustup"
+
+- name: Pin Rust {{ grasp_mirror_rust_version }} for nostr-sdk 0.39 compatibility
+  shell: |
+    {{ ansible_env.HOME }}/.cargo/bin/rustup install {{ grasp_mirror_rust_version }}
+    {{ ansible_env.HOME }}/.cargo/bin/rustup default {{ grasp_mirror_rust_version }}
+  args:
+    executable: /bin/bash
 
 - name: Ensure source directory exists
   file:
@@ -26,6 +34,14 @@
     git clone http://localhost:{{ grasp_port }}/npub12m5exm2uk3xa674cc5r0hlyvccs5xxn7qv83ezuteefv5972nquq4j4szl/grasp-mirror.git {{ grasp_mirror_source_dir }}
   args:
     creates: "{{ grasp_mirror_source_dir }}/.git/HEAD"
+
+- name: Update grasp-mirror source
+  shell: |
+    cd {{ grasp_mirror_source_dir }}
+    git fetch origin
+    git reset --hard origin/master
+  register: grasp_mirror_source_update
+  changed_when: "'HEAD is now at' in grasp_mirror_source_update.stdout"
 
 - name: Ensure data directory exists
   file:
@@ -53,9 +69,9 @@
 - name: Build grasp-mirror (release)
   shell: |
     cd {{ grasp_mirror_source_dir }}
-    /root/.cargo/bin/cargo build --release
+    {{ ansible_env.HOME }}/.cargo/bin/cargo build --release
   environment:
-    PATH: "/root/.cargo/bin:{{ ansible_env.PATH }}"
+    PATH: "{{ ansible_env.HOME }}/.cargo/bin:{{ ansible_env.PATH }}"
   register: grasp_mirror_build
   changed_when: "'Compiling' in grasp_mirror_build.stderr"
 

@@ -1,6 +1,8 @@
 ---
 - name: Deploy test mints (MB, KB, GB, min)
-  hosts: tollgate-vps
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
   become: yes
   gather_facts: yes
   vars:

@@ -1,0 +1,25 @@
+# Network (listen=0: outbound-only, no inbound P2P)
+listen=0
+port={{ bitcoin_core_port }}
+
+# Disk Limit (Pruned to ~10 GB)
+prune={{ bitcoin_core_prune_mb }}
+
+# Radical RAM & Cache Minimization
+dbcache={{ bitcoin_core_dbcache_mb }}
+maxconnections={{ bitcoin_core_max_connections }}
+maxsigcachesize=4
+maxmempool=100
+maxorphantx=10
+
+# CPU & Traffic Conservation (blocks-only mode)
+blocksonly=1
+
+# Disable Features
+txindex=0
+disablewallet=1
+
+# RPC (for local bitcoin-cli queries)
+rpcport={{ bitcoin_core_rpc_port }}
+rpcuser={{ bitcoin_core_rpc_user }}
+rpcpassword={{ bitcoin_core_rpc_password }}

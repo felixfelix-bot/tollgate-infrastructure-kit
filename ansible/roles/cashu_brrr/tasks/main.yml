@@ -5,13 +5,21 @@
     state: directory
     mode: "0755"
 
+- name: Check if npm is available
+  command: which npm
+  register: npm_check
+  changed_when: false
+  failed_when: false
+
 - name: Install build dependencies
   apt:
     name:
       - nodejs
       - npm
     state: present
-  when: cashu_brrr_local_repo | length == 0
+  when:
+    - cashu_brrr_local_repo | length == 0
+    - npm_check.rc != 0
 
 - name: Clone or update cashu-brrr repository
   git:

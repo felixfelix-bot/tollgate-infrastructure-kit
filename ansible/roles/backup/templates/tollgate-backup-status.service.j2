@@ -1,0 +1,8 @@
+[Unit]
+Description=Tollgate Backup Status Generator
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/gen-backup-status.py
+StandardOutput=journal
+StandardError=journal

@@ -92,6 +92,7 @@
     project_src: "{{ tollgate_base_dir }}/routstr"
     state: present
   register: routstr_deploy
+  when: machine_active | default(true)
 
 - name: Wait for Routstr to start
   uri:
@@ -101,6 +102,7 @@
   until: routstr_health.status == 200
   retries: 30
   delay: 3
+  when: machine_active | default(true)
 
 - name: Login to Routstr admin API
   uri:
@@ -111,6 +113,7 @@
     body_format: json
     return_content: yes
   register: routstr_login
+  when: machine_active | default(true)
 
 - name: Configure Routstr settings via admin API
   uri:
@@ -130,6 +133,7 @@
     body_format: json
     return_content: yes
   register: routstr_settings_result
+  when: machine_active | default(true)
 
 - name: Verify Routstr is accessible via Caddy
   uri:
@@ -140,6 +144,7 @@
   until: routstr_caddy_health.status == 200
   retries: 15
   delay: 3
+  when: machine_active | default(true)
 
 - name: Get Tor onion address
   shell: "cat {{ routstr_tor_dir }}/ROUTER/hostname 2>/dev/null || echo 'pending'"

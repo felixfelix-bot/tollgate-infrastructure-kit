@@ -7,14 +7,14 @@ services:
     environment:
       CDK_MINTD_URL: "{{ mint_url }}"
       CDK_MINTD_LN_BACKEND: fakewallet
-      CDK_MINTD_LISTEN_HOST: "0.0.0.0"
+      CDK_MINTD_LISTEN_HOST: "127.0.0.1"
       CDK_MINTD_LISTEN_PORT: "{{ mint_rest_port }}"
       CDK_MINTD_DATABASE: sqlite
       CDK_MINTD_MNEMONIC: "{{ mint_mnemonic }}"
       CDK_MINTD_FAKE_WALLET_SUPPORTED_UNITS: "{{ mint_supported_units }}"
       CDK_MINTD_LN_MAX_MINT: "{{ max_single_issuance | default(10000) }}"
       CDK_MINTD_MINT_MANAGEMENT_ENABLED: "true"
-      CDK_MINTD_MANAGEMENT_ADDRESS: "0.0.0.0"
+      CDK_MINTD_MANAGEMENT_ADDRESS: "127.0.0.1"
       CDK_MINTD_MANAGEMENT_PORT: "{{ mint_grpc_port }}"
       CDK_MINTD_ENABLE_INFO_PAGE: "true"
     volumes:

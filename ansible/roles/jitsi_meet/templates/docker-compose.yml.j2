@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  web:
+    image: jitsi/web:stable-9584
+    container_name: jitsi-web
+    restart: unless-stopped
+    environment:
+      - ENABLE_AUTH=0
+      - ENABLE_GUESTS=1
+      - ENABLE_LOBBY=0
+      - AUTH_TYPE=none
+      - PUBLIC_URL=https://{{ jitsi_meet_subdomain }}.{{ base_domain }}
+      - TZ=UTC
+      - ENABLE_HTTPS=0
+      - DISABLE_HTTP_LEVEL=1
+      - ENABLE_LETSENCRYPT=0
+      - ENABLE_XMPP_WEBSOCKET=1
+      - ENABLE_SCTP=1
+      - ENABLE_RECORDING=0
+      - ENABLE_TRANSCRIPTIONS=0
+      - ENABLE_SUBDOMAINS=0
+      - ENABLE_XMPP_API=0
+      - ENABLE_AUTOMATIC_LOGIN=1
+      - DISABLE_AUDIO_LEVELS=0
+      - ENABLE_NOISY_MIC_DETECTION=1
+      - START_VIDEO_MUTED=0
+      - START_AUDIO_MUTED=0
+      - ENABLE_WELCOME_PAGE=1
+      - ENABLE_PREJOIN_PAGE=1
+      - ENABLE_CLOSE_PAGE=0
+      - DEFAULT_LANGUAGE=en
+      - SHOW_JITSI_WATERMARK=0
+      - SHOW_WATERMARK_FOR_GUESTS=0
+    networks:
+      - {{ docker_network_name }}
+      - default
+    expose:
+      - "80"
+      - "443"
+    ports:
+      - "127.0.0.1:{{ jitsi_meet_http_port }}:80"
+
+  prosody:
+    image: jitsi/prosody:stable-9584
+    container_name: jitsi-prosody
+    restart: unless-stopped
+    environment:
+      - AUTH_TYPE=none
+      - ENABLE_AUTH=0
+      - ENABLE_GUESTS=1
+      - ENABLE_LOBBY=0
+      - ENABLE_XMPP_API=0
+      - ENABLE_SCTP=1
+      - PUBLIC_URL=https://{{ jitsi_meet_subdomain }}.{{ base_domain }}
+      - TZ=UTC
+      - JICOFO_AUTH_PASSWORD=jicofopass
+      - JICOFO_COMPONENT_SECRET=jicofosecret
+      - JVB_AUTH_PASSWORD=jvbpass
+      - JIBRI_RECORDER_USER=recorder
+      - JIBRI_RECORDER_PASSWORD=pass
+    networks:
+      - default
+    expose:
+      - "5222"
+      - "5347"
+      - "5280"
+
+  jicofo:
+    image: jitsi/jicofo:stable-9584
+    container_name: jitsi-jicofo
+    restart: unless-stopped
+    environment:
+      - AUTH_TYPE=none
+      - ENABLE_AUTH=0
+      - JICOFO_AUTH_PASSWORD=jicofopass
+      - TZ=UTC
+    depends_on:
+      - prosody
+    networks:
+      - default
+
+  jvb:
+    image: jitsi/jvb:stable-9584
+    container_name: jitsi-jvb
+    restart: unless-stopped
+    environment:
+      - JVB_AUTH_USER=jvb
+      - JVB_AUTH_PASSWORD=jvbpass
+      - JVB_BREWERY_MUC=jvbbrewery
+      - PUBLIC_URL=https://{{ jitsi_meet_subdomain }}.{{ base_domain }}
+      - TZ=UTC
+      - DOCKER_HOST_ADDRESS={{ ansible_default_ipv4.address | default(machine_ip) }}
+    ports:
+      - "10000:10000/udp"
+    depends_on:
+      - prosody
+    networks:
+      - default
+
+networks:
+  default:
+  {{ docker_network_name }}:
+    external: true

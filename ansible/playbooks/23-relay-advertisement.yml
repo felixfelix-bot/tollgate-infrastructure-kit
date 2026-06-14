@@ -2,6 +2,7 @@
 - name: Publish relay advertisement events
   hosts: localhost
   connection: local
+  become: no
   gather_facts: yes
   roles:
     - relay_advertisement

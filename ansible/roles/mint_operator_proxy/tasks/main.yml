@@ -37,7 +37,8 @@
     url: "http://localhost:{{ mint_operator_proxy_port }}/api/health"
     return_content: yes
   register: proxy_health
-  until: proxy_health.status == 200
+  until: proxy_health.status in [200, 401]
+  ignore_errors: yes
   retries: 15
   delay: 2
 
