@@ -14,34 +14,35 @@ Signing via **Amber** (Android NIP-46 signer): `nak event --sec "bunker://..."`
 ## Workflow
 
 ### Phase 1 — Enrich follows into dossiers (automated, read-only)
-- [ ] 1.1 Fetch ~8 recent kind-1 notes per followed pubkey (batched via `nak req`)
-- [ ] 1.2 Fetch NIP-51 follow-pack membership (kind 39000-39009) per pubkey
-- [ ] 1.3 Compute mutuals / WoT overlap (how many of user's follows also follow each)
-- [ ] 1.4 Write `follows-enriched.jsonl` (profile + notes_sample + packs + mutuals)
+- [x] 1.1 Fetch ~8 recent kind-1 notes per followed pubkey (batched via `nak req`)
+- [ ] 1.2 Fetch NIP-51 follow-pack membership (kind 39000-39009) per pubkey — deferred (expensive; AI triages on profile+notes+activity)
+- [ ] 1.3 Compute mutuals / WoT overlap — deferred (expensive)
+- [x] 1.4 Write `follows-enriched.jsonl` (profile + notes_sample + packs + mutuals) — 225 pubkeys, 217 profiles, 94 active
 
 ### Phase 2 — Criteria rubric (conversation)
 - [ ] 2.1 Capture user's "what I'm looking for" (topics, signal-type, recency, engagement)
 - [ ] 2.2 Capture "what to avoid" (spam, memes-only, inactive)
-- [ ] 2.3 Encode as a scoring rubric prompt
+- [x] 2.3 Encode as a scoring rubric prompt — `scripts/rubric.example.txt` template (awaiting user edit)
 
 ### Phase 3 — AI clustering via ppq.ai
-- [ ] 3.1 `scripts/follow-triage.py` — batch dossiers + rubric to ppq.ai
-- [ ] 3.2 Categorise 217 npubs into named sets + per-npub rationale + suggested petname
+- [x] 3.1 `scripts/follow-triage.py` — batch dossiers + rubric to ppq.ai (built)
+- [ ] 3.2 Categorise 217 npubs into named sets + per-npub rationale + suggested petname — awaiting PPQ_API_KEY + criteria
 - [ ] 3.3 Output `triage.json` (sets: keep clusters, borderline, purge)
 - [ ] 3.4 User reviews/merges/splits sets
 
 ### Phase 4 — Curated purge (signed by Amber)
-- [ ] 4.1 Backup current kind-3 to `follows-backup.json`
-- [ ] 4.2 Fetch each keeper's kind-10002 for relay hints
+- [x] 4.0 `scripts/follow-apply.py` built (backup, fetch relay hints, publish keep-set via Amber)
+- [ ] 4.1 Backup current kind-3 to `follows-backup.json` — automated in follow-apply.py
+- [ ] 4.2 Fetch each keeper's kind-10002 for relay hints — `--also-fetch-relays` flag
 - [ ] 4.3 Confirm AI-suggested petnames with user
-- [ ] 4.4 Build new kind-3 with keep-set (`-p <pk>;<relay>;<petname>`)
+- [ ] 4.4 Build new kind-3 with keep-set
 - [ ] 4.5 Publish via `nak event -k 3 --sec "bunker://..." <relays>` (Amber approval)
 - [ ] 4.6 Verify agg relay reconciles down to keep-set
 
 ### Phase 5 — `follow-review` helper (reusable, ppq.ai)
-- [ ] 5.1 `scripts/follow-review.sh <npub>` — fetch profile + notes + WoT overlap
-- [ ] 5.2 Call ppq.ai for recommendation (alignment, spam flags, suggested petname)
-- [ ] 5.3 Offer to follow via Amber with petname + relay hint
+- [x] 5.1 `scripts/follow-review.sh <npub>` — fetch profile + notes (built, smoke-tested)
+- [x] 5.2 Call ppq.ai for recommendation (alignment, spam flags, suggested petname)
+- [x] 5.3 Offer to follow via Amber with petname + relay hint (merge-safe)
 
 ### Phase 6 — Follow-pack ingestion (optional)
 - [ ] 6.1 `scripts/follow-pack-review.sh <pack-event-id>` — pull NIP-51 pack

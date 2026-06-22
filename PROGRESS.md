@@ -419,6 +419,14 @@
 - [ ] **restic incremental backups** — replace full-daily strfry JSONL with dedup snapshots
 - [ ] **relay1 SSL fix on vps1** — vps1-side Caddy/cert issue causing `TLSV1_ALERT_INTERNAL_ERROR`
 
+### Follow-List Triage + Curated Purge (Jun 2026)
+- [x] **Plan doc** — `PLAN-follow-triage.md` with phased checklist
+- [x] **Tooling built** — `scripts/follow-enrich.py` (dossiers), `follow-triage.py` (ppq.ai clustering), `follow-apply.py` (curated kind-3 via Amber), `follow-review.sh` (per-npub review), `rubric.example.txt`
+- [x] **Enrichment run** — 225 follows: 217 profiles resolved, 94 active, 131 inactive; topic signals: nostr(88) ai(72) bitcoin(57) tor(25) git(17) cashu(7)
+- [x] **Signing design** — Amber NIP-46 bunker via `nak --sec bunker://...` (nsec never leaves phone); follow-review.sh merge-safe
+- [ ] **AI triage** — awaiting ppq.ai key + user criteria to run `follow-triage.py`
+- [ ] **Curated purge** — awaiting Amber bunker URI + triage keep-set to run `follow-apply.py`
+
 ## Blocked / Upstream
 - [ ] True custom unit support (MB, KB, GB, min in keyset) — requires gRPC payment processor or CDK upstream fix
 - [ ] Routstr AI inference via cashu Python lib — keyset ID format mismatch. Pre-built Docker image, needs upstream update or custom build
