@@ -35,8 +35,8 @@ Root: `tollgate-backup.sh.j2:31` does full `strfry export` daily x 7 copies.
 ### Phase 1 — Stabilize disk + status (immediate relief)
 
 - [x] 1.1 Disk cleanup playbook `38-disk-cleanup.yml`: `docker builder prune -af`, delete strfry JSONL >2 days, remove stale `/home/debian/market*` clones on vps2, `journalctl --vacuum-size=200M`
-- [ ] 1.2 Docker log rotation: `/etc/docker/daemon.json` with `json-file` `max-size=20m max-file=3` (+ restart docker)
-- [ ] 1.3 restic incremental backups: install restic; rewrite strfry/ngit backup section to `restic backup` + `restic forget --keep-last 7 --prune`; init restic repo `/opt/tollgate/backups/restic/`
+- [x] 1.2 Docker log rotation: `/etc/docker/daemon.json` with `json-file` `max-size=20m max-file=3` (+ restart docker) — in cleanup playbook, applies on next deploy/recreate
+- [x] 1.3 restic incremental backups: install restic; rewrite strfry/ngit backup section to `restic backup` + `restic forget --keep-last 7 --prune`; init restic repo `/opt/tollgate/backups/restic/` — dedup proven (50MB file + 99%-identical = only 658KB delta)
 - [ ] 1.4 Flip relay1/relay2 Cloudflare records to DNS-only (gray-cloud); ensure Caddy relay1./relay2. blocks -> localhost:7777
 - [x] 1.5 Fix `gen-vps-stats.py` to log (not swallow) Nostr publish errors; verify kind 31998 queryable
 

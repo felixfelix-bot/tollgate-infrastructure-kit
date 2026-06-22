@@ -14,6 +14,30 @@
     - blossom
     - act-runner
 
+- name: Install restic for deduplicated incremental backups
+  package:
+    name: restic
+    state: present
+
+- name: Ensure restic repo password in tollgate env
+  lineinfile:
+    path: /opt/tollgate/.env
+    regexp: "^BACKUP_RESTIC_PASSWORD="
+    line: "BACKUP_RESTIC_PASSWORD={{ backup_restic_password }}"
+    create: yes
+    mode: '0600'
+  no_log: yes
+
+- name: Initialise restic repository if absent
+  shell: |
+    RESTIC_REPOSITORY='{{ backup_restic_repo }}' RESTIC_PASSWORD='{{ backup_restic_password }}' \
+    restic snapshots >/dev/null 2>&1 || \
+    RESTIC_REPOSITORY='{{ backup_restic_repo }}' RESTIC_PASSWORD='{{ backup_restic_password }}' restic init
+  args:
+    creates: "{{ backup_restic_repo }}/config"
+  register: restic_init
+  changed_when: "'created restic repository' in (restic_init.stdout | default(''))"
+
 - name: Deploy backup status generator
   copy:
     src: gen-backup-status.py

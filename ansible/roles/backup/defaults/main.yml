@@ -1,6 +1,9 @@
 ---
 backup_staging_dir: "{{ tollgate_base_dir }}/backups"
 backup_retention_days: 7
+backup_restic_keep_last: 7
+backup_restic_repo: "{{ tollgate_base_dir }}/backups/restic"
+backup_restic_password: "{{ lookup('env', 'BACKUP_RESTIC_PASSWORD') | default('change-me-restic-repo-key', true) }}"
 backup_strfry_container: tollgate-strfry
 backup_ngit_relay_container: tollgate-ngit
 backup_grasp_git_dir: "{{ tollgate_base_dir }}/grasp/data/git"

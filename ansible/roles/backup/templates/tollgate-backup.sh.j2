@@ -6,6 +6,32 @@ TIMESTAMP=$(date +%F_%H%M%S)
 RETENTION_DAYS={{ backup_retention_days }}
 ERRORS=0
 
+export RESTIC_REPOSITORY="{{ backup_restic_repo }}"
+export RESTIC_PASSWORD="{{ backup_restic_password }}"
+export RESTIC_PACK_SIZE=32
+
+restic_ready() {
+    command -v restic >/dev/null 2>&1 || return 1
+    if ! restic snapshots >/dev/null 2>&1; then
+        restic init >/dev/null 2>&1 || return 1
+    fi
+    return 0
+}
+
+restic_add() {
+    local path="$1"; local tag="$2"
+    if restic_ready; then
+        if restic backup "$path" --tag "$tag" >/dev/null 2>&1; then
+            log "restic snapshot stored (tag=$tag): $path"
+            return 0
+        else
+            bail "restic backup failed (tag=$tag)"
+            return 1
+        fi
+    fi
+    return 1
+}
+
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
@@ -23,14 +49,15 @@ fi
 
 log "Starting tollgate backup..."
 
-# --- strfry export ---
+# --- strfry export (restic dedup snapshot) ---
 if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^{{ backup_strfry_container }}$'; then
-    TMPFILE="$BACKUP_DIR/strfry/strfry_${TIMESTAMP}.jsonl.tmp"
-    FINAL="$BACKUP_DIR/strfry/strfry_${TIMESTAMP}.jsonl"
+    TMPFILE="$BACKUP_DIR/strfry/strfry_${TIMESTAMP}.jsonl"
     log "Exporting strfry..."
     if docker exec {{ backup_strfry_container }} /app/strfry export > "$TMPFILE"; then
-        mv "$TMPFILE" "$FINAL"
-        log "strfry export done: $FINAL"
+        log "strfry export done: $TMPFILE ($(du -h "$TMPFILE" | cut -f1))"
+        if restic_add "$TMPFILE" strfry; then
+            rm -f "$TMPFILE"
+        fi
     else
         rm -f "$TMPFILE"
         bail "strfry export failed"
@@ -39,14 +66,15 @@ else
     log "SKIP: strfry container not running"
 fi
 
-# --- ngit-relay export ---
+# --- ngit-relay export (restic dedup snapshot) ---
 if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^{{ backup_ngit_relay_container }}$'; then
-    TMPFILE="$BACKUP_DIR/ngit-relay/ngit_${TIMESTAMP}.jsonl.tmp"
-    FINAL="$BACKUP_DIR/ngit-relay/ngit_${TIMESTAMP}.jsonl"
+    TMPFILE="$BACKUP_DIR/ngit-relay/ngit_${TIMESTAMP}.jsonl"
     log "Exporting ngit-relay..."
     if docker exec {{ backup_ngit_relay_container }} /app/strfry export > "$TMPFILE"; then
-        mv "$TMPFILE" "$FINAL"
-        log "ngit-relay export done: $FINAL"
+        log "ngit-relay export done: $TMPFILE ($(du -h "$TMPFILE" | cut -f1))"
+        if restic_add "$TMPFILE" ngit-relay; then
+            rm -f "$TMPFILE"
+        fi
     else
         rm -f "$TMPFILE"
         bail "ngit-relay export failed"
@@ -112,6 +140,12 @@ fi
 log "Cleaning up backups older than $RETENTION_DAYS days..."
 find "$BACKUP_DIR" -name '*.jsonl' -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
 find "$BACKUP_DIR" -name '*.tmp' -type f -mtime +1 -delete 2>/dev/null || true
+
+# --- restic retention (dedup snapshots: keep last N, prune rest) ---
+if restic_ready; then
+    log "Applying restic retention (keep-last {{ backup_restic_keep_last }})..."
+    restic forget --keep-last {{ backup_restic_keep_last }} --prune >/dev/null 2>&1 || bail "restic forget/prune failed"
+fi
 
 # --- Final status update ---
 if [ -x /usr/local/bin/gen-backup-status.py ]; then
