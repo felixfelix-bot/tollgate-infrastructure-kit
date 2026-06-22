@@ -36,6 +36,7 @@
     - micro_vpn
     - jitsi_meet
     - bitcoin_knots
+    - strfry_agg
 
 - name: Deploy VPS watchdog (local health monitor + auto-redeploy)
   hosts: localhost

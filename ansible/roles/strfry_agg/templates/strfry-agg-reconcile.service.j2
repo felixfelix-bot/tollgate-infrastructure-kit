@@ -1,0 +1,12 @@
+[Unit]
+Description=Strfry aggregation relay - follow-list reconcile
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/tollgate/.env
+Environment=STRFRY_AGG_CONTAINER={{ strfry_agg_container }}
+Environment=STRFRY_AGG_STATE_DIR={{ strfry_agg_state_dir }}
+ExecStart=/usr/local/bin/strfry-agg-reconcile
+User=root

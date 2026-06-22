@@ -86,6 +86,16 @@ relay{{ machine_number }}.{{ base_domain }} {
 }
 {% endif %}
 
+{% if 'strfry_agg' in machine_roles %}
+agg.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    reverse_proxy localhost:{{ strfry_agg_port | default(7779) }}
+}
+{% endif %}
+
 {% if 'ngit_relay' in machine_roles %}
 ngit{{ machine_number }}.{{ base_domain }} {
     tls {

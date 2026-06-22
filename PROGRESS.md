@@ -302,6 +302,12 @@
   - Branch: `ci/nsite-e2e-dashboard-sharding`, 4 files changed (+478/-12)
   - All cherry-picks applied with zero conflicts
   - Plan doc: `docs/nsite-upstream-pr-plan.md`
+- [x] **workflow_dispatch PR comment fix**: added `pr-number` input to workflow_dispatch trigger
+  - Commit `001f069d`: fallback `github.event.inputs.pr-number` in all 6 publish steps
+  - Branch pushed to `PlebeianApp/market` upstream
+  - Triggered workflow_dispatch with `--field pr-number=1004`, run #27258333931
+  - PR comment posted: https://github.com/PlebeianApp/market/pull/1004#issuecomment-4667453024
+  - nsite URL returns HTTP 200
 
 ### 10. Solix C1000 BLE Bridge nsite (`solix.orangesync.tech`)
 - [x] `solix_nsite` Ansible role created
@@ -394,6 +400,24 @@
 - [x] **Tests pass** — 2/2 vitest tests pass (`SimpleAuditorApp.test.tsx`, `SimpleAuditorApp.search.test.ts`)
 - [x] **TypeScript clean** — no errors in `SimpleAuditorApp.tsx`
 - [ ] **Redeploy** to VPS2 via Ansible playbook
+
+### Strfry Aggregation Relay + Disk Stabilization (Jun 2026)
+- [x] **Plan doc** — `PLAN-strfry-agg-relay.md` with checklist
+- [x] **Disk cleanup** — vps2 100%->75% (24G freed), vps1 cleared; `38-disk-cleanup.yml`
+- [x] **Root cause of JSON fallback** — strfry on vps2 was hung (Up but not listening); restarted; `relay2.orangesync.tech` 502->200
+- [x] **gen-vps-stats.py hardened** — publishes to `ws://localhost:7777` (reliable) + logs errors instead of `except: pass`
+- [x] **strfry-agg Python package** — `strfry-agg/` (crypto, reconcile, relaylist, nostr_fetch, cli, write_policy); 34 unit tests passing
+- [x] **strfry_agg Ansible role** — custom strfry+python3 image, write-policy plugin, reconcile+scrape systemd timers
+- [x] **Playbook `37-strfry-agg.yml`** + wired into setup-vps-1/2.yml
+- [x] **Deployed on vps2** — `tollgate-strfry-agg` (port 7779), `agg.orangesync.tech` live (TLS via Caddy)
+- [x] **Reconcile verified** — 1303 npubs from root kind-3 populated in allowlist + mirrored to `.env` `STRFRY_AGG_SERVED_NPUBS`
+- [x] **Write-policy gate verified** — non-followed event rejected end-to-end (`blocked: not in served follow set`), followed/root accepted
+- [x] **Scrape verified** — resolves NIP-65 relay list + runs negentropy sync per author
+- [x] **Cloudflare DNS** — `agg` A records (both VPS) overriding stale `*.orangesync.tech -> .226` wildcard
+- [x] **Timers** — reconcile every 15 min, scrape every 30 min
+- [ ] **Docker log rotation** (`/etc/docker/daemon.json` max-size 20m/3) — in cleanup playbook, needs deploy run
+- [ ] **restic incremental backups** — replace full-daily strfry JSONL with dedup snapshots
+- [ ] **relay1 SSL fix on vps1** — vps1-side Caddy/cert issue causing `TLSV1_ALERT_INTERNAL_ERROR`
 
 ## Blocked / Upstream
 - [ ] True custom unit support (MB, KB, GB, min in keyset) — requires gRPC payment processor or CDK upstream fix

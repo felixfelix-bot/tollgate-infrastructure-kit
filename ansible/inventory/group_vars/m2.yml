@@ -36,6 +36,7 @@ machine_roles:
   - micro_vpn
   - jitsi_meet
   - bitcoin_knots
+  - strfry_agg
 
 machine_cloudflare_subdomains:
   - relay2

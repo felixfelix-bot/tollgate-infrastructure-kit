@@ -35,6 +35,7 @@ machine_roles:
   - relatr
   - jitsi_meet
   - bitcoin_core
+  - strfry_agg
 
 machine_cloudflare_subdomains:
   - relay1

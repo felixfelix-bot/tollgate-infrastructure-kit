@@ -1,0 +1,27 @@
+services:
+  {{ strfry_agg_container }}:
+    build:
+      context: {{ strfry_agg_base_dir }}
+      dockerfile: Dockerfile
+    image: tollgate-strfry-agg:local
+    container_name: {{ strfry_agg_container }}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:{{ strfry_agg_port }}:7777"
+    volumes:
+      - ./strfry.conf:/etc/strfry.conf:ro
+      - ./db:/strfry-db
+      - ./write-policy.py:/opt/strfry-agg/write-policy.py:ro
+      - ./state:/opt/strfry-agg/state:ro
+    environment:
+      - STRFRY_AGG_ALLOWED=/opt/strfry-agg/state/allowed.npubs
+      - STRFRY_AGG_ROOT_HEX={{ strfry_agg_root_hex }}
+    networks:
+      - {{ docker_network_name }}
+
+volumes:
+  {{ strfry_agg_container }}-db:
+
+networks:
+  {{ docker_network_name }}:
+    external: true

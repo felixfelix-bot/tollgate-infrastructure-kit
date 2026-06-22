@@ -22,6 +22,7 @@ ENV_FILE = "/opt/tollgate/.env"
 NOSTR_STATUS_KIND = 31998
 NOSTR_STATUS_DTAG = "tollgate-vps-status"
 NOSTR_PUB_RELAYS = [
+    "ws://localhost:7777",
     "wss://relay1.orangesync.tech",
     "wss://relay2.orangesync.tech",
 ]
@@ -372,27 +373,37 @@ def publish_nostr_status(stats_json_str, nsec_hex):
     machine_id = stats_json_str and json.loads(stats_json_str).get("machine_id", "unknown")
     evt = create_status_event(stats_json_str, nsec_hex, machine_id)
     if evt is None:
+        print(f"[gen-vps-stats] Nostr publish skipped: event signing failed (coincurve unavailable)", flush=True)
         return
     try:
         import asyncio
         import websockets
     except ImportError:
+        print(f"[gen-vps-stats] Nostr publish skipped: websockets/asyncio unavailable", flush=True)
         return
 
     async def _publish():
         payload = json.dumps(["EVENT", evt])
+        results = {}
         for relay_url in NOSTR_PUB_RELAYS:
             try:
                 async with websockets.connect(relay_url, max_size=2**20, close_timeout=3) as ws:
                     await ws.send(payload)
-                    await asyncio.wait_for(ws.recv(), timeout=5)
-            except Exception:
-                pass
+                    resp = await asyncio.wait_for(ws.recv(), timeout=5)
+                    ok = isinstance(resp, str) and '"OK"' in resp and ',true,' in resp
+                    results[relay_url] = "ok" if ok else f"resp={resp[:60]}"
+            except Exception as exc:
+                results[relay_url] = f"{type(exc).__name__}: {exc}"
+        return results
 
     try:
-        asyncio.run(_publish())
-    except Exception:
-        pass
+        results = asyncio.run(_publish())
+        if results:
+            failures = {k: v for k, v in results.items() if v != "ok"}
+            if failures:
+                print(f"[gen-vps-stats] Nostr publish partial failure: {failures}", flush=True)
+    except Exception as exc:
+        print(f"[gen-vps-stats] Nostr publish error: {type(exc).__name__}: {exc}", flush=True)
 
 
 def main():

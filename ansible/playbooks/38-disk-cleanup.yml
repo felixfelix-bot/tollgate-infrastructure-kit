@@ -1,0 +1,91 @@
+---
+- name: Disk cleanup and Docker log rotation hardening
+  hosts: vps
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
+  tasks:
+    - name: Prune Docker build cache
+      community.docker.docker_prune:
+        builder_cache: yes
+      register: docker_buildcache_prune
+
+    - name: Prune dangling Docker images
+      community.docker.docker_prune:
+        images: yes
+        images_filters:
+          dangling: true
+      register: docker_image_prune
+
+    - name: Deploy Docker daemon.json with log rotation
+      copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "20m",
+              "max-file": "3"
+            }
+          }
+        mode: '0644'
+      register: docker_daemon_config
+
+    - name: Restart Docker to apply log rotation
+      systemd:
+        name: docker
+        state: restarted
+      when: docker_daemon_config.changed
+
+    - name: Find old strfry JSONL backups (keep newest 2)
+      find:
+        paths: "{{ tollgate_base_dir }}/backups/strfry"
+        patterns: "*.jsonl"
+      register: strfry_backups
+
+    - name: Remove old strfry JSONL backups beyond newest 2
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (strfry_backups.files | sort(attribute='mtime', reverse=True))[2:] | default([]) }}"
+      when: strfry_backups.matched | int > 2
+
+    - name: Find old ngit-relay JSONL backups (keep newest 2)
+      find:
+        paths: "{{ tollgate_base_dir }}/backups/ngit-relay"
+        patterns: "*.jsonl"
+      register: ngit_backups
+
+    - name: Remove old ngit-relay JSONL backups beyond newest 2
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (ngit_backups.files | sort(attribute='mtime', reverse=True))[2:] | default([]) }}"
+      when: ngit_backups.matched | int > 2
+
+    - name: Vacuum journald to 200M
+      command: journalctl --vacuum-size=200M
+      register: journal_vacuum
+      changed_when: "'Vacuumed' in journal_vacuum.stdout or 'freed' in journal_vacuum.stdout"
+
+    - name: Remove stale Plebeian market PR-test clones (vps2)
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /home/debian/market-bidding-mint
+        - /home/debian/market-shipping-dedupe
+        - /home/debian/market-trusted-mint
+        - /home/debian/market-pr918
+        - /home/debian/market-pr920
+      when: ansible_hostname == 'testserver2'
+
+    - name: Report disk usage before/after
+      command: df -h /
+      register: disk_usage
+      changed_when: false
+
+    - name: Show disk usage
+      debug:
+        msg: "{{ disk_usage.stdout_lines }}"

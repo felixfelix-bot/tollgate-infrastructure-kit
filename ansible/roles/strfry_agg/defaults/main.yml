@@ -1,0 +1,32 @@
+---
+strfry_agg_enabled: true
+strfry_agg_port: 7779
+strfry_agg_domain: "agg.{{ base_domain }}"
+strfry_agg_db_size_gb: 5
+strfry_agg_container: tollgate-strfry-agg
+strfry_agg_base_dir: "{{ tollgate_base_dir }}/strfry-agg"
+strfry_agg_state_dir: "{{ tollgate_base_dir }}/strfry-agg/state"
+strfry_agg_image_base: "ghcr.io/hoytech/strfry:latest"
+
+strfry_agg_root_npub: "{{ lookup('env', 'STRFRY_AGG_ROOT_NPUB') | default('npub1c03rad0r6q833vh57kyd3ndu2jry30nkr0wepqfpsm05vq7he25slryrnw', true) }}"
+
+strfry_agg_bootstrap_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://relay.{{ base_domain }}"
+
+strfry_agg_scrape_kinds:
+  - 1
+  - 3
+  - 5
+  - 6
+  - 7
+  - 10000
+  - 10002
+  - 30023
+
+strfry_agg_reconcile_interval_min: 15
+strfry_agg_scrape_interval_min: 30
+strfry_agg_max_scrape_relays_per_author: 3
+strfry_agg_max_connections: 500
+strfry_agg_max_subs_per_conn: 50

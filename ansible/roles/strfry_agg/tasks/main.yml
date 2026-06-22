@@ -1,0 +1,166 @@
+---
+- name: Create strfry-agg directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ strfry_agg_base_dir }}"
+    - "{{ strfry_agg_base_dir }}/db"
+    - "{{ strfry_agg_state_dir }}"
+    - "{{ strfry_agg_base_dir }}/src"
+
+- name: Ensure Nostr deps installed
+  pip:
+    name:
+      - bech32>=1.2.0
+      - websockets>=12.0
+    state: present
+    executable: pip3
+    extra_args: --break-system-packages
+
+- name: Copy strfry-agg package source
+  copy:
+    src: "{{ playbook_dir }}/../../strfry-agg/src/"
+    dest: "{{ strfry_agg_base_dir }}/src/"
+    mode: '0644'
+
+- name: Copy pyproject for editable install
+  copy:
+    src: "{{ playbook_dir }}/../../strfry-agg/pyproject.toml"
+    dest: "{{ strfry_agg_base_dir }}/pyproject.toml"
+    mode: '0644'
+
+- name: Install strfry-agg package (editable)
+  pip:
+    name: "file:///{{ strfry_agg_base_dir }}"
+    editable: true
+    state: present
+    executable: pip3
+    extra_args: --break-system-packages
+  register: strfry_agg_install
+
+- name: Compute root pubkey hex from npub
+  command: python3 -c "from strfry_agg.crypto import npub_to_hex; print(npub_to_hex('{{ strfry_agg_root_npub }}'))"
+  register: strfry_agg_root_hex_cmd
+  changed_when: false
+
+- name: Store root hex fact
+  set_fact:
+    strfry_agg_root_hex: "{{ strfry_agg_root_hex_cmd.stdout.strip() }}"
+
+- name: Deploy write-policy plugin
+  copy:
+    src: "{{ playbook_dir }}/../../strfry-agg/src/strfry_agg/write_policy.py"
+    dest: "{{ strfry_agg_base_dir }}/write-policy.py"
+    mode: '0755'
+
+- name: Deploy strfry config
+  template:
+    src: strfry.conf.j2
+    dest: "{{ strfry_agg_base_dir }}/strfry.conf"
+    mode: '0644'
+
+- name: Deploy Dockerfile
+  template:
+    src: Dockerfile.j2
+    dest: "{{ strfry_agg_base_dir }}/Dockerfile"
+    mode: '0644'
+
+- name: Deploy docker-compose
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ strfry_agg_base_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Ensure aggregation env vars in tollgate env
+  lineinfile:
+    path: /opt/tollgate/.env
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+    create: yes
+    mode: '0600'
+  loop:
+    - { key: "STRFRY_AGG_ROOT_NPUB", value: "{{ strfry_agg_root_npub }}" }
+    - { key: "STRFRY_AGG_BOOTSTRAP_RELAYS", value: "{{ strfry_agg_bootstrap_relays | join(',') }}" }
+    - { key: "STRFRY_AGG_SCRAPE_KINDS", value: "{{ strfry_agg_scrape_kinds | join(',') }}" }
+    - { key: "STRFRY_AGG_CONTAINER", value: "{{ strfry_agg_container }}" }
+    - { key: "STRFRY_AGG_STATE_DIR", value: "{{ strfry_agg_state_dir }}" }
+    - { key: "STRFRY_AGG_SERVED_NPUBS", value: "" }
+  no_log: yes
+
+- name: Build and start strfry-agg container
+  community.docker.docker_compose_v2:
+    project_src: "{{ strfry_agg_base_dir }}"
+    build: true
+    state: present
+    recreate: "{{ 'always' if strfry_agg_install.changed else 'auto' }}"
+
+- name: Wait for strfry-agg to start
+  uri:
+    url: "http://localhost:{{ strfry_agg_port }}"
+    return_content: yes
+  register: strfry_agg_health
+  until: strfry_agg_health.status == 200
+  retries: 30
+  delay: 3
+
+- name: Deploy reconcile systemd service
+  template:
+    src: strfry-agg-reconcile.service.j2
+    dest: /etc/systemd/system/strfry-agg-reconcile.service
+    mode: '0644'
+
+- name: Deploy reconcile systemd timer
+  template:
+    src: strfry-agg-reconcile.timer.j2
+    dest: /etc/systemd/system/strfry-agg-reconcile.timer
+    mode: '0644'
+
+- name: Deploy scrape systemd service
+  template:
+    src: strfry-agg-scrape.service.j2
+    dest: /etc/systemd/system/strfry-agg-scrape.service
+    mode: '0644'
+
+- name: Deploy scrape systemd timer
+  template:
+    src: strfry-agg-scrape.timer.j2
+    dest: /etc/systemd/system/strfry-agg-scrape.timer
+    mode: '0644'
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start timers
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - strfry-agg-reconcile.timer
+    - strfry-agg-scrape.timer
+
+- name: Run initial reconcile
+  command: /usr/local/bin/strfry-agg-reconcile
+  environment:
+    STRFRY_AGG_CONTAINER: "{{ strfry_agg_container }}"
+    STRFRY_AGG_STATE_DIR: "{{ strfry_agg_state_dir }}"
+  register: strfry_agg_initial_reconcile
+  changed_when: false
+  failed_when: false
+
+- name: Show initial reconcile output
+  debug:
+    msg: "{{ strfry_agg_initial_reconcile.stdout_lines + strfry_agg_initial_reconcile.stderr_lines }}"
+
+- name: Display aggregation relay deployment info
+  debug:
+    msg: |
+      Strfry aggregation relay deployed!
+      Container: {{ strfry_agg_container }} (port {{ strfry_agg_port }})
+      Root npub: {{ strfry_agg_root_npub }} ({{ strfry_agg_root_hex }})
+      Reconcile: every {{ strfry_agg_reconcile_interval_min }} min
+      Scrape: every {{ strfry_agg_scrape_interval_min }} min
+      Allowlist: {{ strfry_agg_state_dir }}/allowed.npubs

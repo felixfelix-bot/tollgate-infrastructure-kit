@@ -33,6 +33,7 @@
     - relatr
     - jitsi_meet
     - bitcoin_core
+    - strfry_agg
 
 - name: Deploy VPS watchdog (local health monitor + auto-redeploy)
   hosts: localhost

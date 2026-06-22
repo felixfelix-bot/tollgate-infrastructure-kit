@@ -1,0 +1,9 @@
+[Unit]
+Description=Strfry aggregation relay - scrape timer
+
+[Timer]
+OnCalendar=*-*-* *:0/{{ strfry_agg_scrape_interval_min }}:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

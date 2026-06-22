@@ -172,6 +172,7 @@ cloudflare_shared_subdomains:
   - solix
   - wot
   - meet
+  - agg
 
 cloudflare_per_machine_subdomains:
   - { prefix: "relay", vps1_suffix: "1", vps2_suffix: "2" }
