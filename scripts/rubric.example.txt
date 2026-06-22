@@ -1,0 +1,21 @@
+# Follow-triage rubric — edit this to describe what you want more/less of.
+# This text is fed to the LLM alongside your follow dossiers.
+
+## What I'm looking for (seek)
+- Builders shipping real things (code, products, working systems)
+- Topics: Bitcoin, Lightning, Cashu/ecash, Nostr infrastructure, self-hosting, sovereignty tech
+- Substantive posts: technical depth, real builds, honest reflection
+- Active in roughly the last 90 days
+- People who engage/converse, not just broadcast
+
+## What I want to avoid (purge)
+- Meme-only / engagement-bait / low-signal accounts
+- Inactive (>1 year, no recent notes)
+- Spam, bot-like, or purely promotional accounts
+- Heavy politics/off-topic noise unrelated to the seek topics
+- Duplicate/alts of people I already follow
+
+## Disposition guidance
+- keep    = clearly matches seek criteria
+- purge   = clearly matches avoid criteria or no signal
+- borderline = some signal but uncertain (e.g. on-topic but inactive, or active but off-topic)
