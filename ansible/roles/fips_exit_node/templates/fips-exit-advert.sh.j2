@@ -4,10 +4,14 @@ set -euo pipefail
 {% if not fips_exit_advertise %}
 exit 0
 {% else %}
-NSEC="${FIPS_EXIT_NSEC:-{{ fips_exit_identity_nsec }}}"
+NSEC_FILE="{{ fips_exit_config_dir }}/identity_nsec"
+NSEC="${FIPS_EXIT_NSEC:-}"
+if [ -z "$NSEC" ] && [ -s "$NSEC_FILE" ]; then
+    NSEC="$(cat "$NSEC_FILE")"
+fi
 
 if [ -z "$NSEC" ]; then
-    echo "FIPS_EXIT_NSEC not set; skipping exit route advertisement" >&2
+    echo "FIPS_EXIT_NSEC not set and no identity_nsec file; skipping exit route advertisement" >&2
     exit 0
 fi
 

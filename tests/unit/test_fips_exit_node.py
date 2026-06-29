@@ -25,6 +25,7 @@ def _base_vars(**overrides):
         "vps_ip": "23.182.128.51",
         "ansible_default_ipv4": {"interface": "eth0"},
         "fips_exit_enabled": True,
+        "fips_exit_autogen_keys": True,
         "fips_exit_wg_iface": "wgexit0",
         "fips_exit_wg_port": 51821,
         "fips_exit_tunnel_subnet": "10.99.99.0/24",
@@ -34,6 +35,8 @@ def _base_vars(**overrides):
         "fips_exit_mtu": 1420,
         "fips_exit_config_dir": "/opt/tollgate/fips-exit-node",
         "fips_exit_server_private_key": "TEST_SERVER_PRIVATE_KEY_BASE64",
+        "fips_exit_server_public_key": "TEST_SERVER_PUBLIC_KEY_BASE64",
+        "fips_exit_peer_private_key": "TEST_PEER_PRIVATE_KEY_BASE64",
         "fips_exit_peer_public_key": "TEST_PEER_PUBLIC_KEY_BASE64",
         "fips_exit_advertise": True,
         "fips_exit_advert_kind": 30078,
@@ -56,6 +59,7 @@ def test_defaults_yaml_is_valid():
     assert data["fips_exit_wg_iface"] == "wgexit0"
     assert data["fips_exit_wg_port"] == 51821
     assert "10.99.99" in data["fips_exit_tunnel_subnet"]
+    assert data.get("fips_exit_autogen_keys") is True
 
 
 def test_tasks_yaml_is_valid():
@@ -63,9 +67,19 @@ def test_tasks_yaml_is_valid():
     assert isinstance(data, list)
     names = [t.get("name", "") for t in data if isinstance(t, dict)]
     joined = "\n".join(names)
-    assert "wireguard-tools" in joined.lower() or "wireguard" in joined.lower()
+    assert "wireguard" in joined.lower()
     assert "ip_forward" in joined.lower() or "sysctl" in joined.lower()
     assert "nft" in joined.lower()
+
+
+def test_tasks_autogenerate_keys_when_not_provided():
+    data = yaml.safe_load((ROLE_DIR / "tasks" / "main.yml").read_text())
+    joined = yaml.safe_dump(data)
+    assert "openssl rand -hex 32" in joined
+    assert "identity_nsec" in joined
+    assert "peer_private.key" in joined
+    assert "peer_public.key" in joined
+    assert "peer-client.conf" in joined
 
 
 def test_handlers_yaml_is_valid():
@@ -100,6 +114,18 @@ def test_wg_conf_renders_and_has_required_fields():
     assert "delete table inet fips-exit" in rendered
 
 
+def test_peer_client_conf_renders_for_transfer():
+    rendered = _env().get_template("peer-client.conf.j2").render(**_base_vars())
+    assert "[Interface]" in rendered
+    assert "PrivateKey = TEST_PEER_PRIVATE_KEY_BASE64" in rendered
+    assert "Address = 10.99.99.2/24" in rendered
+    assert "[Peer]" in rendered
+    assert "PublicKey = TEST_SERVER_PUBLIC_KEY_BASE64" in rendered
+    assert "Endpoint = 23.182.128.51:51821" in rendered
+    assert "AllowedIPs = 0.0.0.0/0, ::/0" in rendered
+    assert "PersistentKeepalive" in rendered
+
+
 def test_nft_renders_with_masquerade_and_forwarding():
     rendered = _env().get_template("exit-nat.nft.j2").render(**_base_vars())
     assert "table inet fips-exit" in rendered
@@ -116,6 +142,7 @@ def test_advert_script_renders_with_route_and_endpoint():
     rendered = _env().get_template("fips-exit-advert.sh.j2").render(**_base_vars())
     assert rendered.startswith("#!/bin/bash")
     assert "FIPS_EXIT_NSEC" in rendered
+    assert "identity_nsec" in rendered
     assert "nak event" in rendered
     assert "--kind 30078" in rendered
     assert "route=0.0.0.0/0" in rendered

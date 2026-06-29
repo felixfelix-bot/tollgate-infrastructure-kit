@@ -46,10 +46,75 @@
     fips_exit_server_private_key: "{{ fips_exit_priv_data.content | b64decode | trim }}"
     fips_exit_server_public_key: "{{ fips_exit_pub_data.content | b64decode | trim }}"
 
-- name: Ensure peer public key is defined
+- name: Generate Nostr identity for route advertisement (autogen)
+  shell: openssl rand -hex 32 > {{ fips_exit_config_dir }}/identity_nsec
+  args:
+    creates: "{{ fips_exit_config_dir }}/identity_nsec"
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_identity_nsec | default('')) | length == 0
+
+- name: Restrict Nostr identity file permissions
+  file:
+    path: "{{ fips_exit_config_dir }}/identity_nsec"
+    mode: "0600"
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_identity_nsec | default('')) | length == 0
+
+- name: Generate WireGuard peer private key (autogen)
+  shell: wg genkey > {{ fips_exit_config_dir }}/peer_private.key
+  args:
+    creates: "{{ fips_exit_config_dir }}/peer_private.key"
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_peer_public_key | default('')) | length == 0
+
+- name: Generate WireGuard peer public key (autogen)
+  shell: wg pubkey < {{ fips_exit_config_dir }}/peer_private.key > {{ fips_exit_config_dir }}/peer_public.key
+  args:
+    creates: "{{ fips_exit_config_dir }}/peer_public.key"
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_peer_public_key | default('')) | length == 0
+
+- name: Restrict peer private key permissions
+  file:
+    path: "{{ fips_exit_config_dir }}/peer_private.key"
+    mode: "0600"
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_peer_public_key | default('')) | length == 0
+
+- name: Read autogen peer private key
+  slurp:
+    src: "{{ fips_exit_config_dir }}/peer_private.key"
+  register: fips_exit_peer_priv_data
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_peer_public_key | default('')) | length == 0
+
+- name: Read autogen peer public key
+  slurp:
+    src: "{{ fips_exit_config_dir }}/peer_public.key"
+  register: fips_exit_peer_pub_data
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_peer_public_key | default('')) | length == 0
+
+- name: Set autogen peer key facts
+  set_fact:
+    fips_exit_peer_private_key: "{{ fips_exit_peer_priv_data.content | b64decode | trim }}"
+    fips_exit_peer_public_key: "{{ fips_exit_peer_pub_data.content | b64decode | trim }}"
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_peer_public_key | default('')) | length == 0
+  no_log: true
+
+- name: Fail when no peer public key available
   fail:
-    msg: "fips_exit_peer_public_key must be set (the WireGuard public key of the FIPS mesh peer that will use this exit). Set it in group_vars or .env."
-  when: fips_exit_peer_public_key is not defined or fips_exit_peer_public_key | length == 0
+    msg: "fips_exit_peer_public_key not provided and fips_exit_autogen_keys is false. Provide the WireGuard public key of the FIPS mesh peer (group_vars/.env), or keep fips_exit_autogen_keys=true (default) to generate one."
+  when: (fips_exit_peer_public_key | default('')) | length == 0
 
 - name: Enable net.ipv4.ip_forward=1 persistently via sysctl
   sysctl:
@@ -71,6 +136,16 @@
     dest: "{{ fips_exit_config_dir }}/exit-nat.nft"
     mode: "0644"
   notify: reload fips exit nft
+
+- name: Emit peer client config for transfer (autogen)
+  template:
+    src: peer-client.conf.j2
+    dest: "{{ fips_exit_config_dir }}/peer-client.conf"
+    mode: "0600"
+  when:
+    - fips_exit_autogen_keys | bool
+    - (fips_exit_peer_private_key | default('')) | length > 0
+  no_log: true
 
 - name: Ensure WireGuard exit interface is enabled and up
   service:
@@ -126,3 +201,10 @@
       Tunnel subnet: {{ fips_exit_tunnel_subnet }}
       NAT: nftables MASQUERADE on {{ fips_exit_public_iface }}
       Route advertisement: {{ 'enabled' if fips_exit_advertise else 'disabled' }} (kind {{ fips_exit_advert_kind }})
+      Peer public key: {{ fips_exit_peer_public_key | default('n/a') }}
+      {% if fips_exit_autogen_keys | bool and (fips_exit_peer_private_key | default('')) | length > 0 %}
+      Autogen: peer-client.conf at {{ fips_exit_config_dir }}/peer-client.conf (transfer to the FIPS mesh peer)
+      Autogen: Nostr identity at {{ fips_exit_config_dir }}/identity_nsec (used by the advert timer)
+      {% else %}
+      Autogen: disabled — keys supplied externally
+      {% endif %}

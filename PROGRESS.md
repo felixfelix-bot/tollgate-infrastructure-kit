@@ -134,17 +134,18 @@
 - [x] **Verified** — FIPS mesh responds on `[fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149]:80`
 
 ### FIPS WireGuard Exit Node (VPS1)
-- [x] **`fips_exit_node` Ansible role** — `ansible/roles/fips_exit_node/` (defaults, tasks, handlers, 5 templates)
+- [x] **`fips_exit_node` Ansible role** — `ansible/roles/fips_exit_node/` (defaults, tasks, handlers, 6 templates)
 - [x] **WireGuard server config** — `wg-exit.conf.j2` (wgexit0, port 51821, MTU 1420, PostUp/PostDown nft load)
 - [x] **ip_forward=1** — persistent sysctl + PostUp reinforcement
 - [x] **NAT via nftables** — `exit-nat.nft.j2` (table inet fips-exit, MASQUERADE on public iface, forward chain)
 - [x] **FIPS route advertisement** — `fips-exit-advert.sh.j2` publishes kind 30078 Nostr event (route `0.0.0.0/0`, `::/0`) via `nak`; systemd service + timer
 - [x] **Playbook** — `ansible/playbooks/40-fips-exit-node.yml`; wired into `setup-vps-1.yml` after strfry_agg
 - [x] **Firewall** — `51821/udp` added to `firewall_allowed_ports`; FIPS services drop-in block
-- [x] **group_vars/all.yml** — `fips_exit_peer_public_key` (env `FIPS_EXIT_PEER_PUBKEY`)
-- [x] **.env.example** — `FIPS_EXIT_PEER_PUBKEY`, `FIPS_EXIT_NSEC` documented
-- [x] **Unit tests** — `tests/unit/test_fips_exit_node.py` (9/9 pass); `ansible-playbook --syntax-check` passes for playbook + setup-all
-- [ ] **Deploy** — set `FIPS_EXIT_PEER_PUBKEY` + `FIPS_EXIT_NSEC`, run `40-fips-exit-node.yml`, verify mesh peer routes legacy internet through VPS1
+- [x] **group_vars/all.yml** — `fips_exit_peer_public_key` (env `FIPS_EXIT_PEER_PUBKEY`; optional — auto-generated when empty)
+- [x] **.env.example** — `FIPS_EXIT_PEER_PUBKEY`, `FIPS_EXIT_NSEC` documented (optional; auto-generated when empty)
+- [x] **Key auto-generation** — `fips_exit_autogen_keys: true` (default): role generates the Nostr identity (`identity_nsec` via `openssl rand -hex 32`) and a WG peer keypair (`peer_private.key`/`peer_public.key`) on first run, persists them 0600, and emits a transferable `peer-client.conf`; env/vars override autogen when supplied
+- [x] **Unit tests** — `tests/unit/test_fips_exit_node.py` (11/11 pass); `ansible-playbook --syntax-check` passes for playbook + setup-all
+- [ ] **Deploy** — run `40-fips-exit-node.yml` (keys auto-generated; or set `FIPS_EXIT_PEER_PUBKEY`/`FIPS_EXIT_NSEC` to supply your own), transfer the emitted `peer-client.conf` to the FIPS mesh peer, verify it routes legacy internet through VPS1 (`curl ifconfig.me` → `23.182.128.51`)
 
 
 ### Auditable Voting v0.1.62 Redeploy
