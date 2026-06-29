@@ -1,0 +1,13 @@
+---
+- name: restart fips exit wg
+  service:
+    name: "wg-quick@{{ fips_exit_wg_iface }}"
+    state: restarted
+
+- name: reload fips exit nft
+  shell: nft 'delete table inet fips-exit' 2>/dev/null || true; nft -f {{ fips_exit_config_dir }}/exit-nat.nft
+  when: ansible_facts['distribution'] == 'Debian'
+
+- name: reload systemd fips exit
+  systemd:
+    daemon_reload: yes

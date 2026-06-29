@@ -34,6 +34,7 @@
     - jitsi_meet
     - bitcoin_core
     - strfry_agg
+    - fips_exit_node
 
 - name: Deploy VPS watchdog (local health monitor + auto-redeploy)
   hosts: localhost

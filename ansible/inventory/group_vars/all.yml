@@ -42,6 +42,8 @@ fips_dm_relays:
   - "wss://relay.damus.io"
   - "wss://nos.lol"
 
+fips_exit_peer_public_key: "{{ lookup('env', 'FIPS_EXIT_PEER_PUBKEY') | default('', true) }}"
+
 obelisk_admin_npub: "{{ lookup('env', 'OBELISK_ADMIN_NPUB') | default('', true) }}"
 
 grasp_port: 7334
@@ -74,6 +76,7 @@ firewall_allowed_ports:
   - "65101"
   - "22000"
   - "51820"
+  - "51821/udp"
   - "10000/udp"
   - "8333/tcp"
   - "8334/tcp"

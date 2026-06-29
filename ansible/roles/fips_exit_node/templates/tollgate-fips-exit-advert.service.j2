@@ -1,0 +1,12 @@
+[Unit]
+Description=Tollgate FIPS exit node route advertisement
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/tollgate/.env
+ExecStart={{ fips_exit_config_dir }}/fips-exit-advert.sh
+
+[Install]
+WantedBy=multi-user.target

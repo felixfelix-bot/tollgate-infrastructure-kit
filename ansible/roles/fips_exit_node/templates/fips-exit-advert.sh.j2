@@ -1,0 +1,29 @@
+#!/bin/bash
+set -euo pipefail
+
+{% if not fips_exit_advertise %}
+exit 0
+{% else %}
+NSEC="${FIPS_EXIT_NSEC:-{{ fips_exit_identity_nsec }}}"
+
+if [ -z "$NSEC" ]; then
+    echo "FIPS_EXIT_NSEC not set; skipping exit route advertisement" >&2
+    exit 0
+fi
+
+ENDPOINT="{{ fips_exit_advert_endpoint }}"
+CONTENT='{"service":"fips-exit-node","route":"0.0.0.0/0,::/0","endpoint":"'"$ENDPOINT"'","transport":"wireguard","port":{{ fips_exit_wg_port }}}'
+
+nak event \
+    --sec "$NSEC" \
+    --kind {{ fips_exit_advert_kind }} \
+    -t d={{ fips_exit_advert_identifier }} \
+    -t t=fips-exit \
+    -t endpoint="$ENDPOINT" \
+    -t route=0.0.0.0/0 \
+    -t route=::/0 \
+    -t transport=wireguard \
+    -t port={{ fips_exit_wg_port }} \
+    --content "$CONTENT" \
+    {{ fips_exit_advert_relays | join(' ') }}
+{% endif %}

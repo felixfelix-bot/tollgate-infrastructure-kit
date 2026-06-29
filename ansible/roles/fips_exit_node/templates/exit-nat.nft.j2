@@ -1,0 +1,12 @@
+table inet fips-exit {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        oifname "{{ fips_exit_public_iface }}" ip saddr {{ fips_exit_tunnel_subnet }} masquerade
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+        iifname "{{ fips_exit_wg_iface }}" oifname "{{ fips_exit_public_iface }}" accept
+        oifname "{{ fips_exit_wg_iface }}" iifname "{{ fips_exit_public_iface }}" ct state established,related accept
+    }
+}

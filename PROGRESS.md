@@ -133,6 +133,20 @@
 - [x] **Deployed to VPS** via `13-fips.yml` + `04-caddy.yml`
 - [x] **Verified** — FIPS mesh responds on `[fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149]:80`
 
+### FIPS WireGuard Exit Node (VPS1)
+- [x] **`fips_exit_node` Ansible role** — `ansible/roles/fips_exit_node/` (defaults, tasks, handlers, 5 templates)
+- [x] **WireGuard server config** — `wg-exit.conf.j2` (wgexit0, port 51821, MTU 1420, PostUp/PostDown nft load)
+- [x] **ip_forward=1** — persistent sysctl + PostUp reinforcement
+- [x] **NAT via nftables** — `exit-nat.nft.j2` (table inet fips-exit, MASQUERADE on public iface, forward chain)
+- [x] **FIPS route advertisement** — `fips-exit-advert.sh.j2` publishes kind 30078 Nostr event (route `0.0.0.0/0`, `::/0`) via `nak`; systemd service + timer
+- [x] **Playbook** — `ansible/playbooks/40-fips-exit-node.yml`; wired into `setup-vps-1.yml` after strfry_agg
+- [x] **Firewall** — `51821/udp` added to `firewall_allowed_ports`; FIPS services drop-in block
+- [x] **group_vars/all.yml** — `fips_exit_peer_public_key` (env `FIPS_EXIT_PEER_PUBKEY`)
+- [x] **.env.example** — `FIPS_EXIT_PEER_PUBKEY`, `FIPS_EXIT_NSEC` documented
+- [x] **Unit tests** — `tests/unit/test_fips_exit_node.py` (9/9 pass); `ansible-playbook --syntax-check` passes for playbook + setup-all
+- [ ] **Deploy** — set `FIPS_EXIT_PEER_PUBKEY` + `FIPS_EXIT_NSEC`, run `40-fips-exit-node.yml`, verify mesh peer routes legacy internet through VPS1
+
+
 ### Auditable Voting v0.1.62 Redeploy
 - [x] **Plan doc** — `docs/auditable-voting-v0.1.62-deploy.md` with checklist
 - [x] **E2E test repo** — `/home/c03rad0r/auditable-voting-tests/` (27 Playwright tests, pushed to ngit)

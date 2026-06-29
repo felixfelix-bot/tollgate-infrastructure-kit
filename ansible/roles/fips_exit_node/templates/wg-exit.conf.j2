@@ -1,0 +1,12 @@
+[Interface]
+PrivateKey = {{ fips_exit_server_private_key }}
+Address = {{ fips_exit_server_tunnel_ip }}/24
+ListenPort = {{ fips_exit_wg_port }}
+MTU = {{ fips_exit_mtu }}
+
+PostUp = sysctl -w net.ipv4.ip_forward=1; nft 'delete table inet fips-exit' 2>/dev/null || true; nft -f {{ fips_exit_config_dir }}/exit-nat.nft
+PostDown = nft 'delete table inet fips-exit' 2>/dev/null || true
+
+[Peer]
+PublicKey = {{ fips_exit_peer_public_key }}
+AllowedIPs = {{ fips_exit_peer_tunnel_ip }}/32

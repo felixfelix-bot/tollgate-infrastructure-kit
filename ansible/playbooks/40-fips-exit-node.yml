@@ -1,0 +1,9 @@
+---
+- name: Deploy FIPS WireGuard exit node
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - fips_exit_node

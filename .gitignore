@@ -12,6 +12,8 @@ id_ed25519*
 *.retry
 *.pyc
 __pycache__/
+.venv/
+
 
 node_modules/
 tests/e2e/node_modules/

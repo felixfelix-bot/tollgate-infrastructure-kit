@@ -1,0 +1,128 @@
+---
+- name: Install wireguard-tools and nftables
+  apt:
+    name:
+      - wireguard-tools
+      - nftables
+    state: present
+
+- name: Create fips-exit-node config directory
+  file:
+    path: "{{ fips_exit_config_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Generate WireGuard exit server private key
+  shell: wg genkey > {{ fips_exit_config_dir }}/server_private.key
+  args:
+    creates: "{{ fips_exit_config_dir }}/server_private.key"
+  changed_when: true
+
+- name: Generate WireGuard exit server public key
+  shell: wg pubkey < {{ fips_exit_config_dir }}/server_private.key > {{ fips_exit_config_dir }}/server_public.key
+  args:
+    creates: "{{ fips_exit_config_dir }}/server_public.key"
+  changed_when: true
+
+- name: Restrict server private key permissions
+  file:
+    path: "{{ fips_exit_config_dir }}/server_private.key"
+    mode: "0600"
+
+- name: Read server private key
+  slurp:
+    src: "{{ fips_exit_config_dir }}/server_private.key"
+  register: fips_exit_priv_data
+  changed_when: false
+
+- name: Read server public key
+  slurp:
+    src: "{{ fips_exit_config_dir }}/server_public.key"
+  register: fips_exit_pub_data
+  changed_when: false
+
+- name: Set WireGuard key facts
+  set_fact:
+    fips_exit_server_private_key: "{{ fips_exit_priv_data.content | b64decode | trim }}"
+    fips_exit_server_public_key: "{{ fips_exit_pub_data.content | b64decode | trim }}"
+
+- name: Ensure peer public key is defined
+  fail:
+    msg: "fips_exit_peer_public_key must be set (the WireGuard public key of the FIPS mesh peer that will use this exit). Set it in group_vars or .env."
+  when: fips_exit_peer_public_key is not defined or fips_exit_peer_public_key | length == 0
+
+- name: Enable net.ipv4.ip_forward=1 persistently via sysctl
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    reload: yes
+
+- name: Deploy WireGuard exit config
+  template:
+    src: wg-exit.conf.j2
+    dest: "/etc/wireguard/{{ fips_exit_wg_iface }}.conf"
+    mode: "0600"
+  notify: restart fips exit wg
+
+- name: Deploy nftables NAT rules
+  template:
+    src: exit-nat.nft.j2
+    dest: "{{ fips_exit_config_dir }}/exit-nat.nft"
+    mode: "0644"
+  notify: reload fips exit nft
+
+- name: Ensure WireGuard exit interface is enabled and up
+  service:
+    name: "wg-quick@{{ fips_exit_wg_iface }}"
+    state: started
+    enabled: yes
+
+- name: Deploy FIPS exit route advertisement script
+  template:
+    src: fips-exit-advert.sh.j2
+    dest: "{{ fips_exit_config_dir }}/fips-exit-advert.sh"
+    mode: "0755"
+
+- name: Deploy FIPS exit advert systemd service
+  template:
+    src: tollgate-fips-exit-advert.service.j2
+    dest: /etc/systemd/system/tollgate-fips-exit-advert.service
+    mode: "0644"
+  notify: reload systemd fips exit
+
+- name: Deploy FIPS exit advert systemd timer
+  template:
+    src: tollgate-fips-exit-advert.timer.j2
+    dest: /etc/systemd/system/tollgate-fips-exit-advert.timer
+    mode: "0644"
+  notify: reload systemd fips exit
+
+- name: Enable and start FIPS exit advert timer
+  systemd:
+    name: tollgate-fips-exit-advert.timer
+    state: started
+    enabled: yes
+    daemon_reload: yes
+
+- name: Open WireGuard exit port in FIPS services firewall drop-in
+  blockinfile:
+    path: /etc/fips/fips.d/services.nft
+    marker: "# {mark} fips-exit-node wg port"
+    block: |
+      table inet fips-services {
+          chain input {
+              udp dport {{ fips_exit_wg_port }} accept
+          }
+      }
+  when: ansible_facts['distribution'] == 'Debian'
+
+- name: Display FIPS exit node deployment info
+  debug:
+    msg: |
+      FIPS exit node deployed on {{ inventory_hostname }}.
+      WireGuard server public key: {{ fips_exit_server_public_key }}
+      Listen endpoint: {{ fips_exit_advert_endpoint }} ({{ fips_exit_wg_iface }})
+      Tunnel subnet: {{ fips_exit_tunnel_subnet }}
+      NAT: nftables MASQUERADE on {{ fips_exit_public_iface }}
+      Route advertisement: {{ 'enabled' if fips_exit_advertise else 'disabled' }} (kind {{ fips_exit_advert_kind }})

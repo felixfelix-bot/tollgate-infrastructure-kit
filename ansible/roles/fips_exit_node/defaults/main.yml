@@ -1,0 +1,21 @@
+---
+fips_exit_enabled: true
+fips_exit_wg_iface: wgexit0
+fips_exit_wg_port: 51821
+fips_exit_tunnel_subnet: "10.99.99.0/24"
+fips_exit_server_tunnel_ip: "10.99.99.1"
+fips_exit_peer_tunnel_ip: "10.99.99.2"
+fips_exit_public_iface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
+fips_exit_mtu: 1420
+fips_exit_config_dir: "{{ tollgate_base_dir }}/fips-exit-node"
+fips_exit_advertise: true
+fips_exit_advert_kind: 30078
+fips_exit_advert_identifier: "tollgate-fips-exit"
+fips_exit_advert_interval_hours: 6
+fips_exit_advert_endpoint: "{{ vps_ip | default(ansible_default_ipv4.address) }}:{{ fips_exit_wg_port }}"
+fips_exit_identity_nsec: "{{ lookup('env', 'FIPS_EXIT_NSEC') | default('', true) }}"
+fips_exit_advert_relays:
+  - "wss://relay1.{{ base_domain }}"
+  - "wss://relay2.{{ base_domain }}"
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"

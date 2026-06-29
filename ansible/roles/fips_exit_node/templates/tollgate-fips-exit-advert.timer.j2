@@ -1,0 +1,10 @@
+[Unit]
+Description=Tollgate FIPS exit node route advertisement timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ fips_exit_advert_interval_hours }}h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
