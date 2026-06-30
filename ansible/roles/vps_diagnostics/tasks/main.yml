@@ -27,3 +27,30 @@
     dest: "{{ ansible_env.HOME }}/.hermes/vps_credentials.env"
     state: link
   ignore_errors: true
+
+- name: Ensure Docker daemon config directory exists
+  file:
+    path: /etc/docker
+    state: directory
+    mode: '0755'
+
+- name: Configure Docker log rotation (50M max, 3 files per container)
+  copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "50m",
+          "max-file": "3"
+        }
+      }
+    mode: '0644'
+  notify: restart docker
+
+- name: Restart Docker if log configuration changed
+  systemd:
+    name: docker
+    state: restarted
+    daemon_reload: true
+  when: docker_restart_enabled | default(true)
