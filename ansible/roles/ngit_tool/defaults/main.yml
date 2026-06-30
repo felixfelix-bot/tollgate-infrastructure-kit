@@ -1,0 +1,7 @@
+---
+# ngit Tool defaults
+# Automates all ngit (nostr git) operations via shell script + MCP server
+
+ngit_scripts_dir: "{{ ansible_env.HOME }}/scripts"
+ngit_mcp_config: "{{ ansible_env.HOME }}/.hermes/profiles/manager/config.yaml"
+ngit_nsec: ""  # Set in .env or group_vars, NEVER commit

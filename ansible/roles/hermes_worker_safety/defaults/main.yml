@@ -1,0 +1,26 @@
+---
+# Hermes Worker Safety defaults
+# These prevent uncontrolled worker bursts (OOM death spirals)
+
+hermes_config_path: "{{ ansible_env.HOME }}/.hermes/profiles/manager/config.yaml"
+hermes_scripts_dir: "{{ ansible_env.HOME }}/scripts"
+hermes_log_dir: "{{ ansible_env.HOME }}/.hermes/logs"
+hermes_profile: "manager"
+
+# Global concurrency cap — total workers across ALL boards
+worker_max_in_progress: 3
+
+# Per-tick spawn cap — max new workers per dispatch cycle
+worker_max_spawn: 1
+
+# Per-profile cap — max workers per assignee profile
+worker_max_per_profile: 1
+
+# Dispatch gate poll interval (minutes)
+dispatch_gate_interval: 2
+
+# Load threshold — don't dispatch above this
+dispatch_load_threshold: 6.0
+
+# Memory floor — don't dispatch below this (MB)
+dispatch_mem_floor_mb: 500

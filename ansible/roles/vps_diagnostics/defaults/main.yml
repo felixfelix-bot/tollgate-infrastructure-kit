@@ -1,0 +1,5 @@
+---
+# VPS Diagnostics defaults
+vps_host: "23.182.128.51"
+vps_user: "debian"
+diagnostic_interval_minutes: 60

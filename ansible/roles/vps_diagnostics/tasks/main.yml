@@ -1,0 +1,29 @@
+---
+# VPS Diagnostics Role
+# Installs automated health diagnostic + cleanup scripts for VPS management.
+# When a health check fails, the diagnostic script SSHes to the VPS, collects
+# data, identifies root causes, and produces actionable recommendations.
+#
+# Integration:
+#   - The vps_diag.py collector runs standalone for manual diagnostics
+#   - The vps_cleanup.py executor applies safe cleanup actions
+#   - The VPS health check cron calls these when it detects issues
+
+- name: Install VPS diagnostic collector
+  copy:
+    src: vps_diag.py
+    dest: "{{ ansible_env.HOME }}/scripts/vps_diag.py"
+    mode: '0755'
+
+- name: Install VPS cleanup executor
+  copy:
+    src: vps_cleanup.py
+    dest: "{{ ansible_env.HOME }}/scripts/vps_cleanup.py"
+    mode: '0755'
+
+- name: Create .env symlink for credential access
+  file:
+    src: "{{ ansible_env.HOME }}/tollgate-infrastructure-kit/.env"
+    dest: "{{ ansible_env.HOME }}/.hermes/vps_credentials.env"
+    state: link
+  ignore_errors: true

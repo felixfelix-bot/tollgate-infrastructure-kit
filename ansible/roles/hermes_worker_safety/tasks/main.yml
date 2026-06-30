@@ -1,0 +1,61 @@
+---
+# Hermes Worker Safety Role
+# Prevents uncontrolled worker bursts that caused OOM death spirals.
+#
+# ROOT CAUSE (found via investigation):
+#   - kanban.max_in_progress was NOT SET → no global concurrency cap
+#   - kanban.max_spawn was NOT SET → no per-tick spawn limit
+#   - Three independent dispatchers (watchdog cron, adaptive daemon, auto-assigner)
+#     all calling `hermes kanban dispatch` without coordination
+#   - Kalman filter smooths inputs but does NOT enforce any cap
+#
+# FIX: Set config caps + install dispatch gate as additional safety layer.
+
+- name: Ensure scripts directory exists
+  file:
+    path: "{{ hermes_scripts_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Install compute_max_workers.py (dynamic concurrency calculator)
+  copy:
+    src: compute_max_workers.py
+    dest: "{{ hermes_scripts_dir }}/compute_max_workers.py"
+    mode: '0755'
+
+- name: Install dispatch gate (pre-flight check before spawning workers)
+  copy:
+    src: dispatch-gate.py
+    dest: "{{ hermes_scripts_dir }}/dispatch-gate.py"
+    mode: '0755'
+
+- name: Set global concurrency cap (max_in_progress)
+  lineinfile:
+    path: "{{ hermes_config_path }}"
+    regexp: '^  max_in_progress:'
+    line: '  max_in_progress: {{ worker_max_in_progress }}'
+    insertafter: '^kanban:'
+  when: hermes_config_path is defined
+
+- name: Set per-tick spawn cap (max_spawn)
+  lineinfile:
+    path: "{{ hermes_config_path }}"
+    regexp: '^  max_spawn:'
+    line: '  max_spawn: {{ worker_max_spawn }}'
+    insertafter: '^kanban:'
+  when: hermes_config_path is defined
+
+- name: Ensure per-profile cap is set (max_in_progress_per_profile)
+  lineinfile:
+    path: "{{ hermes_config_path }}"
+    regexp: '^  max_in_progress_per_profile:'
+    line: '  max_in_progress_per_profile: {{ worker_max_per_profile }}'
+    insertafter: '^kanban:'
+  when: hermes_config_path is defined
+
+- name: Create dispatch gate cron (every {{ dispatch_gate_interval }} minutes)
+  cron:
+    name: "hermes-safe-dispatch-gate"
+    minute: "*/{{ dispatch_gate_interval }}"
+    job: "{{ hermes_scripts_dir }}/dispatch-gate.py >> {{ hermes_log_dir }}/dispatch-gate.log 2>&1"
+    state: present

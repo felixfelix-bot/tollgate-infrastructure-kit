@@ -1,0 +1,49 @@
+---
+# ngit Tool Role
+# Installs nostr-git automation toolchain: shell script + MCP server + TTY helpers
+#
+# ngit (nostr git) stores git repos as Nostr events on relays.
+# Standard `git push` via HTTPS transport fails because ngit's grasp servers
+# don't accept pushes over HTTPS. This toolchain provides:
+#   1. ngit-tool.sh — 6 commands (init/push/sync/status/fix/clone) via tmux
+#   2. ngit-tool-mcp.py — MCP server exposing 5 tools wired into Hermes
+#   3. ngit-tool.mk — Makefile for quick terminal use
+#   4. TTY helpers — expect script + Python pty for interactive prompts
+#
+# Usage: ngit-tool.sh push ~/repos/my-repo
+
+- name: Install ngit-tool.sh (main automation script)
+  copy:
+    src: ngit-tool.sh
+    dest: "{{ ngit_scripts_dir }}/ngit-tool.sh"
+    mode: '0755'
+
+- name: Install ngit-tool.mk (Makefile wrapper)
+  copy:
+    src: ngit-tool.mk
+    dest: "{{ ansible_env.HOME }}/ngit-tool.mk"
+    mode: '0644'
+
+- name: Install ngit-tool-mcp.py (MCP server for Hermes agents)
+  copy:
+    src: ngit-tool-mcp.py
+    dest: "{{ ngit_scripts_dir }}/ngit-tool-mcp.py"
+    mode: '0755'
+
+- name: Install TTY helper scripts
+  copy:
+    src: "tty_helpers/{{ item }}"
+    dest: "{{ ngit_scripts_dir }}/{{ item }}"
+    mode: '0755'
+  loop:
+    - pty_run.py
+    - ngit-init.expect
+  ignore_errors: true
+
+- name: Wire ngit-tool MCP server into Hermes config
+  lineinfile:
+    path: "{{ ngit_mcp_config }}"
+    regexp: 'ngit-tool-mcp'
+    line: '    - command: python3 {{ ngit_scripts_dir }}/ngit-tool-mcp.py'
+    insertbefore: 'mcp_servers:'
+  when: ngit_mcp_config is defined

@@ -1,0 +1,9 @@
+---
+# Handlers for hermes_worker_safety role
+
+- name: restart hermes dispatcher
+  systemd:
+    name: hermes-dispatcher
+    state: restarted
+    daemon_reload: true
+  when: false  # Optional: enable when running on a Hermes host
