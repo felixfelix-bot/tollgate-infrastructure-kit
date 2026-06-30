@@ -1,0 +1,33 @@
+---
+- name: Create install directory
+  file:
+    path: "{{ vps_health_install_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Create data directory
+  file:
+    path: "{{ vps_health_data_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Deploy VPS health MCP server
+  copy:
+    src: vps-health-mcp.py
+    dest: "{{ vps_health_install_dir }}/vps-health-mcp.py"
+    mode: "0755"
+  notify: restart vps health
+
+- name: Deploy systemd service
+  template:
+    src: vps-health-mcp.service.j2
+    dest: /etc/systemd/system/vps-health-mcp.service
+    mode: "0644"
+  notify: restart vps health
+
+- name: Enable and start VPS health monitor
+  systemd:
+    name: vps-health-mcp
+    state: started
+    enabled: yes
+    daemon_reload: yes

@@ -1,0 +1,17 @@
+[Unit]
+Description=VPS Health Monitor MCP Server
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/vps-health/vps-health-mcp.py
+Restart=always
+RestartSec=10
+StandardInput=data
+StandardOutput=data
+User=root
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
