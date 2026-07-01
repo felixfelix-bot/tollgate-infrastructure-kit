@@ -1,0 +1,10 @@
+[Unit]
+Description=Blossom WoT enforcement timer
+
+[Timer]
+# Offset from strfry-agg-reconcile (:0/15) so allowed.npubs is freshly written.
+OnCalendar=*-*-* *:{{ wot_sync_blossom_offset_min }}/{{ wot_sync_blossom_interval_min }}:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

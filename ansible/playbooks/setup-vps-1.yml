@@ -34,6 +34,7 @@
     - jitsi_meet
     - bitcoin_core
     - strfry_agg
+    - wot_sync
 
 - name: Deploy VPS watchdog (local health monitor + auto-redeploy)
   hosts: localhost
