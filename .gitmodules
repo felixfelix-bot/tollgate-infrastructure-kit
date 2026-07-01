@@ -1,0 +1,3 @@
+[submodule "kanbanstr"]
+	path = kanbanstr
+	url = https://github.com/vivganes/kanbanstr.git
