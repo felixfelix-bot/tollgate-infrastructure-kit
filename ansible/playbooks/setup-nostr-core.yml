@@ -1,0 +1,32 @@
+---
+- name: Deploy Nostr core infrastructure (minimal — Tier 1 only)
+  hosts: vps1
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - system
+    - docker
+    - cloudflare_dns
+    - caddy
+    - strfry
+    - strfry_agg
+    - obelisk_relay
+    - blossom
+    - nsite_gateway
+    - ngit_relay
+    - nsyte_cli
+  vars:
+    blossom_mirror_enabled: false
+    blossom_upload_max_size: 10485760
+    strfry_agg_mapsize: "10G"
+    docker_log_max_size: "50m"
+    docker_log_max_file: "3"
+
+- name: Deploy watchdog (local health monitor + auto-redeploy)
+  hosts: localhost
+  connection: local
+  become: no
+  gather_facts: yes
+  roles:
+    - watchdog
