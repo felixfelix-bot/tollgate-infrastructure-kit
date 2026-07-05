@@ -4,6 +4,8 @@
     name:
       - libdbus-1-dev
       - pkg-config
+      - libclang-dev
+      - clang
     state: present
 
 - name: Install Rust
@@ -33,6 +35,7 @@
     creates: "{{ tollgate_base_dir }}/src/fips/target/debian/fips_*.deb"
   environment:
     PATH: "/root/.cargo/bin:{{ ansible_env.PATH }}"
+    LIBCLANG_PATH: "/usr/lib/llvm-19/lib"
 
 - name: Find FIPS deb package
   find:
