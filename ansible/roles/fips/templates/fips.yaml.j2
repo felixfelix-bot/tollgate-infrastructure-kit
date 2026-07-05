@@ -38,10 +38,13 @@ dns:
 transports:
   udp:
     bind_addr: "0.0.0.0:2121"
+    external_addr: "{{ ansible_host }}:2121"
     advertise_on_nostr: true
 
   tcp:
     bind_addr: "0.0.0.0:8443"
+    external_addr: "{{ ansible_host }}:8443"
+    advertise_on_nostr: true
     advertise_on_nostr: true
 
 peers: []
