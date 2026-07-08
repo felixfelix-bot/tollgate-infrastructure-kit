@@ -34,3 +34,6 @@ acme.json
 .pytest_cache/
 dist/
 build/
+
+# auto-generated opencode session handover (do not commit)
+HANDOVER.md
