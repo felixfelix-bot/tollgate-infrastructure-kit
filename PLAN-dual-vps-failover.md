@@ -8,9 +8,9 @@ Multi-VPS deployment with automated failover. All services deploy to both VPSes 
 
 | Label | IP | User | Password | Role |
 |---|---|---|---|---|
-| vps1 | `66.92.204.38` | `debian` | `REDACTED_VPS_PASSWORD` | Primary (active for stateful) |
-| vps2 | `23.182.128.51` | `debian` | `REDACTED_VPS2_PASSWORD` | Secondary (standby for stateful) |
-| backup | `100.90.22.201` | `c03rad0r` | `REDACTED_BACKUP_PASSWORD` (sudo) | Syncthing backup target |
+| vps1 | `66.92.204.38` | `debian` | (see `.env`) | Primary (active for stateful) |
+| vps2 | `23.182.128.51` | `debian` | (see `.env`) | Secondary (standby for stateful) |
+| backup | `100.90.22.201` | `c03rad0r` | (see `.env`) | Syncthing backup target |
 
 **Abandoned**: `23.182.128.226` (unreachable, removed from all configs)
 
