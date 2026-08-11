@@ -525,11 +525,78 @@ Task 1 (VPS base)
 
 ---
 
+## Cashu Credit Flow (End-to-End)
+
+Routstr Core uses Cashu tokens as the API authentication mechanism. The flow:
+
+```
+1. Felix signs Nostr kind 38010 approval event
+   → mint-orchestrator daemon sees it
+   → calls GRPC UpdateNut04Quote(quote_id, "PAID")
+   → CDK mintd marks the invoice as paid
+
+2. Friend's Cashu wallet mints tokens from the paid quote
+   → Friend now has Cashu tokens (sat-denominated)
+
+3. Friend's Hermes container uses routstrd as LLM proxy
+   → routstrd manages Cashu wallet (via cocod)
+   → Each LLM request includes x-cashu header with Cashu token
+   → Routstr Core validates token, deducts cost, forwards to z.ai
+
+4. Cost accounting:
+   → Routstr charges per-token (Kalman pricing + margin)
+   → Friend's Cashu balance decreases per request
+   → When balance low: Felix issues more credits via GRPC
+```
+
+**Key:** routstrd (https://github.com/Routstr/routstrd) is the client-side daemon that manages the Cashu wallet and injects the `x-cashu` header. Each Hermes container runs routstrd alongside Hermes. routstrd connects to the shared Routstr node on the VPS.
+
+**Hermes container LLM config:**
+```yaml
+llm:
+  base_url: http://routstrd:9000  # local routstrd daemon
+  api_key: ""  # routstrd injects the Cashu token header
+```
+
+Or if Hermes supports custom headers, point directly at the Routstr node:
+```yaml
+llm:
+  base_url: http://routstr:8000
+  extra_headers:
+    x-cashu: "{{ cashu_token }}"  # refreshed by sidecar script
+```
+
+**Simpler approach for V1:** Skip per-token payment gating. Friends use the Routstr node freely (Felix's z.ai keys). Add Cashu gating in V2 once the basics work. This avoids the complexity of running routstrd + cocod in each container.
+
+---
+
+## Self-Review (consultant was unavailable due to quota)
+
+### BLOCKER: Docker-in-Docker for worker profiles
+Hermes worker profiles spawn subprocesses that use terminal, git, file tools. Inside a Docker container, this works fine for basic operations. But if workers need to run `docker` commands (e.g., for kanban worker containers), they need Docker-in-Docker or Docker socket mounting. **Recommendation:** Mount the host Docker socket into each Hermes container (`-v /var/run/docker.sock:/var/run/docker.sock`). This lets workers use Docker without DinD, but means containers share the Docker daemon (not fully isolated). For 3 trusted friends, this is acceptable.
+
+### WARNING: Memory budget tight for 4GB VPS
+3 Hermes containers at 512MB each = 1.5GB. Plus Routstr (200MB), obelisk (100MB), Cashu mint (200MB), mint-orchestrator (100MB), Caddy (50MB), system (300MB) = ~2.5GB. Leaves 1.5GB headroom. **OK if VPS has 4GB.** If 2GB, reduce to 256MB per Hermes container or limit to 2 friends.
+
+### WARNING: Hermes Docker image needs testing
+Hermes is designed to run as a system package, not in Docker. The Docker image needs to handle: persistent state (volumes), gateway restart, signal handling, Nostr adapter (coincurve), Python 3.11+ compatibility. **Recommendation:** Task 7 should include a smoke test (docker run → hermes gateway starts → Nostr adapter connects to relay → basic chat works).
+
+### SUGGESTION: Start without Cashu gating
+V1: Friends use shared Routstr freely (Felix's keys). Track usage per friend via zai_usage.db (already tracks per-container). V2: Add Cashu payment gating once basics work. This simplifies Tasks 5-6 and removes the routstrd + cocod dependency from each container.
+
+### SUGGESTION: Use obelisk-relay's built-in Cashu wallet
+obelisk-relay has a built-in NIP-60/61 Cashu wallet. If we enable it, friends can tip each other or pay for services within the Buzz interface. Future enhancement, not needed for V1.
+
+### SUGGESTION: Backup strategy
+Add `ansible/roles/syncthing/` to the playbook for incremental backup to T470 (like testserver2 setup). Each friend's Docker volume gets synced. Low priority — add after initial deployment works.
+
+---
+
 ## Open Questions for Felix
 
-1. **Domain:** Use `sovereignengineering.io` or another domain? (Already have this in Cloudflare)
-2. **VPS RAM:** How much RAM does the SSD VPS have? Need 4GB minimum for 3 friends.
+1. **Domain:** Use `sovereignengineering.io` or another domain?
+2. **VPS RAM:** How much RAM does the SSD VPS have? Need 4GB for 3 friends.
 3. **Friend npubs:** Do friends already have Nostr identities, or generate fresh ones?
-4. **Routstr pricing:** What margin to set? (Current proxy uses Kalman pricing — copy config?)
-5. **Credit denomination:** Satoshis or msat? How much credit per friend per month?
-6. **Backup strategy:** Syncthing to T470 like testserver2, or different approach?
+4. **V1 or V2 Cashu gating:** Start without payment gating (simpler) or full Cashu from day 1?
+5. **Credit amount:** If using Cashu, how much credit per friend per month?
+6. **Docker socket:** OK to mount host Docker socket into friend containers (needed for worker profiles)?
