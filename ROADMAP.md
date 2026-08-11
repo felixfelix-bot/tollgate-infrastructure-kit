@@ -13,7 +13,7 @@
 | 1 | Use official Hermes Dockerfile (not custom) | Hermes ships with production Dockerfile + docker-compose.yml using s6-overlay supervision, uv, node22, Debian 13. No need to build custom image. |
 | 2 | Use obelisk-relay (not Block Buzz relay) | 1 vCPU/1GB RAM vs Block's PostgreSQL+Redis+S3. Already in Ansible kit. NIP-29 compatible. Buzz client works. |
 | 3 | Mount host Docker socket | Worker profiles need Docker. DinD is heavy. Socket mount = shared daemon, acceptable for 3 trusted friends. |
-| 4 | V1: no Cashu gating, V2: add it | Simplifies V1 (no routstrd/cocod per container). Track usage per friend via proxy logs. Add Cashu when basics work. |
+| 4 | FULL Cashu per-token sats from day 1 | Felix wants Cashu gating from day 1. routstrd in each container manages wallet. CDK mint on VPS with GRPC mark-paid. |
 | 5 | Use Hermes native Nostr adapter | Already built at `gateway/platforms/nostr.py`. No Signal/Matrix needed. coincurve for Schnorr. |
 | 6 | Network egress isolation | Hermes has docs for Docker network segmentation. Use internal network for Hermes containers, egress only to Routstr + obelisk. |
 
@@ -141,7 +141,12 @@ Deploy a FRESH CDK mint in Docker on the new VPS (NOT testserver2's existing min
 - [ ] Docker socket mount works (workers can run Docker commands)
 - [ ] Resource limits enforced (no container exceeds limit)
 - [ ] GRPC port 50055 NOT accessible from internet
-- [ ] Felix can issue Cashu credits via Nostr approval event (if V2 Cashu enabled)
+- [ ] Felix can issue Cashu credits via Nostr approval event (full Cashu from day 1)
+- [ ] Each friend's routstrd can mint tokens from approved quotes
+- [ ] Each friend's LLM calls include x-cashu header, Routstr validates + deducts
+- [ ] Deployment admin nsec used (NOT Felix's personal nsec)
+- [ ] Per-friend Docker networks (friends isolated from each other)
+- [ ] Per-friend API keys in Routstr (quota isolation)
 
 ---
 
