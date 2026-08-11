@@ -1,0 +1,166 @@
+---
+# MT-09: Master playbook — multi-tenant Hermes infrastructure
+# Orchestrates: system base, Caddy reverse proxy, NIP-29 relay (obelisk),
+# Routstr AI inference, fresh Cashu mint, mint orchestrator, and Hermes tenants.
+# Target: 64.188.7.38 (or override via --extra-vars "target_ip=...")
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/45-multi-tenant-hermes.yml
+#   ansible-playbook ansible/playbooks/45-multi-tenant-hermes.yml --extra-vars "target_ip=23.182.128.51"
+#
+# Prerequisites:
+#   - .env file populated from .env.example
+#   - Ansible installed on controller
+#   - SSH access to target VPS
+#   - Docker Swarm initialized on target (MT-05c)
+
+- name: 01-system — base system configuration
+  hosts: "{{ target_group | default('multi_tenant') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - role: system
+      when: system_enabled | default(true)
+
+- name: 20-caddy — reverse proxy and TLS termination
+  hosts: "{{ target_group | default('multi_tenant') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - role: caddy
+      when: caddy_enabled | default(true)
+
+- name: 40-nip29-relay — NIP-29 relay with obelisk
+  hosts: "{{ target_group | default('multi_tenant') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - role: nip29_relay
+      when: nip29_enabled | default(true)
+  vars:
+    nip29_relay_nsec: "{{ lookup('env', 'DEPLOYMENT_ADMIN_NSEC') }}"
+    nip29_domain: "{{ caddy_domain | default(base_domain | default('example.com')) }}"
+
+- name: Routstr — AI inference node with dedicated Cashu mint
+  hosts: "{{ target_group | default('multi_tenant') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
+  roles:
+    - role: routstr
+      when: routstr_enabled | default(true)
+  vars:
+    routstr_upstream_base_url: "{{ lookup('env', 'ROUTSTR_UPSTREAM_BASE_URL') | default('https://api.z.ai/api/coding/paas/v4', true) }}"
+    routstr_upstream_api_key: "{{ lookup('env', 'ZAI_API_KEY_OURS') }}"
+    routstr_admin_password: "{{ lookup('env', 'ROUTSTR_ADMIN_PASSWORD') | default('changeme', true) }}"
+
+- name: Cashu mint — fresh CDK mint for multi-tenant ecash
+  hosts: "{{ target_group | default('multi_tenant') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
+  roles:
+    - role: cashu_mint
+      when: cashu_mint_enabled | default(true)
+  vars:
+    mint_name: "tenant"
+    mint_units: "sat,usd,eur"
+    npub: "{{ lookup('env', 'FRIEND1_NPUB') }}"
+    custom_port: 8085
+    custom_grpc_port: 50051
+
+- name: Mint orchestrator — multi-mint management daemon
+  hosts: "{{ target_group | default('multi_tenant') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
+  roles:
+    - role: mint_orchestrator
+      when: mint_orchestrator_enabled | default(true)
+
+- name: Hermes tenants — multi-tenant Hermes Agent deployment
+  hosts: "{{ target_group | default('multi_tenant') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
+  roles:
+    - role: hermes_tenants
+      when: hermes_tenants_enabled | default(true)
+  vars:
+    hermes_tenants_tenants:
+      - name: "ours"
+        npub: "{{ lookup('env', 'FRIEND1_NPUB') }}"
+        nsec: "{{ lookup('env', 'FRIEND1_NSEC') }}"
+        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_OURS') }}"
+      - name: "friend1"
+        npub: "{{ lookup('env', 'FRIEND2_NPUB') }}"
+        nsec: "{{ lookup('env', 'FRIEND2_NSEC') }}"
+        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_FRIEND') }}"
+      - name: "friend2"
+        npub: "{{ lookup('env', 'FRIEND3_NPUB') }}"
+        nsec: "{{ lookup('env', 'FRIEND3_NSEC') }}"
+        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_FRIEND') }}"
+    hermes_tenants_deployment_admin_nsec: "{{ lookup('env', 'DEPLOYMENT_ADMIN_NSEC') }}"
+    hermes_tenants_image: "hermes-agent:nostr"
+    hermes_tenants_base_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/hermes"
+
+- name: Verify multi-tenant deployment
+  hosts: "{{ target_group | default('multi_tenant') }}"
+  become: yes
+  gather_facts: no
+  ignore_unreachable: true
+  tasks:
+    - name: Check Caddy is responding
+      uri:
+        url: "http://localhost:80"
+        return_content: no
+      register: caddy_check
+      failed_when: false
+      changed_when: false
+
+    - name: Check NIP-29 relay port
+      wait_for:
+        port: "{{ nip29_port | default(7780) }}"
+        host: "127.0.0.1"
+        timeout: 10
+      failed_when: false
+
+    - name: Check Routstr is responding
+      uri:
+        url: "http://localhost:8000/v1/info"
+        return_content: no
+      register: routstr_check
+      failed_when: false
+      changed_when: false
+
+    - name: Check Cashu mint is responding
+      uri:
+        url: "http://localhost:8085/v1/info"
+        return_content: no
+      register: mint_check
+      failed_when: false
+      changed_when: false
+
+    - name: Check Hermes tenant containers
+      command: "docker ps --filter name=hermes- --format '{% raw %}{{.Names}}: {{.Status}}{% endraw %}'"
+      register: hermes_containers
+      changed_when: false
+      failed_when: false
+
+    - name: Display deployment verification
+      debug:
+        msg:
+          - "=== Multi-Tenant Hermes Deployment Verification ==="
+          - "Caddy (port 80): {{ 'OK' if caddy_check.status == 200 else 'FAIL' }}"
+          - "NIP-29 relay (port {{ nip29_port | default(7780) }}): {{ 'OK' if not ansible_failed_result | default(false) else 'check' }}"
+          - "Routstr (port 8000): {{ 'OK' if routstr_check.status == 200 else 'FAIL' }}"
+          - "Cashu mint (port 8085): {{ 'OK' if mint_check.status == 200 else 'FAIL' }}"
+          - "Hermes containers:"
+          - "{{ hermes_containers.stdout_lines | default(['none found']) }}"

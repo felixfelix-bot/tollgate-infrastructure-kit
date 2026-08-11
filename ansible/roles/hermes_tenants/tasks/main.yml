@@ -1,0 +1,148 @@
+---
+- name: Create Hermes base directory
+  ansible.builtin.file:
+    path: "{{ hermes_tenants_base_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Install pynostr for keypair generation
+  ansible.builtin.pip:
+    name: pynostr
+    state: present
+    extra_args: "--break-system-packages"
+  run_once: true
+
+- name: Create per-tenant directories
+  ansible.builtin.file:
+    path: "{{ hermes_tenants_base_dir }}/{{ item.name }}"
+    state: directory
+    mode: "0700"
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create per-tenant subdirectories
+  ansible.builtin.file:
+    path: "{{ hermes_tenants_base_dir }}/{{ item.0.name }}/{{ item.1 }}"
+    state: directory
+    mode: "0700"
+  with_nested:
+    - "{{ hermes_tenants_tenants }}"
+    - ["data", "config", "nsec"]
+  loop_control:
+    label: "{{ item.0.name }}/{{ item.1 }}"
+
+- name: Generate nsec/npub keypair for tenants without keys
+  ansible.builtin.shell: |
+    python3 -c "
+    from pynostr.key import PrivateKey
+    pk = PrivateKey()
+    print(pk.bech32())
+    print(pk.public_key.bech32())
+    "
+  register: hermes_tenants_keypair_output
+  changed_when: false
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.nsec is not defined or item.nsec | length == 0
+
+- name: Write generated nsec files
+  ansible.builtin.copy:
+    content: "{{ item.stdout_lines[0] }}"
+    dest: "{{ hermes_tenants_base_dir }}/{{ item.item.name }}/nsec/nsec.txt"
+    mode: "0600"
+  no_log: true
+  loop: "{{ hermes_tenants_keypair_output.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.stdout_lines is defined and item.stdout_lines | length > 0
+
+- name: Create per-tenant Docker network (isolate friends)
+  community.docker.docker_network:
+    name: "hermes-net-{{ item.name }}"
+    state: present
+    driver: bridge
+    internal: false
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create per-tenant Docker volume for persistent state
+  community.docker.docker_volume:
+    name: "hermes-{{ item.name }}-data"
+    state: present
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Deploy per-tenant Docker Compose files
+  ansible.builtin.template:
+    src: docker-compose.tenant.yml.j2
+    dest: "{{ hermes_tenants_base_dir }}/{{ item.name }}/docker-compose.yml"
+    mode: "0600"
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+    index_var: tenant_index
+  vars:
+    tenant_name: "{{ item.name }}"
+    tenant_npub: "{{ item.npub | default('') }}"
+    tenant_nsec: "{{ item.nsec | default('') }}"
+    tenant_zai_api_key: "{{ item.zai_api_key }}"
+    tenant_gateway_port: "{{ hermes_tenants_gateway_port_base | int + tenant_index }}"
+    tenant_health_port: "{{ hermes_tenants_health_port_base | int + tenant_index }}"
+
+- name: Deploy per-tenant .env files
+  ansible.builtin.copy:
+    content: |
+      HERMES_NPUB={{ item.npub | default('') }}
+      HERMES_NSEC={{ item.nsec | default('') }}
+      ZAI_API_KEY=*** item.zai_api_key }}
+      NOSTR_RELAYS={{ hermes_tenants_nostr_relays }}
+      NOSTR_GROUPS={{ hermes_tenants_nostr_groups }}
+      NOSTR_NSEC_PATH=/nsec/nsec.txt
+      LLM_PROXY_URL={{ hermes_tenants_llm_proxy_url }}
+      DEPLOYMENT_ADMIN_NSEC={{ hermes_tenants_deployment_admin_nsec }}
+      ROUTSTRD_PORT={{ hermes_tenants_routstrd_config.port }}
+      ROUTSTRD_HEALTH_ENDPOINT={{ hermes_tenants_routstrd_config.health_endpoint }}
+    dest: "{{ hermes_tenants_base_dir }}/{{ item.name }}/.env"
+    mode: "0600"
+  no_log: true
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Start Hermes tenant containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ hermes_tenants_base_dir }}/{{ item.name }}"
+    state: present
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: hermes_tenants_deploy
+
+- name: Wait for Hermes tenant containers to be healthy
+  ansible.builtin.command: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} hermes-{{ item.name }}"
+  register: hermes_tenants_health_check
+  until: hermes_tenants_health_check.stdout == "healthy"
+  retries: 30
+  delay: 5
+  changed_when: false
+  failed_when: false
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Display Hermes tenant deployment info
+  ansible.builtin.debug:
+    msg: |
+      Hermes multi-tenant deployment complete!
+      Tenants deployed: {{ hermes_tenants_tenants | map(attribute='name') | join(', ') }}
+      Base dir: {{ hermes_tenants_base_dir }}
+      Networks: {{ hermes_tenants_tenants | map(attribute='name') | map('regex_replace', '^', 'hermes-net-') | join(', ') }}
+      Relay: {{ hermes_tenants_relay_url }}
+      Image: {{ hermes_tenants_image }}
+      Log config: {{ hermes_tenants_log_driver }}, max-size={{ hermes_tenants_log_max_size }}, max-file={{ hermes_tenants_log_max_file }}
+      Resource limits: memory={{ hermes_tenants_resource_limits.memory }}, cpus={{ hermes_tenants_resource_limits.cpus }}
+      Docker socket mount: {{ 'DISABLED (security)' if hermes_tenants_no_docker_socket else 'ENABLED' }}

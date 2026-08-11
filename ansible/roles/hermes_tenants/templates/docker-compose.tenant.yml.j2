@@ -1,0 +1,49 @@
+services:
+  hermes-{{ tenant_name }}:
+    image: {{ hermes_tenants_image }}
+    container_name: hermes-{{ tenant_name }}
+    restart: {{ hermes_tenants_container_restart }}
+    env_file:
+      - .env
+    volumes:
+      - hermes-{{ tenant_name }}-data:/data
+      - ./config:/config
+      - ./nsec:/nsec:ro
+    networks:
+      - hermes-net-{{ tenant_name }}
+    ports:
+      - "{{ tenant_gateway_port }}:8080"
+      - "{{ tenant_health_port }}:{{ hermes_tenants_routstrd_config.port }}"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:{{ hermes_tenants_routstrd_config.port }}{{ hermes_tenants_routstrd_config.health_endpoint }}')\" || exit 1"]
+      interval: {{ hermes_tenants_healthcheck_interval }}
+      timeout: {{ hermes_tenants_healthcheck_timeout }}
+      retries: {{ hermes_tenants_healthcheck_retries }}
+      start_period: {{ hermes_tenants_healthcheck_start_period }}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: {{ hermes_tenants_container_restart }}
+      resources:
+        limits:
+          memory: {{ hermes_tenants_resource_limits.memory }}
+          cpus: "{{ hermes_tenants_resource_limits.cpus }}"
+        reservations:
+          memory: {{ hermes_tenants_resource_reservations.memory }}
+    logging:
+      driver: {{ hermes_tenants_log_driver }}
+      options:
+        max-size: {{ hermes_tenants_log_max_size }}
+        max-file: "{{ hermes_tenants_log_max_file }}"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  hermes-{{ tenant_name }}-data:
+    external: true
+    name: hermes-{{ tenant_name }}-data
+
+networks:
+  hermes-net-{{ tenant_name }}:
+    external: true
+    name: hermes-net-{{ tenant_name }}
