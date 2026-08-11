@@ -41,7 +41,8 @@ class MintGrpcClient:
             return False
         try:
             request = cdk_mint_rpc_pb2.UpdateNut04QuoteRequest(quote_id=quote_id, state=state)
-            await self.stub.UpdateNut04Quote(request)
+            metadata = [("x-cdk-protocol-version", "1.0.0")]
+            await self.stub.UpdateNut04Quote(request, metadata=metadata)
             logger.info(f"Updated quote {quote_id} to state {state}")
             return True
         except grpc.aio.AioRpcError as e:
@@ -52,7 +53,7 @@ class MintGrpcClient:
         if not self.stub:
             return None
         try:
-            response = await self.stub.GetInfo(cdk_mint_rpc_pb2.GetInfoRequest())
+            response = await self.stub.GetInfo(cdk_mint_rpc_pb2.GetInfoRequest(), metadata=[("x-cdk-protocol-version", "1.0.0")])
             return {
                 "name": response.name,
                 "version": response.version,

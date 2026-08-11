@@ -17,6 +17,7 @@ class MintEntry:
     created_at: str
     max_single_issuance: int = 10000
     max_balance: int = 1000000
+    units: str = "sat"
 
 
 class MintRegistry:

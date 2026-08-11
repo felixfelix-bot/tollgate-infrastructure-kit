@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import cdk_mint_rpc_pb2 as cdk__mint__rpc__pb2
+from tollgate_mint_orchestrator import cdk_mint_rpc_pb2 as cdk__mint__rpc__pb2
 
 GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__
