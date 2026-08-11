@@ -592,11 +592,13 @@ Add `ansible/roles/syncthing/` to the playbook for incremental backup to T470 (l
 
 ---
 
-## Open Questions for Felix
+## Open Questions — ANSWERED by Felix (2026-08-08)
 
-1. **Domain:** Use `sovereignengineering.io` or another domain?
-2. **VPS RAM:** How much RAM does the SSD VPS have? Need 4GB for 3 friends.
-3. **Friend npubs:** Do friends already have Nostr identities, or generate fresh ones?
-4. **V1 or V2 Cashu gating:** Start without payment gating (simpler) or full Cashu from day 1?
-5. **Credit amount:** If using Cashu, how much credit per friend per month?
-6. **Docker socket:** OK to mount host Docker socket into friend containers (needed for worker profiles)?
+1. **Domain:** `orangesync.tech` (not sovereignengineering.io)
+2. **VPS RAM:** Felix will fix the SSD VPS. Follow up in ~1h, then tomorrow morning if still down. Assume 4GB+.
+3. **Friend npubs:** Generate fresh ones during deployment.
+4. **Cashu gating:** FULL Cashu from day 1 — per-token sats via Cashu. Use routstrd CLI.
+5. **Credit amount:** TBD — Felix will set amounts.
+6. **Docker socket:** Yes, mount host Docker socket. No hard cap on workers — resource constraints of the machine are the cap. Smart dispatching: only dispatch when resources have headroom.
+7. **Nostr adapter:** Branch `nostr-adapter` on `felixfelix-bot/hermes-agent` fork. Merge to fork's `main` before deployment.
+8. **Cashu mint:** Fresh CDK mint in Docker on the new VPS (NOT testserver2's existing mint).

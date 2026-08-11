@@ -92,16 +92,39 @@ Based on the grill, 3 changes to the plan:
 
 **GATE:** This task MUST pass before any other work begins. If it fails, the architecture changes.
 
+### NEW Task 0b: Merge nostr-adapter to fork main
+**Profile:** worker-admin
+**Duration:** 30 min
+**Scope:**
+1. In `~/.hermes/hermes-agent/`, merge `nostr-adapter` branch into `main` on the `felixfelix-bot/hermes-agent` fork
+2. Run existing Nostr adapter tests (`gateway/platforms/test_nostr_adapter.py`)
+3. Push merged main to `fork` remote (github.com/felixfelix-bot/hermes-agent)
+4. Verify the adapter is on the default branch for Docker image builds
+
+### NEW Task 13: Smart resource-aware dispatching
+**Profile:** worker-admin
+**Branch:** `multi-tenant/smart-dispatch`
+**Duration:** 2 hours
+**Scope:**
+1. Adapt existing `dispatch_resource_gate.sh` for multi-tenant VPS context
+2. Check available RAM, CPU load, disk space on the VPS before dispatching workers
+3. If headroom < threshold → refuse dispatch (wait for next tick)
+4. If headroom > threshold → dispatch
+5. No hard worker cap — machine resource constraints ARE the cap
+6. Integrate with kanban-auto-assigner to prevent over-dispatch
+7. Per-friend resource accounting (track which friend's workers are consuming what)
+
 ### Task 7 REVISED: Use official Hermes Docker image + override compose
 Instead of building custom Dockerfile, use official `hermes-agent` image. Write per-friend `docker-compose.override.yml` files that:
 - Replace `network_mode: host` with `networks: [hermes-net]`
 - Set env vars (NOSTR_RELAYS, NOSTR_GROUPS, NOSTR_NSEC_PATH, LLM proxy URL)
 - Mount Docker socket
-- Set resource limits
+- Set resource limits (soft — resource constraints are the cap, no hard worker limits)
 - Mount per-friend persistent volume
+- Include routstrd sidecar for Cashu wallet management (per-token sats from day 1)
 
-### Task 5 REVISED: Bind GRPC to localhost only
-Add explicit `bind: 127.0.0.1` for CDK mintd GRPC port 50055 in the Ansible role. Not exposed via Caddy.
+### Task 5 REVISED: Fresh CDK mint on new VPS + GRPC localhost bind
+Deploy a FRESH CDK mint in Docker on the new VPS (NOT testserver2's existing mint). GRPC port 50055 bound to 127.0.0.1 only. Full Cashu payment gating from day 1 — friends pay per-token sats via Cashu.
 
 ---
 
@@ -122,14 +145,16 @@ Add explicit `bind: 127.0.0.1` for CDK mintd GRPC port 50055 in the Ansible role
 
 ---
 
-## 5. Open Questions (unchanged from plan)
+## 5. Open Questions — ANSWERED
 
-1. Domain: sovereignengineering.io?
-2. VPS RAM: how much? (Need 4GB for 3 friends, 2GB for 1-2)
-3. Friends have Nostr identities already?
-4. V1 (no Cashu gating) or V2 (full Cashu)?
-5. Credit amount per friend per month?
-6. OK to mount host Docker socket?
+1. **Domain:** `orangesync.tech` ✅
+2. **VPS RAM:** Felix fixing the SSD VPS. Follow up in ~1h, tomorrow if still down. Assume 4GB+ ✅
+3. **Friend npubs:** Generate fresh ones during deployment ✅
+4. **Cashu gating:** FULL Cashu from day 1 — per-token sats via Cashu + routstrd ✅
+5. **Credit amount:** TBD — Felix will set ✅
+6. **Docker socket:** Yes, mount. No hard cap — resource constraints = cap. Smart dispatching ✅
+7. **Nostr adapter:** Merge `nostr-adapter` branch to fork `main` before deployment ✅
+8. **Cashu mint:** Fresh CDK mint on new VPS (NOT testserver2's existing mint) ✅
 
 ---
 
