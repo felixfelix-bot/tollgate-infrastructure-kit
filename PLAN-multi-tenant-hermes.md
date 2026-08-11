@@ -1,404 +1,395 @@
-# Multi-Tenant Hermes Hosting — Implementation Plan
+# Plan: Multi-Tenant Hermes + Routstr + NIP-29 on Single VPS
 
-## Overview
+**Status:** DRAFT — awaiting operator approval
+**Date:** 2026-08-08
+**Decision Maker:** Felix (operator)
 
-Deploy a single VPS that hosts Hermes AI agent instances for 1-3 friends,
-with a shared Routstr AI inference node, Cashu mint for AI credits,
-and NIP-29 relay for chat interface. Each friend gets their own Hermes
-container with the full sovereign engineering setup (kanban, quality
-gates, worker profiles).
+---
 
-## Target VPS
+## 1. Goal
 
-- **Host**: SSD VPS (64.188.7.38) — currently offline, needs booting
-- **OS**: Debian (assume 12 or 13)
-- **Capacity**: Enough for 1-3 concurrent Hermes instances + infrastructure
-- **Assumption**: Friends won't all use it simultaneously; slowdowns OK
+Deploy a single VPS that serves 3 friends with:
+- A shared **Routstr AI inference node** (LLM proxy with Kalman pricing)
+- **3 Docker-isolated Hermes instances** (one per friend, full setup)
+- A **NIP-29 group chat relay** (obelisk-relay) for human-bot interaction via Buzz client
+- **Ansible workflow** for one-command deployment
 
-## Architecture
+## 2. Target VPS
 
-```
-Internet → Cloudflare DNS → Caddy (:80/:443, auto TLS)
-  ├── relay.BASE_DOMAIN       → strfry (:7777) — general Nostr relay
-  ├── chat.BASE_DOMAIN        → obelisk-relay (:8080) — NIP-29 group chat
-  ├── routstr.BASE_DOMAIN     → Routstr node (:8000) — AI inference proxy
-  ├── mint.BASE_DOMAIN        → Cashu mint REST (:8085) — CDK mintd
-  ├── mint-api.BASE_DOMAIN    → Mint orchestrator (:8090) — approval API
-  └── *.nsite.BASE_DOMAIN     → nsite gateway (:3002) — optional, for static sites
+- **Machine:** SSD VPS at 64.188.7.38 (needs booting from provider console)
+- **OS:** Debian 13 (will install fresh)
+- **Size:** Small (1-2 vCPU, 2-4GB RAM) — sufficient for 3 light users
+- **Scale:** Can upgrade VPS size later if needed
 
-  Docker network: sovereign-net
-
-  Containers:
-  ├── caddy                    — reverse proxy + TLS
-  ├── strfry                   — general Nostr relay
-  ├── obelisk-relay            — NIP-29 group chat (admin: Felix's npub)
-  ├── routstr-node             — AI inference proxy (z.ai upstream)
-  ├── cashu-mint               — CDK mintd (fakewallet, GRPC management)
-  ├── mint-orchestrator        — Python daemon (systemd, GRPC approvals)
-  ├── hermes-friend-1          — Hermes agent instance #1
-  │   └── routstrd-1           — routstrd sidecar (LLM routing + Cashu wallet)
-  ├── hermes-friend-2          — Hermes agent instance #2
-  │   └── routstrd-2           — routstrd sidecar
-  └── hermes-friend-3          — Hermes agent instance #3
-      └── routstrd-3           — routstrd sidecar
-```
-
-## Component Details
-
-### 1. Caddy (Reverse Proxy + TLS)
-
-Already have: `ansible/roles/caddy/` + `ansible/playbooks/04-caddy.yml`
-
-Config:
-- On-demand TLS via Cloudflare DNS-01
-- Routes for relay, chat, routstr, mint, mint-api subdomains
-- WebSocket upgrade headers for relay + obelisk
-
-### 2. strfry (General Nostr Relay)
-
-Already have: `ansible/roles/strfry/` + `ansible/playbooks/05-strfry.yml`
-
-Purpose: General-purpose Nostr relay for event distribution.
-Friends' Hermes instances publish here, discover Routstr nodes here.
-
-### 3. obelisk-relay (NIP-29 Group Chat)
-
-Already have: `ansible/roles/obelisk_relay/` + `ansible/playbooks/06-obelisk-relay.yml`
-
-Config:
-- `ADMIN_NPUB` = Felix's npub (admin rights)
-- Each friend gets a NIP-29 group for their Hermes chat
-- Friends use Buzz app (desktop/mobile) to connect to `wss://chat.BASE_DOMAIN`
-- Hermes instances connect via NIP-29 client (buzz-cli or direct Nostr)
-
-**Why obelisk over Block Buzz:** 1 container (~100MB RAM) vs 4 containers
-(~500MB-1GB + PostgreSQL + Redis + S3). We already have the Ansible role,
-it's running in production, and NIP-29 group chat is its core feature.
-The extra features (full-text search, presence, typing indicators, NIP-34
-git events, workflow engine) are not needed for 1-3 friends chatting with
-their Hermes bots.
-
-### 4. Routstr Node (AI Inference Proxy)
-
-Already have: `ansible/roles/routstr/` + `ansible/playbooks/18-routstr.yml`
-
-Config:
-- `UPSTREAM_BASE_URL` = z.ai API endpoint
-- `UPSTREAM_API_KEY` = Felix's z.ai API key
-- `CASHU_MINTS` = the Cashu mint URL on this VPS
-- `NSEC` = generated Nostr keypair for the node
-- `RELAYS` = local strfry relay
-- Publishes availability on Nostr so routstrd clients can discover it
-
-The node accepts Cashu tokens, verifies them, and proxies LLM requests
-to z.ai. It takes a margin (configurable) on each request.
-
-### 5. Cashu Mint (AI Credits)
-
-Already have: `ansible/roles/cashu_mint/` + `ansible/roles/mint_orchestrator/`
-
-Config:
-- CDK mintd with `fakewallet` backend (no real Lightning needed)
-- GRPC management API enabled (port 50051)
-- REST API on port 8085
-- SQLite database
-- Units: `sat` (for AI credits, 1 sat = 1 API credit unit)
-- Felix approves quotes via `mint-approve` CLI or web dashboard
-
-**Free credit issuance flow:**
-1. Friend creates a NUT-04 mint quote (via Cashu wallet)
-2. Felix approves via `mint-approve --nsec <nsec> --mint <url> --quote <id> --amount <N> --unit sat`
-3. Orchestrator receives kind 38010 event, calls GRPC `UpdateNut04Quote(id, "PAID")`
-4. Friend's wallet mints tokens against the paid quote
-5. Friend's routstrd spends tokens at the Routstr node
-
-### 6. Mint Orchestrator (systemd)
-
-Already have: `ansible/roles/mint_orchestrator/`
-
-Python daemon that:
-- Listens for Nostr kind 38010 events on local relay
-- Validates event signature (must be from Felix's npub)
-- Calls CDK GRPC to mark quotes as paid
-- Logs all approvals to `/var/log/tollgate/mint-approvals.jsonl`
-- REST API on port 8090 for health/audit
-
-### 7. Hermes Containers (1 per friend)
-
-**NEW Ansible role needed: `hermes_instance`**
-
-Each friend gets a Docker container with:
-- Hermes Agent (from hermes-agent.nousresearch.com)
-- routstrd sidecar (LLM routing + Cashu wallet)
-- Full sovereign engineering setup:
-  - Kanban system (unlimited boards, per-project)
-  - Quality gates (7 gates, cross-family cold review)
-  - Worker profiles (can create as many as needed)
-  - SOUL.md with unbreakable principles
-  - Skills system
-  - Cron jobs (quota-gated)
-  - Memory (durable across sessions)
-
-**Container spec:**
-- Base: `oven/bun:1-slim` (for routstrd) + Python venv (for Hermes)
-- Volumes:
-  - `hermes-data-{name}` → `/home/hermes/.hermes/` (config, profiles, kanban, skills)
-  - `hermes-repos-{name}` → `/home/hermes/repos/` (git repos)
-  - `routstrd-data-{name}` → `/data` (routstrd config + cocod wallet)
-- Network: `sovereign-net` (Docker bridge)
-- Resource limits: 2GB RAM, 2 CPU cores per container (adjustable)
-- Environment:
-  - `ROUTSTRD_DIR=/data`
-  - `COCOD_DIR=/data/.cocod`
-  - `HERMES_PROVIDER=http://routstrd-{name}:8008/v1` (routstrd as LLM provider)
-
-**routstrd setup inside container:**
-1. `routstrd onboard` — initialize config, generate Nostr identity
-2. `routstrd start --provider https://routstr.BASE_DOMAIN` — connect to our node
-3. `routstrd clients add --hermes` — auto-configure Hermes to use routstrd
-4. Fund wallet: `routstrd receive <cashu-token>` (Felix issues credits)
-
-**Hermes onboarding (full setup from day 1):**
-- Load `hermes-agent` skill (configuration, tools, features)
-- Configure NIP-29 client to connect to `wss://chat.BASE_DOMAIN`
-- Create first kanban board for the friend's primary project
-- Set up worker profiles with quality gates
-- Configure quota gate (routstrd handles pricing, but local gate prevents runaway)
-- Create default SOUL.md with sovereign engineering principles
-- Install core skills: quality-gates, kanban-worker-management, etc.
-
-### 8. NIP-29 Chat Integration
-
-Each friend communicates with their Hermes via NIP-29 group chat:
-1. Friend installs Buzz app (desktop or mobile)
-2. Connects to `wss://chat.BASE_DOMAIN` with their Nostr key
-3. Felix creates a NIP-29 group for them (or they create their own if obelisk allows)
-4. Hermes instance is configured to listen on that group
-5. Friend sends messages in Buzz → NIP-29 relay → Hermes receives → responds
-
-**Buzz CLI for automation:** The `buzz-cli` skill already exists in our
-skills. It can send/receive NIP-29 messages programmatically. Hermes
-instances can use this for:
-- Status updates (post to a #status group)
-- PR review notifications (post to a #pr-reviews group)
-- Error alerts (post to an #alerts group)
-
-## Ansible Playbook Structure
+## 3. Architecture
 
 ```
-ansible/
-├── playbooks/
-│   ├── 00-zram.yml              # existing
-│   ├── 01-system.yml            # existing
-│   ├── 02-docker.yml            # existing
-│   ├── 03-cloudflare-dns.yml    # existing
-│   ├── 04-caddy.yml             # existing (add new routes)
-│   ├── 05-strfry.yml            # existing
-│   ├── 06-obelisk-relay.yml     # existing
-│   ├── 07-blossom.yml           # existing (optional, for media)
-│   ├── 18-routstr.yml           # existing (Routstr node)
-│   ├── 41-cashu-mint.yml        # existing (rename/reuse)
-│   ├── 42-mint-orchestrator.yml # existing (rename/reuse)
-│   └── 43-hermes-instances.yml  # NEW — deploys N Hermes containers
-├── roles/
-│   ├── hermes_instance/         # NEW
-│   │   ├── defaults/main.yml    # container config, resource limits
-│   │   ├── tasks/main.yml        # build + deploy containers
-│   │   ├── templates/
-│   │   │   ├── Dockerfile.hermes.j2
-│   │   │   ├── docker-compose.hermes.j2
-│   │   │   ├── hermes-config.yaml.j2
-│   │   │   ├── soul.md.j2
-│   │   │   └── routstrd-config.json.j2
-│   │   └── handlers/main.yml    # restart on config change
-│   └── ... (existing roles)
+Internet → Cloudflare DNS (auto A records)
+  → VPS (Debian 13, 64.188.7.38)
+    → Caddy (:80/:443, auto HTTPS)
+      ├── relay.BASE_DOMAIN     → obelisk-relay (Docker :8080)     [NIP-29 group chat]
+      ├── routstr.BASE_DOMAIN   → Routstr Core (Docker :8000)     [LLM proxy + pricing]
+      ├── blossom.BASE_DOMAIN   → blossom-server (Docker :3001)  [blob storage]
+      ├── nsite.BASE_DOMAIN     → nsite-gateway (Docker :3002)    [static sites]
+      ├── git.BASE_DOMAIN       → ngit-grasp (Systemd :7334)     [nostr git]
+      │
+      └── Hermes containers (Docker network, not exposed publicly):
+          ├── hermes-friend-1 (Docker, internal only, buzz client → obelisk)
+          ├── hermes-friend-2 (Docker, internal only, buzz client → obelisk)
+          └── hermes-friend-3 (Docker, internal only, buzz client → obelisk)
+              │
+              └── All route LLM calls → routstr.BASE_DOMAIN:8000
 ```
 
-### New Role: `hermes_instance`
+## 4. Components
 
-**defaults/main.yml:**
+### 4.1 Routstr Node (shared LLM proxy)
+
+**What:** A single Routstr AI inference node running in Docker, with Felix's z.ai API keys.
+
+**How it works:**
+- Runs `ghcr.io/routstr/proxy:latest` (already in Ansible kit as `routstr` role)
+- Holds z.ai API keys (ours + friend) in config
+- Applies Kalman-filter-based pricing per model
+- Serves OpenAI-compatible `/v1/chat/completions` endpoint
+- Friends' Hermes containers point to `http://routstr:8000` as their LLM proxy
+- Optional: Cashu payment gating (friends pay SATs per token)
+
+**Future:** Friends can also run `routstrd` client to use OTHER routstr nodes (not just ours) — portable, no lock-in.
+
+**Ansible:** Reuse existing `ansible/roles/routstr/` role.
+
+### 4.2 NIP-29 Relay (obelisk-relay)
+
+**What:** Group chat relay for human-bot interaction via Buzz client.
+
+**Why obelisk over official Block Buzz relay:**
+- 1 vCPU / 1GB RAM sufficient (vs. Block's PostgreSQL + Redis + S3 = 3 extra containers)
+- Already have Ansible role (`ansible/roles/obelisk_relay/`)
+- Prebuilt Docker image: `ghcr.io/obelisk-app/obelisk-relay:latest`
+- Built-in web UI, invite codes, role-based permissions, Cashu wallet
+- Buzz client works with it (standard NIP-29 protocol)
+
+**How friends interact:**
+1. Friend installs Buzz client (desktop or web)
+2. Connects to `wss://relay.BASE_DOMAIN`
+3. NIP-42 AUTH challenge → friend signs with their Nostr key
+4. Admin (Felix) whitelists friend's npub
+5. Friend joins channels, talks to their Hermes bot
+
+**Each friend gets a dedicated group/channel** for their Hermes bot. The bot's Nostr key is generated per-friend during deployment.
+
+**Ansible:** Reuse existing `ansible/roles/obelisk_relay/` role.
+
+### 4.3 Hermes Docker Containers (one per friend)
+
+**What:** Each friend gets a complete Hermes Agent instance in an isolated Docker container.
+
+**Container contents:**
+- Hermes Agent (full install — `pip install hermes-agent` or from source)
+- Hermes config: `~/.hermes/config.yaml` (per-friend, generated by Ansible)
+- LLM proxy: points to `http://routstr:8000` (shared Routstr node)
+- Nostr identity: per-friend nsec generated during deploy
+- Buzz integration: Hermes NIP-29 client → obelisk relay
+- Kanban boards: each friend can create unlimited boards
+- Worker profiles: full setup (quality-gates, cross-family review, delegation)
+- Skills: quality-gates, kanban-worker-management, cron-llm-escalation, etc.
+- SOUL.md: adapted from Felix's, with per-friend name preferences
+
+**Container isolation:**
+- Each container has its own filesystem (Docker volume)
+- Each container has its own SQLite databases (kanban, session, usage)
+- Each container has its own Nostr identity (nsec)
+- Containers share only the Docker network (for Routstr + obelisk access)
+- No port exposure — friends interact via Buzz (NIP-29), not direct HTTP
+
+**Resource limits per container:**
+- Memory: 512MB soft, 1GB hard (adjustable)
+- CPU: fair-share (Docker default)
+- Disk: 5GB per friend (expandable)
+
+**Docker compose template (per friend):**
 ```yaml
-hermes_instances:
-  - name: "friend1"
-    nostr_npub: "npub1..."        # friend's Nostr public key
-    nip29_group: "friend1-hermes"  # group ID on obelisk
-    api_credits_sat: 10000        # initial AI credits (sat)
-    ram_limit: "2g"
-    cpu_limit: "2"
-    model_default: "glm-4.5-flash" # default model via routstrd
-  - name: "friend2"
-    nostr_npub: "npub1..."
-    nip29_group: "friend2-hermes"
-    api_credits_sat: 10000
-    ram_limit: "2g"
-    cpu_limit: "2"
-    model_default: "glm-4.5-flash"
-  # ... add more friends as needed
+services:
+  hermes-friend-N:
+    build: ./hermes-docker
+    container_name: hermes-friend-N
+    restart: unless-stopped
+    volumes:
+      - hermes-friend-N-data:/home/hermes/.hermes
+    environment:
+      - HERMES_PROFILE=friend-N
+      - LLM_PROXY_URL=http://routstr:8000
+      - NOSTR_RELAY_URL=ws://obelisk:8080
+      - FRIEND_NPUB=<friend_npub>
+      - FRIEND_NSEC=<friend_nsec>
+    networks:
+      - hermes-net
+    mem_limit: 1g
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+volumes:
+  hermes-friend-N-data:
+networks:
+  hermes-net:
+    external: true
 ```
 
-**tasks/main.yml** (simplified):
-1. Create Docker network `sovereign-net`
-2. For each instance in `hermes_instances`:
-   a. Generate routstrd config (Nostr identity, provider URL)
-   b. Build Hermes Docker image (if not cached)
-   c. Deploy docker-compose with Hermes + routstrd sidecar
-   d. Wait for health check
-   e. Initialize routstrd (onboard + start)
-   f. Fund routstrd wallet (issue Cashu credits via mint-approve)
-   g. Configure Hermes (load skills, create kanban board, set up NIP-29)
-   h. Create NIP-29 group on obelisk relay
-   i. Verify end-to-end: friend can chat via Buzz → Hermes responds
+### 4.4 Hermes Docker Image
 
-## Deployment Order
+**What:** A Dockerfile that builds a Hermes Agent image ready for deployment.
 
-1. **Boot VPS** (manual — Felix boots from provider panel)
-2. **Check what's on it** (SSH in, surface existing services)
-3. **Base system** (00-zram, 01-system, 02-docker)
-4. **DNS** (03-cloudflare-dns — set up BASE_DOMAIN)
-5. **Caddy** (04-caddy — reverse proxy + TLS)
-6. **strfry** (05-strfry — general relay)
-7. **obelisk-relay** (06-obelisk-relay — NIP-29 chat)
-8. **Routstr node** (18-routstr — AI inference proxy)
-9. **Cashu mint** (41-cashu-mint — CDK mintd with fakewallet)
-10. **Mint orchestrator** (42-mint-orchestrator — GRPC approval daemon)
-11. **Hermes instances** (43-hermes-instances — one container per friend)
-12. **Onboard friends** (issue credits, create NIP-29 groups, verify chat)
+```dockerfile
+FROM python:3.12-slim
 
-## Resource Budget (estimated)
+# System deps
+RUN apt-get update && apt-get install -y \
+    git curl jq sqlite3 openssh-client \
+    && rm -rf /var/lib/apt/lists/*
 
-| Component | RAM | CPU | Disk |
-|-----------|-----|-----|------|
-| Caddy | 50 MB | 0.1 | 100 MB |
-| strfry | 100 MB | 0.1 | 1 GB |
-| obelisk-relay | 100 MB | 0.1 | 500 MB |
-| Routstr node | 200 MB | 0.2 | 500 MB |
-| Cashu mint | 100 MB | 0.1 | 500 MB |
-| Mint orchestrator | 50 MB | 0.1 | 100 MB |
-| Hermes #1 | 2 GB | 2 | 5 GB |
-| Hermes #2 | 2 GB | 2 | 5 GB |
-| Hermes #3 | 2 GB | 2 | 5 GB |
-| **Total** | **~6.6 GB** | **~6.8** | **~18 GB** |
+# Hermes
+RUN pip install hermes-agent
 
-For a VPS with 8GB+ RAM and 40GB+ disk, this fits. If friends are not
-all active simultaneously, RAM pressure is lower (Hermes idle ~500MB).
+# Nostr tools
+RUN pip install pynostr
 
-## Onboarding Plan (per friend)
+# Entry point
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-### Step 1: Issue AI Credits
+# Pre-load skills
+COPY skills/ /home/hermes/.hermes/skills/
+
+WORKDIR /home/hermes
+ENTRYPOINT ["/entrypoint.sh"]
+```
+
+**entrypoint.sh:**
 ```bash
-# Felix approves a mint quote for the friend
-tollgate-mint-approve \
-  --nsec <felix-nsec> \
-  --mint https://mint.BASE_DOMAIN \
-  --quote <quote-id> \
-  --amount 10000 \
-  --unit sat
+#!/bin/bash
+set -e
+
+# Generate config from environment
+cat > /home/hermes/.hermes/config.yaml << EOF
+profile: $HERMES_PROFILE
+llm:
+  base_url: $LLM_PROXY_URL
+  model: glm-5.2
+nostr:
+  relay: $NOSTR_RELAY_URL
+  nsec: $FRIEND_NSEC
+EOF
+
+# Start Hermes
+exec hermes gateway --start
 ```
 
-### Step 2: Create NIP-29 Group
-```bash
-# Using buzz CLI or direct Nostr
-buzz groups create \
-  --relay wss://chat.BASE_DOMAIN \
-  --id friend1-hermes \
-  --name "Friend1's Hermes" \
-  --admin <friend-npub>
+### 4.5 Supporting Services
+
+These reuse existing Ansible roles from the tollgate-infrastructure-kit:
+
+| Service | Role | Purpose |
+|---------|------|---------|
+| Caddy | `caddy` | Reverse proxy, auto HTTPS via Cloudflare DNS-01 |
+| Docker | `docker` | Container runtime |
+| Cloudflare DNS | `cloudflare_dns` | Auto A records for subdomains |
+| Blossom | `blossom` | Nostr blob storage (for media uploads) |
+| nsite-gateway | `nsite_gateway` | Static site hosting |
+| ngit-grasp | `grasp` | Nostr-native git hosting |
+| System | `system` | Base config, SSH, fail2ban, timezone |
+| Watchdog | `watchdog` | Health monitoring |
+
+**NOT deployed (not needed for this use case):**
+- Cashu mint infrastructure (friends pay via external Routstr, not local mints)
+- MPTCP server (not needed)
+- FIPS mesh (not needed)
+- Bitcoin Core / Knots (not needed)
+- Auditable voting (not needed)
+- Jitsi Meet (not needed)
+- ACT Runner (not needed)
+- Syncthing (optional, for backup)
+
+## 5. Ansible Playbook
+
+**New playbook:** `ansible/playbooks/50-multi-tenant-hermes.yml`
+
+```yaml
+---
+- name: Deploy multi-tenant Hermes + Routstr + NIP-29
+  hosts: vps1
+  become: yes
+  gather_facts: yes
+  roles:
+    # Base infrastructure
+    - zram
+    - system
+    - docker
+    - cloudflare_dns
+    - caddy
+    # Core services
+    - routstr           # LLM proxy with Kalman pricing
+    - obelisk_relay     # NIP-29 group chat
+    - blossom           # Blob storage
+    - nsite_gateway     # Static sites
+    - grasp             # Nostr git
+    - watchdog          # Health monitoring
+    # Hermes containers (new role)
+    - hermes_tenants     # Deploys N Docker containers, one per friend
+  vars:
+    hermes_tenants:
+      - name: friend-1
+        npub: "{{ lookup('env', 'FRIEND1_NPUB') }}"
+        nsec: "{{ lookup('env', 'FRIEND1_NSEC') }}"
+        signal_number: "{{ lookup('env', 'FRIEND1_SIGNAL') }}"  # optional
+      - name: friend-2
+        npub: "{{ lookup('env', 'FRIEND2_NPUB') }}"
+        nsec: "{{ lookup('env', 'FRIEND2_NSEC') }}"
+      - name: friend-3
+        npub: "{{ lookup('env', 'FRIEND3_NPUB') }}"
+        nsec: "{{ lookup('env', 'FRIEND3_NSEC') }}"
 ```
 
-### Step 3: Deploy Hermes Container
-```bash
-# Ansible deploys with friend's config
-ansible-playbook 43-hermes-instances.yml \
-  -e "hermes_instances=[{name: 'friend1', nostr_npub: 'npub1...', ...}]"
+**New role:** `ansible/roles/hermes_tenants/`
+
+Tasks:
+1. Build Hermes Docker image (from hermes-docker/ dir in repo)
+2. For each friend in `hermes_tenants` list:
+   - Generate config.yaml from template
+   - Generate Nostr keypair if nsec not provided
+   - Create Docker volume for persistent data
+   - Start container with resource limits
+   - Register friend's npub in obelisk-relay whitelist
+   - Create a dedicated NIP-29 group for friend + their bot
+3. Verify all containers running
+4. Print connection info (Buzz relay URL, friend npubs, bot npubs)
+
+## 6. Onboarding Flow (Full Setup from Day One)
+
+Each friend gets:
+
+### Step 1: Nostr Identity
+- Generate a new nsec for friend (or they bring their own)
+- Set NIP-05 verification on the VPS domain (optional)
+
+### Step 2: Hermes Configuration
+- Profile created with their name
+- LLM proxy → shared Routstr node
+- Nostr relay → obelisk-relay
+- SOUL.md adapted: their name, their preferences
+- Skills loaded: quality-gates, kanban-worker-management, cron-llm-escalation, hermes-agent
+
+### Step 3: Buzz Client Setup
+- Friend installs Buzz (desktop or web)
+- Connects to `wss://relay.BASE_DOMAIN`
+- Authenticates with their nsec
+- Their Hermes bot is added to a dedicated channel
+- Bot responds to messages in the channel
+
+### Step 4: Kanban Boards
+- Friend can create kanban boards for any project
+- `hermes kanban --board <name> create`
+- Each board is independent (own SQLite db in their container)
+- Worker profiles available (worker-balloon, worker-admin, etc.)
+
+### Step 5: Quality Gates
+- quality-gates skill loaded into every worker
+- 7 mandatory gates enforced before task completion
+- Cross-family review (GLM work → Kimi reviews, etc.)
+
+### Step 6: Worker Profiles
+- Each friend can spawn worker profiles
+- Workers run in the same container (subprocesses)
+- Each worker gets own context window, own git worktree
+- Quality gates force-loaded
+
+## 7. Cost Pass-Through
+
+**Routstr node pricing:**
+- Routstr applies Kalman-based pricing per model
+- Margin configurable in routstr config
+- Friends pay per token (SATs via Cashu, or flat monthly)
+- If friend wants to use their own z.ai keys: they can run routstrd client pointing to z.ai directly
+
+**Cost allocation:**
+| Component | Cost | Who pays |
+|-----------|------|----------|
+| VPS | $15.12/mo | Felix (split among friends) |
+| z.ai API keys | $155/mo total | Felix (friends pay per-token via Routstr) |
+| Domain | ~$10/yr | Felix |
+| Ollama Cloud | $25/mo | Felix (fallback) |
+
+**Friend pricing model:** Per-token SATs via Cashu, routed through Routstr. Or flat monthly split ($15 VPS / 3 = $5/mo each + usage-based LLM cost).
+
+## 8. What Exists vs. What Needs Building
+
+### EXISTS (in tollgate-infrastructure-kit):
+- [x] Ansible role: `routstr` — deploys Routstr Docker container
+- [x] Ansible role: `obelisk_relay` — deploys obelisk NIP-29 relay
+- [x] Ansible role: `blossom` — blob storage
+- [x] Ansible role: `nsite_gateway` — static sites
+- [x] Ansible role: `grasp` — Nostr git
+- [x] Ansible role: `caddy` — reverse proxy + TLS
+- [x] Ansible role: `docker` — Docker runtime
+- [x] Ansible role: `system` — base system config
+- [x] Ansible role: `watchdog` — health monitoring
+- [x] Ansible inventory with VPS targets
+- [x] Caddy templates with subdomain routing
+
+### NEEDS BUILDING:
+- [ ] `ansible/roles/hermes_tenants/` — new role for multi-container Hermes deploy
+- [ ] `hermes-docker/` — Dockerfile + entrypoint for Hermes container image
+- [ ] Hermes NIP-29 client integration (Buzz protocol support in Hermes)
+- [ ] `ansible/playbooks/50-multi-tenant-hermes.yml` — master playbook
+- [ ] Caddy route entries for relay/routstr/blossom subdomains (may need template update)
+- [ ] obelisk-relay whitelist automation (Ansible task to register friend npubs)
+- [ ] Per-friend Nostr keypair generation (Ansible task)
+- [ ] Hermes skills pre-loading into Docker image
+- [ ] routstrd client setup in each Hermes container (so friends can use other Routstr nodes)
+- [ ] Onboarding documentation for friends
+
+## 9. Open Questions
+
+1. **API keys:** Should friends ONLY use shared Routstr, or also be able to bring their own z.ai keys as fallback? (Assumed: both — shared Routstr primary, own keys optional via routstrd)
+
+2. **Buzz client integration:** Does Hermes currently have a NIP-29 client that can talk to obelisk-relay? Or do we need to build a Hermes messaging platform plugin for NIP-29/Buzz? (Need to check Hermes messaging platform support)
+
+3. **Worker isolation:** Should each friend's worker profiles be limited in number? (e.g., max 3 concurrent workers per friend to prevent VPS overload)
+
+4. **Domain:** What BASE_DOMAIN to use for this VPS? orangesync.tech? A new domain?
+
+5. **Signal fallback:** If Buzz isn't enough, do friends also need Signal/Matrix access? (Would need phone numbers or Matrix homeserver)
+
+## 10. Next Steps
+
+1. **Boot the VPS** — Felix needs to boot 64.188.7.38 from provider console, then we check what's on it
+2. **Decide on domain** — which BASE_DOMAIN for this deployment
+3. **Collect friend npubs** — or let Ansible generate nsec per friend
+4. **Build hermes_tenants role** — the main new Ansible role
+5. **Build hermes-docker image** — Dockerfile + entrypoint
+6. **Test Hermes NIP-29 integration** — verify Hermes can talk to obelisk-relay via Buzz protocol
+7. **Write onboarding doc** — for friends: "How to use your Hermes bot via Buzz"
+8. **Deploy** — `make deploy-multi-tenant` or `ansible-playbook 50-multi-tenant-hermes.yml`
+
+## 11. Dependencies — RESOLVED
+
+- [x] **Hermes NIP-29 messaging support** — ALREADY BUILT. Native Nostr platform adapter at `gateway/platforms/nostr.py` in Hermes Agent (branch `nostr-adapter`, commit a480d7fbef on `felixfelix-bot/hermes-agent`). Uses coincurve Schnorr signatures, WebSocket to NIP-29 relays, group-based routing, self-echo skip, reconnection watcher. Config via env vars: `NOSTR_RELAYS`, `NOSTR_GROUPS`, `NOSTR_NSEC_PATH`.
+- [ ] routstrd must be installable in Docker (check https://github.com/Routstr/routstrd)
+- [x] obelisk-relay Docker image pullable (ghcr.io/obelisk-app/obelisk-relay:latest — confirmed)
+- [x] Buzz client supports NIP-42 AUTH (confirmed in obelisk docs)
+- [x] strfry29 membership enforcement: events from non-member pubkeys rejected. Each friend's Hermes bot needs its own keypair added as group member via kind 9000 (put-user).
+
+**Key implication:** No Signal phone numbers or Matrix accounts needed for friends. Each friend gets:
+1. A Nostr keypair (nsec/npub) generated during Ansible deploy
+2. Their Hermes container connects to obelisk-relay via WebSocket
+3. They install Buzz client, connect to the same relay, authenticate with their own nsec
+4. Admin (Felix) whitelists their npub and adds them to a group with their bot
+5. They chat with their bot via Buzz — fully Nostr-native, no phone number required
+
+**Hermes container env vars per friend:**
+```env
+NOSTR_RELAYS=ws://obelisk:8080
+NOSTR_GROUPS=friend-N-project
+NOSTR_NSEC_PATH=/home/hermes/.hermes/state/nip29-relay-nsec.key
 ```
-
-### Step 4: Configure Hermes
-Inside the container:
-1. Load `hermes-agent` skill
-2. Set up NIP-29 listener on the friend's group
-3. Create default kanban board ("my-first-project")
-4. Install quality-gates skill
-5. Configure worker profiles (start with 1-2 simple ones)
-6. Set up quota gate (prevent runaway spending)
-7. Create SOUL.md with sovereign principles
-
-### Step 5: Verify End-to-End
-1. Friend opens Buzz app
-2. Connects to `wss://chat.BASE_DOMAIN`
-3. Sees their Hermes group
-4. Sends a message → Hermes responds
-5. Hermes can create kanban tasks, run workers, push code
-
-## Friend's Hermes Setup (what they get)
-
-Each friend's Hermes instance includes:
-
-### Core
-- Hermes Agent (latest) with Python venv
-- routstrd sidecar (LLM routing via Routstr, Cashu payments)
-- NIP-29 chat interface (Buzz app on their phone/desktop)
-- Nostr identity (generated, stored in container volume)
-
-### Sovereign Engineering
-- Kanban system (unlimited boards, per-project)
-- Quality gates (7 gates, force-loaded)
-- Worker profiles (create as many as needed)
-- SOUL.md (unbreakable principles: push, delegate, quota-gate)
-- Skills system (install from our skill library)
-- Cron jobs (quota-gated)
-- Memory (durable across sessions)
-- Session search (find past work)
-
-### Pre-installed Skills
-- `quality-gates` — 7 mandatory gates
-- `kanban-worker-management` — task lifecycle, dispatch
-- `kanban-quota-aware-dispatch` — model tiering, quota gates
-- `hermes-agent` — configuration, tools, features
-- `buzz-cli` — NIP-29 group chat interaction
-- `github-pr-workflow` — PR lifecycle
-- `test-driven-development` — TDD enforcement
-- `systematic-debugging` — root-cause debugging
-
-### Models Available (via routstrd → Routstr node → z.ai)
-- glm-5.2 (heavy — architecture, complex reasoning)
-- glm-4.5-flash (fast — simple tasks)
-- glm-4.5-air (mid — coding)
-- kimi-k2.7-code (code/spatial — if Ollama Cloud available)
-
-## Open Questions
-
-1. **VPS boot**: SSD VPS (64.188.7.38) is offline. Felix needs to boot it
-   from provider panel. Then we check what's on it before deploying.
-
-2. **BASE_DOMAIN**: What domain to use? Currently testserver2 uses
-   `orangesync.tech`. Could use same domain with different subdomains,
-   or a separate domain for this project.
-
-3. **Hermes Docker image**: Is there a prebuilt Hermes Docker image?
-   Or do we need to build from source? Check hermes-agent.nousresearch.com
-   for Docker instructions.
-
-4. **routstrd in Docker**: The routstrd Dockerfile is dev-oriented.
-   Need to create a production-ready Dockerfile that runs `routstrd start`
-   as a daemon (not interactive bash).
-
-5. **NIP-29 client in Hermes**: How does Hermes listen for NIP-29 messages?
-   Is there a built-in NIP-29 client, or do we need to write one?
-   The `buzz-cli` skill exists but it's a CLI tool, not a listener daemon.
-
-6. **Cashu wallet for friends**: Friends need a Cashu wallet to receive
-   credits. Options: (a) Cashu nuts.com web wallet, (b) nutshell CLI,
-   (c) built into routstrd (cocod wallet). routstrd's cocod wallet can
-   receive tokens directly via `routstrd receive <token>`.
-
-## Next Steps
-
-1. Felix boots the SSD VPS
-2. We SSH in and check what's on it
-3. Felix decides: wipe or keep existing
-4. We configure BASE_DOMAIN in .env
-5. We run the Ansible playbooks in order
-6. We create the first friend's Hermes instance
-7. We verify end-to-end (Buzz → NIP-29 → Hermes → routstrd → Routstr → z.ai)
-8. We onboard the friend (show them Buzz app, how to chat with Hermes)
-9. Repeat for each friend
