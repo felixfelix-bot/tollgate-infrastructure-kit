@@ -133,6 +133,35 @@ Add explicit `bind: 127.0.0.1` for CDK mintd GRPC port 50055 in the Ansible role
 
 ---
 
-## 6. Kimi K3 Adversarial Review
+## 6. Consultant Reviews
 
-[DEFERRED — kimi-k3:cloud unavailable (503, Ollama Cloud down). Proceeding with own adversarial analysis only. Retry when quota resets.]
+### Subagent Review (2026-08-12)
+Already integrated above — see B1-B3, W1-W5, S1-S5.
+
+### Manager Deep Review (2026-08-12)
+Full review at `ROADMAP-REVIEW.md`. Key additional findings:
+
+**CRITICAL (adopted):**
+- C1: Use `git clone` + `pip install -e .` not `pip install hermes-agent` (may not be on PyPI)
+- C2: Pin nostr-adapter to commit `a480d7fbef` in Dockerfile (stable, reproducible)
+- C3: Add Phase 0.5 VPS readiness check with 3 fallback options
+
+**HIGH (adopted):**
+- H1: Resource estimate updated — 8GB tight for 3 active friends. Recommend 16GB or limit to 2.
+- H2: Per-friend API keys in Routstr for quota isolation (one friend can't exhaust everyone)
+- H3: Add spike task MT-00 (routstrd Docker spike) before committing architecture
+- H4: Expand entrypoint.sh to generate full config.yaml with all sections
+
+**Additional tasks (10 new, 23 total):**
+MT-00 (spike), MT-00b (VPS check), MT-04b (wallet test), MT-05b (API keys),
+MT-05c (admin nsec), MT-06b (logs), MT-06c (healthchecks), MT-09b (.env.example),
+MT-11b (molecule test), MT-11c (backup strategy)
+
+**Security mitigations adopted:**
+- Use deployment admin nsec (NOT Felix's personal nsec)
+- Per-friend Docker networks (isolate friends from each other)
+- Docker secrets for z.ai API keys (not in image)
+- Don't mount Docker socket in friend containers (or use socket proxy for V2)
+
+### Kimi K3 Review
+DEFERRED — kimi-k3:cloud unavailable (503, Ollama Cloud down). Retry when quota resets.
