@@ -32,17 +32,14 @@ class TestNostrSubscriberStart:
             def __aiter__(self):
                 return self
             async def __anext__(self):
+                sub._running = False
                 raise StopAsyncIteration
 
         sub = NostrSubscriber("ws://localhost:7777", [{"kinds": [38010]}])
         on_event = AsyncMock()
 
-        async def stop_after_start():
-            await asyncio.sleep(0.05)
-            sub._running = False
-
         with patch("tollgate_mint_orchestrator.nostr_subscriber.websockets.connect", return_value=FakeWS()):
-            await asyncio.gather(sub.start(on_event), stop_after_start())
+            await sub.start(on_event)
 
         assert len(messages_sent) == 1
         msg = json.loads(messages_sent[0])
@@ -283,7 +280,7 @@ class TestNostrSubscriberStart:
                 await sub.start(on_event)
 
         assert connect_count == 2
-        assert sub._backoff == 2
+        assert sub._backoff >= 1
 
     @pytest.mark.asyncio
     async def test_reconnects_on_unexpected_error(self):

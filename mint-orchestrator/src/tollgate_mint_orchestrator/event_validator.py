@@ -67,17 +67,14 @@ def _verify_schnorr_fallback(msg_hex: str, pubkey_hex: str, sig_hex: str) -> boo
             raw=True,
         )
     except Exception:
-        try:
-            from nostr_sdk import verify_nip01_signature
-            return verify_nip01_signature(pubkey_hex, event_id=sig_hex)
-        except Exception:
-            return True
+        return False
 
 
 class EventValidator:
-    def __init__(self, registry, approval_ttl_secs: int = 300):
+    def __init__(self, registry, approval_ttl_secs: int = 300, authorized_approvers: Optional[list[str]] = None):
         self.registry = registry
         self.approval_ttl_secs = approval_ttl_secs
+        self.authorized_approvers = authorized_approvers or []
 
     def validate(self, event: dict) -> ValidationResult:
         if event.get("kind") != 38010:
@@ -118,8 +115,12 @@ class EventValidator:
             return ValidationResult(valid=False, error=f"unsupported unit: {unit}")
 
         pubkey = event.get("pubkey", "")
-        if pubkey != mint_entry.hex_pubkey:
-            return ValidationResult(valid=False, error="pubkey does not match mint owner")
+        if self.authorized_approvers:
+            if pubkey not in self.authorized_approvers:
+                return ValidationResult(valid=False, error="pubkey not in authorized approvers list")
+        else:
+            if pubkey != mint_entry.hex_pubkey:
+                return ValidationResult(valid=False, error="pubkey does not match mint owner")
 
         created_at = event.get("created_at", 0)
         now = int(time.time())

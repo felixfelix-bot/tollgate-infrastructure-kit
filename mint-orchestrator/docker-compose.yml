@@ -1,0 +1,19 @@
+services:
+  mint-orchestrator:
+    build: .
+    container_name: mint-orchestrator
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      ORCHESTRATOR_RELAY_URL: "${ORCHESTRATOR_RELAY_URL:-ws://127.0.0.1:7777}"
+      ORCHESTRATOR_REGISTRY_PATH: "${ORCHESTRATOR_REGISTRY_PATH:-/opt/tollgate/mints/registry.json}"
+      ORCHESTRATOR_AUDIT_LOG_PATH: "${ORCHESTRATOR_AUDIT_LOG_PATH:-/var/log/tollgate/mint-approvals.jsonl}"
+      ORCHESTRATOR_API_HOST: "${ORCHESTRATOR_API_HOST:-0.0.0.0}"
+      ORCHESTRATOR_API_PORT: "${ORCHESTRATOR_API_PORT:-8090}"
+      ORCHESTRATOR_APPROVAL_TTL_SECS: "${ORCHESTRATOR_APPROVAL_TTL_SECS:-300}"
+      ORCHESTRATOR_LOG_LEVEL: "${ORCHESTRATOR_LOG_LEVEL:-info}"
+      ORCHESTRATOR_AUTHORIZED_APPROVERS: "${ORCHESTRATOR_AUTHORIZED_APPROVERS}"
+      ORCHESTRATOR_GRPC_HOST: "${ORCHESTRATOR_GRPC_HOST:-127.0.0.1}"
+    volumes:
+      - /opt/tollgate/mints/registry.json:/opt/tollgate/mints/registry.json:ro
+      - /var/log/tollgate:/var/log/tollgate

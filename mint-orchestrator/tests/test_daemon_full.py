@@ -129,7 +129,6 @@ class TestHandleEvent:
 
         mock_client = AsyncMock()
         mock_client.connect = AsyncMock()
-        mock_client.get_nut04_quote = AsyncMock(return_value={"state": "UNPAID"})
         mock_client.update_nut04_quote = AsyncMock(return_value=True)
 
         with patch("tollgate_mint_orchestrator.daemon._get_grpc_client", return_value=mock_client):
@@ -143,51 +142,6 @@ class TestHandleEvent:
         mock_client.update_nut04_quote.assert_called_once_with("quote-123", "PAID")
 
     @pytest.mark.asyncio
-    async def test_quote_not_found(self, tmp_path):
-        from tollgate_mint_orchestrator.daemon import _handle_event, _grpc_clients
-        _grpc_clients.clear()
-
-        reg = _make_registry(tmp_path)
-        audit = AuditLogger(str(tmp_path / "audit.jsonl"))
-        validator = EventValidator(reg, approval_ttl_secs=300)
-        event = _make_event()
-
-        mock_client = AsyncMock()
-        mock_client.get_nut04_quote = AsyncMock(return_value=None)
-
-        with patch("tollgate_mint_orchestrator.daemon._get_grpc_client", return_value=mock_client):
-            with patch("tollgate_mint_orchestrator.event_validator._verify_signature", return_value=True):
-                await _handle_event(event, validator, reg, audit)
-
-        entries = audit.read_recent()
-        assert len(entries) == 1
-        assert entries[0]["success"] is False
-        assert "not found" in entries[0]["error"]
-
-    @pytest.mark.asyncio
-    async def test_quote_already_paid(self, tmp_path):
-        from tollgate_mint_orchestrator.daemon import _handle_event, _grpc_clients
-        _grpc_clients.clear()
-
-        reg = _make_registry(tmp_path)
-        audit = AuditLogger(str(tmp_path / "audit.jsonl"))
-        validator = EventValidator(reg, approval_ttl_secs=300)
-        event = _make_event()
-
-        mock_client = AsyncMock()
-        mock_client.get_nut04_quote = AsyncMock(return_value={"state": "PAID"})
-
-        with patch("tollgate_mint_orchestrator.daemon._get_grpc_client", return_value=mock_client):
-            with patch("tollgate_mint_orchestrator.event_validator._verify_signature", return_value=True):
-                await _handle_event(event, validator, reg, audit)
-
-        entries = audit.read_recent()
-        assert len(entries) == 1
-        assert entries[0]["success"] is False
-        assert "not UNPAID" in entries[0]["error"]
-        mock_client.update_nut04_quote.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_grpc_update_failure(self, tmp_path):
         from tollgate_mint_orchestrator.daemon import _handle_event, _grpc_clients
         _grpc_clients.clear()
@@ -198,7 +152,6 @@ class TestHandleEvent:
         event = _make_event()
 
         mock_client = AsyncMock()
-        mock_client.get_nut04_quote = AsyncMock(return_value={"state": "UNPAID"})
         mock_client.update_nut04_quote = AsyncMock(return_value=False)
 
         with patch("tollgate_mint_orchestrator.daemon._get_grpc_client", return_value=mock_client):
@@ -243,17 +196,17 @@ class TestHandleEvent:
         assert entries[0]["success"] is False
 
     @pytest.mark.asyncio
-    async def test_quote_state_none_treated_as_unpaid(self, tmp_path):
+    async def test_authorized_approver_accepted(self, tmp_path):
         from tollgate_mint_orchestrator.daemon import _handle_event, _grpc_clients
         _grpc_clients.clear()
 
         reg = _make_registry(tmp_path)
         audit = AuditLogger(str(tmp_path / "audit.jsonl"))
-        validator = EventValidator(reg, approval_ttl_secs=300)
-        event = _make_event()
+        approver_key = "c" * 64
+        validator = EventValidator(reg, approval_ttl_secs=300, authorized_approvers=[approver_key])
+        event = _make_event(pubkey=approver_key)
 
         mock_client = AsyncMock()
-        mock_client.get_nut04_quote = AsyncMock(return_value={"state": None})
         mock_client.update_nut04_quote = AsyncMock(return_value=True)
 
         with patch("tollgate_mint_orchestrator.daemon._get_grpc_client", return_value=mock_client):
@@ -261,8 +214,26 @@ class TestHandleEvent:
                 await _handle_event(event, validator, reg, audit)
 
         entries = audit.read_recent()
+        assert len(entries) == 1
         assert entries[0]["success"] is True
-        mock_client.update_nut04_quote.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_unauthorized_approver_rejected(self, tmp_path):
+        from tollgate_mint_orchestrator.daemon import _handle_event, _grpc_clients
+        _grpc_clients.clear()
+
+        reg = _make_registry(tmp_path)
+        audit = AuditLogger(str(tmp_path / "audit.jsonl"))
+        approver_key = "c" * 64
+        validator = EventValidator(reg, approval_ttl_secs=300, authorized_approvers=[approver_key])
+        event = _make_event(pubkey="d" * 64)
+
+        await _handle_event(event, validator, reg, audit)
+
+        entries = audit.read_recent()
+        assert len(entries) == 1
+        assert entries[0]["success"] is False
+        assert "authorized approvers" in entries[0]["error"]
 
 
 class TestRunDaemon:
@@ -292,12 +263,6 @@ class TestRunDaemon:
             mock_subscriber = AsyncMock()
             mock_subscriber.start = AsyncMock()
             mock_subscriber.stop = AsyncMock()
-
-            async def trigger_stop():
-                await asyncio.sleep(0.1)
-                import signal
-                loop = asyncio.get_event_loop()
-                loop.add_signal_handler(signal.SIGTERM, lambda: None)
 
             with patch("tollgate_mint_orchestrator.daemon.OrchestratorAPI", return_value=mock_api):
                 with patch("tollgate_mint_orchestrator.daemon.NostrSubscriber", return_value=mock_subscriber):

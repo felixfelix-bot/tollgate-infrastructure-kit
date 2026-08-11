@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
+COPY pyproject.toml ./
 COPY protos/ protos/
 COPY src/ src/
 

@@ -48,29 +48,6 @@ class MintGrpcClient:
             logger.error(f"gRPC error updating quote {quote_id}: {e.code()} - {e.details()}")
             return False
 
-    async def get_nut04_quote(self, quote_id: str) -> Optional[dict]:
-        if not self.stub:
-            return None
-        try:
-            request = cdk_mint_rpc_pb2.GetNut04QuoteRequest(quote_id=quote_id)
-            response = await self.stub.GetNut04Quote(request)
-            quote = response.quote
-            return {
-                "quote": quote.quote,
-                "method": quote.method,
-                "request": quote.request,
-                "checking_id": quote.checking_id,
-                "unit": quote.unit,
-                "amount": quote.amount,
-                "state": quote.state,
-                "created_time": quote.created_time,
-                "paid_time": quote.paid_time,
-                "expiry": quote.expiry,
-            }
-        except grpc.aio.AioRpcError as e:
-            logger.error(f"gRPC error getting quote {quote_id}: {e.code()}")
-            return None
-
     async def get_info(self) -> Optional[dict]:
         if not self.stub:
             return None

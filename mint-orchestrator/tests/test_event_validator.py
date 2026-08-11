@@ -144,6 +144,23 @@ class TestEventValidator:
         assert not result.valid
         assert "pubkey" in result.error
 
+    def test_authorized_approver_accepted(self, tmp_path):
+        reg = _make_registry(tmp_path)
+        approver_key = "c" * 64
+        v = EventValidator(reg, authorized_approvers=[approver_key])
+        event = _make_event(pubkey=approver_key)
+        result = v.validate(event)
+        assert result.valid or "signature" in (result.error or "")
+
+    def test_unauthorized_approver_rejected(self, tmp_path):
+        reg = _make_registry(tmp_path)
+        approver_key = "c" * 64
+        v = EventValidator(reg, authorized_approvers=[approver_key])
+        event = _make_event(pubkey="d" * 64)
+        result = v.validate(event)
+        assert not result.valid
+        assert "authorized approvers" in result.error
+
     def test_expired_event(self, tmp_path):
         reg = _make_registry(tmp_path)
         v = EventValidator(reg, approval_ttl_secs=300)

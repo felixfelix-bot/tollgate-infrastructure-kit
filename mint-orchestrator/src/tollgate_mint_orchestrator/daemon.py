@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import signal
-from dataclasses import asdict
 
 from tollgate_mint_orchestrator.api import OrchestratorAPI
 from tollgate_mint_orchestrator.audit_log import AuditLogger
@@ -22,6 +21,8 @@ DEFAULTS = {
     "ORCHESTRATOR_API_PORT": "8090",
     "ORCHESTRATOR_APPROVAL_TTL_SECS": "300",
     "ORCHESTRATOR_LOG_LEVEL": "info",
+    "ORCHESTRATOR_AUTHORIZED_APPROVERS": "",
+    "ORCHESTRATOR_GRPC_HOST": "127.0.0.1",
 }
 
 _grpc_clients: dict[str, MintGrpcClient] = {}
@@ -34,7 +35,8 @@ def _env(key: str) -> str:
 async def _get_grpc_client(mint_entry) -> MintGrpcClient:
     key = mint_entry.subdomain
     if key not in _grpc_clients:
-        client = MintGrpcClient("localhost", mint_entry.grpc_port)
+        grpc_host = _env("ORCHESTRATOR_GRPC_HOST")
+        client = MintGrpcClient(grpc_host, mint_entry.grpc_port)
         await client.connect()
         _grpc_clients[key] = client
     return _grpc_clients[key]
@@ -67,37 +69,6 @@ async def _handle_event(
 
     client = await _get_grpc_client(mint_entry)
 
-    quote = await client.get_nut04_quote(result.quote_id)
-    if not quote:
-        error = f"Quote {result.quote_id} not found on mint {mint_entry.url}"
-        logger.error(error)
-        audit.log_approval(
-            event_id=event.get("id", ""),
-            npub=event.get("pubkey", ""),
-            mint_url=mint_entry.url,
-            quote_id=result.quote_id,
-            amount=result.amount,
-            unit=result.unit,
-            success=False,
-            error=error,
-        )
-        return
-
-    if quote.get("state") not in ("UNPAID", None):
-        error = f"Quote {result.quote_id} is {quote.get('state')}, not UNPAID"
-        logger.warning(error)
-        audit.log_approval(
-            event_id=event.get("id", ""),
-            npub=event.get("pubkey", ""),
-            mint_url=mint_entry.url,
-            quote_id=result.quote_id,
-            amount=result.amount,
-            unit=result.unit,
-            success=False,
-            error=error,
-        )
-        return
-
     success = await client.update_nut04_quote(result.quote_id, "PAID")
     audit.log_approval(
         event_id=event.get("id", ""),
@@ -121,7 +92,15 @@ async def run_daemon():
 
     registry = MintRegistry.load(_env("ORCHESTRATOR_REGISTRY_PATH"))
     audit = AuditLogger(_env("ORCHESTRATOR_AUDIT_LOG_PATH"))
-    validator = EventValidator(registry, int(_env("ORCHESTRATOR_APPROVAL_TTL_SECS")))
+
+    authorized_approvers = [
+        a.strip() for a in _env("ORCHESTRATOR_AUTHORIZED_APPROVERS").split(",") if a.strip()
+    ]
+    validator = EventValidator(
+        registry,
+        int(_env("ORCHESTRATOR_APPROVAL_TTL_SECS")),
+        authorized_approvers=authorized_approvers,
+    )
 
     filters = [{"kinds": [38010], "#t": ["mint-approval"]}]
     subscriber = NostrSubscriber(_env("ORCHESTRATOR_RELAY_URL"), filters)

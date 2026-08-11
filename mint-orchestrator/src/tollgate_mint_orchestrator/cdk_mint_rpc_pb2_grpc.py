@@ -59,6 +59,11 @@ class CdkMintStub(object):
                 request_serializer=cdk__mint__rpc__pb2.UpdateIconUrlRequest.SerializeToString,
                 response_deserializer=cdk__mint__rpc__pb2.UpdateResponse.FromString,
                 _registered_method=True)
+        self.UpdateTosUrl = channel.unary_unary(
+                '/cdk_mint_management_v1.CdkMint/UpdateTosUrl',
+                request_serializer=cdk__mint__rpc__pb2.UpdateTosUrlRequest.SerializeToString,
+                response_deserializer=cdk__mint__rpc__pb2.UpdateResponse.FromString,
+                _registered_method=True)
         self.UpdateName = channel.unary_unary(
                 '/cdk_mint_management_v1.CdkMint/UpdateName',
                 request_serializer=cdk__mint__rpc__pb2.UpdateNameRequest.SerializeToString,
@@ -144,6 +149,12 @@ class CdkMintServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def UpdateIconUrl(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateTosUrl(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -241,6 +252,11 @@ def add_CdkMintServicer_to_server(servicer, server):
             'UpdateIconUrl': grpc.unary_unary_rpc_method_handler(
                     servicer.UpdateIconUrl,
                     request_deserializer=cdk__mint__rpc__pb2.UpdateIconUrlRequest.FromString,
+                    response_serializer=cdk__mint__rpc__pb2.UpdateResponse.SerializeToString,
+            ),
+            'UpdateTosUrl': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateTosUrl,
+                    request_deserializer=cdk__mint__rpc__pb2.UpdateTosUrlRequest.FromString,
                     response_serializer=cdk__mint__rpc__pb2.UpdateResponse.SerializeToString,
             ),
             'UpdateName': grpc.unary_unary_rpc_method_handler(
@@ -433,6 +449,33 @@ class CdkMint(object):
             target,
             '/cdk_mint_management_v1.CdkMint/UpdateIconUrl',
             cdk__mint__rpc__pb2.UpdateIconUrlRequest.SerializeToString,
+            cdk__mint__rpc__pb2.UpdateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateTosUrl(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/cdk_mint_management_v1.CdkMint/UpdateTosUrl',
+            cdk__mint__rpc__pb2.UpdateTosUrlRequest.SerializeToString,
             cdk__mint__rpc__pb2.UpdateResponse.FromString,
             options,
             channel_credentials,

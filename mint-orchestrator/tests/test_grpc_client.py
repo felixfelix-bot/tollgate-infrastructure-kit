@@ -17,12 +17,6 @@ class TestMintGrpcClient:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_get_without_connection(self):
-        client = MintGrpcClient("localhost", 50051)
-        result = await client.get_nut04_quote("q1")
-        assert result is None
-
-    @pytest.mark.asyncio
     async def test_info_without_connection(self):
         client = MintGrpcClient("localhost", 50051)
         result = await client.get_info()

@@ -72,11 +72,12 @@ class TestDaemon:
         event = _make_event()
 
         mock_client = AsyncMock()
-        mock_client.get_nut04_quote = AsyncMock(return_value=None)
+        mock_client.update_nut04_quote = AsyncMock(return_value=False)
         mock_client.connect = AsyncMock()
 
         with patch("tollgate_mint_orchestrator.daemon._get_grpc_client", return_value=mock_client):
-            await _handle_event(event, validator, reg, audit)
+            with patch("tollgate_mint_orchestrator.event_validator._verify_signature", return_value=True):
+                await _handle_event(event, validator, reg, audit)
 
         entries = audit.read_recent()
         assert any(e["success"] is False for e in entries)
