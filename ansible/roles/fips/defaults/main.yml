@@ -32,7 +32,8 @@ fips_peers:
 fips_mesh_hosts:
   vps2: "npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82"
   dq05: "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
-  # t14gen5 and t470 npubs added after first FIPS install
+  t14gen5: "npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh"
+  # t470 npub added after first FIPS install
 fips_extra_hosts: {}
 fips_external_addr: ""
 fips_deb_arch_map:
