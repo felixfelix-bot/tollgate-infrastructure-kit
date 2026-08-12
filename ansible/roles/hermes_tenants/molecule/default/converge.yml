@@ -37,7 +37,7 @@
         extra_args: "--break-system-packages"
     - name: Check if hermes-agent test image exists
       ansible.builtin.command: docker image inspect hermes-agent:nostr
-      register: image_check
+      register: hermes_tenants_image_check
       changed_when: false
       failed_when: false
     - name: Create dummy hermes-agent image for testing
@@ -46,12 +46,14 @@
         cat > "$tmpdir/Dockerfile" <<'DOCKERFILE'
         FROM python:3.12-slim
         RUN pip install --no-cache-dir flask
-        RUN printf 'from flask import Flask\napp = Flask(__name__)\n@app.route("/health")\ndef health():\n    return "ok", 200\nif __name__ == "__main__":\n    app.run(host="0.0.0.0", port=9000)\n' > /app.py
+        RUN printf 'from flask import Flask\napp = Flask(__name__)\n' > /app.py
+        RUN printf '@app.route("/health")\ndef health():\n    return "ok", 200\n' >> /app.py
+        RUN printf 'if __name__ == "__main__":\n    app.run(host="0.0.0.0", port=9000)\n' >> /app.py
         CMD ["python", "/app.py"]
         DOCKERFILE
         docker build -t hermes-agent:nostr "$tmpdir"
         rm -rf "$tmpdir"
-      when: image_check.rc != 0
+      when: hermes_tenants_image_check.rc != 0
       changed_when: false
   roles:
     - role: hermes_tenants

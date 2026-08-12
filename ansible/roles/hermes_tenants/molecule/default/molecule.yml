@@ -39,3 +39,4 @@ provisioner:
             zai_api_key: "test-key-carol"
 verifier:
   name: ansible
+...
