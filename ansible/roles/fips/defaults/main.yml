@@ -1,0 +1,26 @@
+---
+fips_version: "0.4.1"
+fips_ethernet_interface: ""
+fips_advertise_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://offchain.pub"
+  - "wss://relay.orangesync.tech"
+  - "wss://ngit.orangesync.tech"
+fips_dm_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://offchain.pub"
+  - "wss://relay.orangesync.tech"
+  - "wss://ngit.orangesync.tech"
+fips_stun_servers:
+  - "stun:stun.l.google.com:19302"
+  - "stun:stun.cloudflare.com:3478"
+  - "stun:global.stun.twilio.com:3478"
+fips_peers: []
+fips_extra_hosts: {}
+fips_external_addr: ""
+fips_mesh_ssh_port: 22
+fips_deb_arch_map:
+  x86_64: amd64
+  aarch64: arm64

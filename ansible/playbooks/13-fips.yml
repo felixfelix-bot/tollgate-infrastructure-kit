@@ -1,6 +1,6 @@
 ---
-- name: Deploy fips 
-  hosts: vps
+- name: Deploy fips
+  hosts: all
   ignore_unreachable: true
   serial: 1
   become: yes

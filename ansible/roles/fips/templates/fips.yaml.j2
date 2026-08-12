@@ -1,16 +1,10 @@
-# FIPS Node Configuration — managed by Ansible
-
 node:
   identity:
     persistent: true
-{% if fips_identity_nsec is defined and fips_identity_nsec | length > 0 %}
-    nsec: "{{ fips_identity_nsec }}"
-{% endif %}
   discovery:
     nostr:
       enabled: true
       policy: configured_only
-      open_discovery_max_pending: 64
       app: "fips-overlay-v1"
       advertise: true
       advert_relays:
@@ -22,9 +16,9 @@ node:
         - "{{ relay }}"
 {% endfor %}
       stun_servers:
-        - "stun:stun.l.google.com:19302"
-        - "stun:stun.cloudflare.com:3478"
-        - "stun:global.stun.twilio.com:3478"
+{% for stun in fips_stun_servers %}
+        - "{{ stun }}"
+{% endfor %}
 
 tun:
   enabled: true
@@ -33,15 +27,33 @@ tun:
 
 dns:
   enabled: true
+  bind_addr: "[::1]"
   port: 5354
 
 transports:
   udp:
     bind_addr: "0.0.0.0:2121"
     advertise_on_nostr: true
-
   tcp:
     bind_addr: "0.0.0.0:8443"
     advertise_on_nostr: true
+{% if fips_external_addr | length > 0 %}
+    external_addr: "{{ fips_external_addr }}"
+{% endif %}
+{% if fips_ethernet_interface | length > 0 %}
+  ethernet:
+    interface: "{{ fips_ethernet_interface }}"
+    discovery: true
+    announce: true
+    auto_connect: true
+    accept_connections: true
+{% endif %}
 
-peers: []
+peers:
+{% for peer in fips_peers %}
+  - npub: "{{ peer.npub }}"
+    alias: "{{ peer.alias }}"
+    transport: "{{ peer.transport }}"
+    addr: "{{ peer.addr }}"
+    connect_policy: "{{ peer.connect_policy }}"
+{% endfor %}

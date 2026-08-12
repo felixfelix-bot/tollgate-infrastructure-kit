@@ -1,80 +1,82 @@
 ---
-- name: Install Rust
-  shell: |
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-  args:
-    creates: /root/.cargo/bin/rustup
-  become: yes
-  become_user: root
+- name: Set deb architecture
+  set_fact:
+    fips_deb_arch: "{{ fips_deb_arch_map[ansible_architecture] | default('amd64') }}"
 
-- name: Clone FIPS
-  git:
-    repo: "https://github.com/jmcorgan/fips.git"
-    dest: "{{ tollgate_base_dir }}/src/fips"
-    depth: 1
-    force: yes
+- name: Download FIPS deb package
+  get_url:
+    url: "https://github.com/jmcorgan/fips/releases/download/v{{ fips_version }}/fips_{{ fips_version }}_{{ fips_deb_arch }}.deb"
+    dest: "/tmp/fips_{{ fips_version }}_{{ fips_deb_arch }}.deb"
+    mode: '0644'
 
-- name: Install cargo-deb
-  command: /root/.cargo/bin/cargo install cargo-deb
-  args:
-    creates: /root/.cargo/bin/cargo-deb
-
-- name: Build FIPS deb package
-  command: /root/.cargo/bin/cargo deb
-  args:
-    chdir: "{{ tollgate_base_dir }}/src/fips"
-    creates: "{{ tollgate_base_dir }}/src/fips/target/debian/fips_*.deb"
-  environment:
-    PATH: "/root/.cargo/bin:{{ ansible_env.PATH }}"
-
-- name: Find FIPS deb package
-  find:
-    paths: "{{ tollgate_base_dir }}/src/fips/target/debian/"
-    patterns: "fips_*.deb"
-  register: fips_deb
-
-- name: Install FIPS
+- name: Install FIPS deb package
   apt:
-    deb: "{{ fips_deb.files[0].path }}"
-  when: fips_deb.files | length > 0
+    deb: "/tmp/fips_{{ fips_version }}_{{ fips_deb_arch }}.deb"
+    state: present
+  notify: reload systemd
 
-- name: Deploy FIPS config
+- name: Ensure fips group exists
+  group:
+    name: fips
+    state: present
+
+- name: Add ansible_user to fips group
+  user:
+    name: "{{ ansible_user }}"
+    groups: fips
+    append: yes
+
+- name: Create /etc/fips directory
+  file:
+    path: /etc/fips
+    state: directory
+    mode: '0755'
+
+- name: Deploy fips.yaml config
   template:
     src: fips.yaml.j2
     dest: /etc/fips/fips.yaml
     mode: '0600'
   notify: restart fips
 
-- name: Enable and start FIPS
-  systemd:
-    name: fips
-    state: started
-    enabled: yes
+- name: Deploy /etc/fips/hosts
+  template:
+    src: fips-hosts.j2
+    dest: /etc/fips/hosts
+    mode: '0644'
+  notify: restart fips
 
-- name: Ensure fips.d directory exists
+- name: Create /etc/fips/fips.d directory
   file:
     path: /etc/fips/fips.d
     state: directory
     mode: '0755'
 
-- name: Deploy FIPS mesh HTTP firewall rule
-  copy:
-    content: |
-      table inet fips-services {
-          chain input {
-              tcp dport {{ fips_mesh_http_port | default(80) }} accept
-          }
-      }
-    dest: /etc/fips/fips.d/services.nft
+- name: Deploy SSH firewall rule
+  template:
+    src: ssh.nft.j2
+    dest: /etc/fips/fips.d/ssh.nft
     mode: '0644'
   notify: reload nftables
 
-- name: Check if nftables service exists
-  stat:
-    path: /etc/systemd/system/nftables.service
-  register: nftables_service
+- name: Enable and start fips
+  systemd:
+    name: fips
+    state: started
+    enabled: yes
+    daemon_reload: yes
 
-- name: Apply nftables rules
-  command: nft -f /etc/fips/fips.d/services.nft
-  when: nftables_service.stat.exists
-  changed_when: true
+- name: Enable and start fips-dns
+  systemd:
+    name: fips-dns
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  notify: restart fips-dns
+
+- name: Enable and start fips-firewall
+  systemd:
+    name: fips-firewall
+    state: started
+    enabled: yes
+    daemon_reload: yes

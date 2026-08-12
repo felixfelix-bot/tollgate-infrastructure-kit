@@ -1,0 +1,5 @@
+table inet fips-services {
+    chain input {
+        tcp dport {{ fips_mesh_ssh_port }} accept
+    }
+}
