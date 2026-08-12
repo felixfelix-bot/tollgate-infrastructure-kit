@@ -19,6 +19,8 @@ node:
 {% for stun in fips_stun_servers %}
         - "{{ stun }}"
 {% endfor %}
+    lan:
+      enabled: {{ fips_lan_discovery | lower }}
 
 tun:
   enabled: true
@@ -53,7 +55,13 @@ peers:
 {% for peer in fips_peers %}
   - npub: "{{ peer.npub }}"
     alias: "{{ peer.alias }}"
-    transport: "{{ peer.transport }}"
-    addr: "{{ peer.addr }}"
-    connect_policy: "{{ peer.connect_policy }}"
+{% if peer.via_nostr is defined and peer.via_nostr %}
+    via_nostr: true
+{% endif %}
+    addresses:
+{% for addr in peer.addresses %}
+      - transport: {{ addr.transport }}
+        addr: "{{ addr.addr }}"
+{% endfor %}
+    connect_policy: {{ peer.connect_policy | default('auto_connect') }}
 {% endfor %}

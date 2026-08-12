@@ -16,3 +16,8 @@
   systemd:
     name: fips-dns
     state: restarted
+
+- name: restart systemd-resolved
+  systemd:
+    name: systemd-resolved
+    state: restarted

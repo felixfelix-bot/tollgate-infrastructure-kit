@@ -1,5 +1,6 @@
-table inet fips-services {
+table inet fips-ssh {
     chain input {
-        tcp dport {{ fips_mesh_ssh_port }} accept
+        type filter hook input priority 0; policy accept;
+        iifname "fips0" tcp dport {{ fips_mesh_ssh_port }} accept
     }
 }

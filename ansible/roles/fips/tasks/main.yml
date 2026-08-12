@@ -32,6 +32,16 @@
     state: directory
     mode: '0755'
 
+- name: Auto-detect ethernet/wifi interface
+  set_fact:
+    fips_ethernet_interface: "{{ ansible_facts['interfaces'] | select('match', '^wl|^enp|^eth') | map('extract', ansible_facts) | selectattr('active', 'defined') | selectattr('active', 'equalto', True) | map(attribute='device') | first }}"
+  when: fips_ethernet_interface | length == 0
+
+- name: Show detected ethernet/wifi interface
+  debug:
+    msg: "FIPS ethernet interface: {{ fips_ethernet_interface }}"
+  when: fips_ethernet_interface | length > 0
+
 - name: Deploy fips.yaml config
   template:
     src: fips.yaml.j2
@@ -74,9 +84,46 @@
     daemon_reload: yes
   notify: restart fips-dns
 
+- name: Run fips-dns-setup to integrate with systemd-resolved
+  command: /usr/lib/fips/fips-dns-setup
+  when: ansible_facts['os_family'] == 'Debian'
+  notify: restart systemd-resolved
+
 - name: Enable and start fips-firewall
   systemd:
     name: fips-firewall
     state: started
     enabled: yes
     daemon_reload: yes
+
+- name: Wait for FIPS to initialize
+  wait_for:
+    path: /run/fips/control.sock
+    timeout: 10
+
+- name: Verify peer connectivity
+  command: fipsctl show peers
+  register: fips_peers_result
+  changed_when: false
+
+- name: Check peer count
+  assert:
+    that:
+      - "'connected' in fips_peers_result.stdout"
+    fail_msg: "No peers connected — check network and config"
+    success_msg: "FIPS mesh peer connected"
+
+- name: Show FIPS status
+  command: fipsctl show status
+  register: fips_status
+  changed_when: false
+
+- name: Display FIPS node info
+  debug:
+    msg: "FIPS node {{ fips_status.stdout | from_json | json_query('npub') }} running with {{ fips_status.stdout | from_json | json_query('peer_count') }} peers"
+
+- name: Verify .fips DNS resolution
+  command: dig @::1 -p 5354 test-us01.fips AAAA +short
+  register: dns_check
+  changed_when: false
+  failed_when: dns_check.stdout | length == 0

@@ -1,6 +1,9 @@
 ---
 fips_version: "0.4.1"
 fips_ethernet_interface: ""
+fips_ethernet_auto_detect: true
+fips_lan_discovery: true
+fips_mesh_ssh_port: 22
 fips_advertise_relays:
   - "wss://relay.damus.io"
   - "wss://nos.lol"
@@ -17,10 +20,15 @@ fips_stun_servers:
   - "stun:stun.l.google.com:19302"
   - "stun:stun.cloudflare.com:3478"
   - "stun:global.stun.twilio.com:3478"
-fips_peers: []
+fips_peers:
+  - npub: "npub136yqae6na688fs75g95ppps3lxe07fvxefj77938zf47uhm6074sxw8ctm"
+    alias: "test-us03"
+    addresses:
+      - transport: udp
+        addr: "test-us03.fips.network:2121"
+    connect_policy: auto_connect
 fips_extra_hosts: {}
 fips_external_addr: ""
-fips_mesh_ssh_port: 22
 fips_deb_arch_map:
   x86_64: amd64
   aarch64: arm64
