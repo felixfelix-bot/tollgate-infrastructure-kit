@@ -375,3 +375,62 @@ All tests returned HTTP 200 with the expected page content.
 - `docs/FIPS-INGRESS-GATE-PLAN.md` — This document, updated with PoC results
 - VPS2 `/etc/caddy/Caddyfile` — Added poc.orangesync.tech route (live)
 - VPS2 `/etc/fips/fips.yaml` — Added T470 peer (live)
+
+## Phase 2 PoC Results (2026-08-12)
+
+### What was done
+
+1. **socat TCP proxy**: Installed socat on VPS2 and created a systemd
+   service (`fips-ssh-proxy.service`) that listens on TCP port 2222 and
+   forwards to T470's SSH daemon at `[fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8]:22`
+   via the FIPS mesh (fips0 interface).
+
+2. **UFW firewall rule**: Opened port 2222/tcp on VPS2's UFW firewall to
+   allow inbound connections from the public internet.
+
+3. **Ansible role**: Created `ansible/roles/fips-ingress/` with:
+   - `defaults/main.yml` — Configurable target host, port, socat path
+   - `templates/fips-ssh-proxy.service.j2` — Templated systemd unit
+   - `tasks/main.yml` — Install socat, deploy service, open UFW, verify
+   - `handlers/main.yml` — Reload systemd + restart service on change
+
+4. **Ansible playbook**: Created `ansible/playbooks/41-fips-ingress.yml`
+   targeting the `vps` host group.
+
+### Verification (Gate 2)
+
+- **VPS2 → T470 via FIPS mesh**: `ping6 fd97:...:dee8` → 3/3 packets, ~170ms RTT
+- **socat service**: `systemctl is-active fips-ssh-proxy` → active, enabled
+- **Port listening**: `ss -tlnp | grep 2222` → socat on 0.0.0.0:2222
+- **External SSH test**: `ssh -p 2222 c03rad0r@23.182.128.51 hostname` →
+  returns `CobradorWave` (T470's hostname)
+
+### Key Findings
+
+- **UFW must allow the proxy port**: VPS2 runs UFW with a strict allowlist.
+  Port 2222/tcp must be explicitly opened or socat will listen but
+  external connections will time out. The Ansible role handles this
+  automatically via the `ufw` module.
+
+- **Target machine SSH key must be authorized**: The socat proxy forwards
+  the raw TCP stream, so SSH authentication happens end-to-end (client →
+  target machine). The connecting user's public key must be in the target
+  machine's `~/.ssh/authorized_keys`.
+
+- **socat with `fork,reuseaddr`**: The `fork` option allows multiple
+  concurrent SSH sessions (socat forks a child per connection). `reuseaddr`
+  allows quick restart without "address already in use" errors.
+
+- **Wants=fips.service**: The systemd unit includes `Wants=fips.service` so
+  the proxy starts after the FIPS daemon is available, ensuring the mesh
+  route to the target machine is up before the proxy accepts connections.
+
+### Artifacts
+
+- `ansible/roles/fips-ingress/defaults/main.yml` — Role defaults
+- `ansible/roles/fips-ingress/templates/fips-ssh-proxy.service.j2` — Systemd template
+- `ansible/roles/fips-ingress/tasks/main.yml` — Deployment tasks
+- `ansible/roles/fips-ingress/handlers/main.yml` — Service handlers
+- `ansible/playbooks/41-fips-ingress.yml` — Playbook
+- VPS2 `/etc/systemd/system/fips-ssh-proxy.service` — Live systemd unit
+- VPS2 UFW rule: `2222/tcp ALLOW Anywhere # FIPS SSH proxy`

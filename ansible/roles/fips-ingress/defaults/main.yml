@@ -1,0 +1,7 @@
+---
+fips_ingress_ssh_proxy_enabled: true
+fips_ingress_ssh_proxy_port: 2222
+fips_ingress_ssh_target_host: "fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8"
+fips_ingress_ssh_target_port: 22
+fips_ingress_socat_path: "/usr/bin/socat"
+fips_ingress_service_name: "fips-ssh-proxy"

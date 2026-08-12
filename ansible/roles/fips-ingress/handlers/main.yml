@@ -1,0 +1,9 @@
+---
+- name: reload systemd fips-ingress
+  systemd:
+    daemon_reload: yes
+
+- name: restart fips-ssh-proxy
+  systemd:
+    name: "{{ fips_ingress_service_name }}"
+    state: restarted
