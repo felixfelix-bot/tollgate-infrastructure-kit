@@ -21,12 +21,18 @@ fips_stun_servers:
   - "stun:stun.cloudflare.com:3478"
   - "stun:global.stun.twilio.com:3478"
 fips_peers:
-  - npub: "npub136yqae6na688fs75g95ppps3lxe07fvxefj77938zf47uhm6074sxw8ctm"
-    alias: "test-us03"
+  - npub: "npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82"
+    alias: "vps2"
     addresses:
       - transport: udp
-        addr: "test-us03.fips.network:2121"
+        addr: "23.182.128.51:2121"
+      - transport: tcp
+        addr: "23.182.128.51:8443"
     connect_policy: auto_connect
+fips_mesh_hosts:
+  vps2: "npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82"
+  dq05: "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
+  # t14gen5 and t470 npubs added after first FIPS install
 fips_extra_hosts: {}
 fips_external_addr: ""
 fips_deb_arch_map:

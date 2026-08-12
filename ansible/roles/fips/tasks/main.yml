@@ -123,7 +123,7 @@
     msg: "FIPS node {{ fips_status.stdout | from_json | json_query('npub') }} running with {{ fips_status.stdout | from_json | json_query('peer_count') }} peers"
 
 - name: Verify .fips DNS resolution
-  command: dig @::1 -p 5354 test-us01.fips AAAA +short
+  command: dig @::1 -p 5354 vps2.fips AAAA +short
   register: dns_check
   changed_when: false
   failed_when: dns_check.stdout | length == 0
