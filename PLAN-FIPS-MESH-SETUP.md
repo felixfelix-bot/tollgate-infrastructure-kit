@@ -9,6 +9,8 @@
 
 This document defines the full scope of work for deploying FIPS mesh networking across all machines so they can SSH into each other over the FIPS overlay. It is a scoping document for kanban worker tasks — not the implementation itself.
 
+> **Related:** [FIPS Ingress Gate](docs/FIPS-INGRESS-GATE.md) — public internet → VPS2 → FIPS mesh (reverse proxy for hosting services from home machines). Inspired by [fr34aky/fips-exit-gate](https://github.com/fr34aky/fips-exit-gate) (outbound exit service).
+
 ---
 
 ## 0. WHY PRIVATE MESH
