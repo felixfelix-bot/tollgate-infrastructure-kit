@@ -19,3 +19,9 @@ routstr_mint_url: "https://{{ routstr_mint_subdomain }}.{{ mint_domain }}"
 routstr_mint_units: "sat,msat"
 
 routstr_operator_npub: "npub1zzt0d0s2f4lsanpd7nkjep5r79p7ljq7aw37eek64hf0ef6v0mxqgwljrv"
+
+routstr_health_endpoint: "/v1/info"
+routstr_healthcheck_interval: 30s
+routstr_healthcheck_timeout: 10s
+routstr_healthcheck_retries: 3
+routstr_healthcheck_start_period: 30s

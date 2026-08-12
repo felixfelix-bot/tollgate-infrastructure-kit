@@ -185,3 +185,55 @@
         fail_msg: ".env missing for {{ item.item }}"
         success_msg: ".env exists for {{ item.item }}"
       loop: "{{ hermes_tenants_env_file_check.results }}"
+
+    - name: Get healthcheck status for each container
+      ansible.builtin.shell: docker inspect --format '{{ '{{.State.Health.Status}}' }}' hermes-{{ item }}
+      register: hermes_tenants_health_status
+      changed_when: false
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert healthcheck status is healthy for all containers
+      ansible.builtin.assert:
+        that:
+          - item.stdout == "healthy"
+        fail_msg: "Container {{ item.item }} health status is '{{ item.stdout }}', expected 'healthy'"
+        success_msg: "Healthcheck healthy verified for {{ item.item }}"
+      loop: "{{ hermes_tenants_health_status.results }}"
+
+    - name: Get healthcheck test command for each container
+      ansible.builtin.shell: docker inspect --format '{{ '{{index .Config.Healthcheck.Test 1}}' }}' hermes-{{ item }}
+      register: hermes_tenants_healthcheck_cmd
+      changed_when: false
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert healthcheck tests both gateway and routstrd endpoints
+      ansible.builtin.assert:
+        that:
+          - "'8080' in item.stdout"
+          - "'9000' in item.stdout"
+        fail_msg: "Healthcheck for {{ item.item }} does not test both gateway (8080) and routstrd (9000): {{ item.stdout }}"
+        success_msg: "Healthcheck tests both gateway and routstrd endpoints for {{ item.item }}"
+      loop: "{{ hermes_tenants_healthcheck_cmd.results }}"
+
+    - name: Get restart policy for each container
+      ansible.builtin.shell: docker inspect --format '{{ '{{.HostConfig.RestartPolicy.Name}}' }}' hermes-{{ item }}
+      register: hermes_tenants_restart_policy
+      changed_when: false
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert restart policy is unless-stopped for all containers
+      ansible.builtin.assert:
+        that:
+          - item.stdout == "unless-stopped"
+        fail_msg: "Restart policy for {{ item.item }} is '{{ item.stdout }}', expected 'unless-stopped'"
+        success_msg: "Restart policy unless-stopped verified for {{ item.item }}"
+      loop: "{{ hermes_tenants_restart_policy.results }}"

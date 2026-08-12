@@ -104,6 +104,16 @@
   delay: 3
   when: machine_active | default(true)
 
+- name: Wait for Routstr container healthcheck to pass
+  ansible.builtin.command: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} {{ routstr_container_name }}"
+  register: routstr_health_status
+  until: routstr_health_status.stdout == "healthy"
+  retries: 30
+  delay: 5
+  changed_when: false
+  failed_when: false
+  when: machine_active | default(true)
+
 - name: Login to Routstr admin API
   uri:
     url: "http://localhost:{{ routstr_rest_port }}/admin/api/login"

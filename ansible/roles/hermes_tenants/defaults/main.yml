@@ -31,6 +31,10 @@ hermes_tenants_routstrd_config:
   port: 9000
   health_endpoint: "/health"
 
+hermes_tenants_gateway_config:
+  port: 8080
+  health_endpoint: "/health"
+
 hermes_tenants_gateway_port_base: 9000
 hermes_tenants_health_port_base: 9100
 

@@ -64,6 +64,14 @@ Deploys multiple isolated Hermes Agent instances as Docker containers on a singl
 | `hermes_tenants_healthcheck_timeout` | `10s` | Healthcheck timeout |
 | `hermes_tenants_healthcheck_retries` | `3` | Healthcheck retries before unhealthy |
 | `hermes_tenants_healthcheck_start_period` | `60s` | Grace period before healthchecks count |
+| `hermes_tenants_gateway_config.port` | `8080` | Internal gateway port to check |
+| `hermes_tenants_gateway_config.health_endpoint` | `/health` | Gateway health endpoint path |
+| `hermes_tenants_routstrd_config.port` | `9000` | Internal routstrd port to check |
+| `hermes_tenants_routstrd_config.health_endpoint` | `/health` | Routstrd health endpoint path |
+
+The healthcheck tests both the gateway (port 8080/health) and routstrd (port 9000/health).
+If the gateway endpoint is unreachable, it falls back to `pgrep hermes` (process alive check).
+If unhealthy after 3 retries, Docker auto-restarts the container (`restart: unless-stopped`).
 
 ### Security
 
@@ -128,6 +136,12 @@ docker inspect --format '{{.HostConfig.LogConfig}}' hermes-ours
 
 # Health status
 docker inspect --format '{{.State.Health.Status}}' hermes-ours
+
+# Healthcheck test command
+docker inspect --format '{{index .Config.Healthcheck.Test 1}}' hermes-ours
+
+# Restart policy
+docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' hermes-ours
 
 # No Docker socket mounted
 docker inspect --format '{{.HostConfig.Binds}}' hermes-ours

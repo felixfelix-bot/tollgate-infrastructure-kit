@@ -15,7 +15,7 @@ services:
       - "{{ tenant_gateway_port }}:8080"
       - "{{ tenant_health_port }}:{{ hermes_tenants_routstrd_config.port }}"
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:{{ hermes_tenants_routstrd_config.port }}{{ hermes_tenants_routstrd_config.health_endpoint }}')\" || exit 1"]
+      test: ["CMD-SHELL", "(curl -sf http://localhost:{{ hermes_tenants_gateway_config.port }}{{ hermes_tenants_gateway_config.health_endpoint }} || pgrep hermes) && curl -sf http://localhost:{{ hermes_tenants_routstrd_config.port }}{{ hermes_tenants_routstrd_config.health_endpoint }} || exit 1"]
       interval: {{ hermes_tenants_healthcheck_interval }}
       timeout: {{ hermes_tenants_healthcheck_timeout }}
       retries: {{ hermes_tenants_healthcheck_retries }}

@@ -7,6 +7,12 @@ services:
     volumes:
       - {{ routstr_data_dir }}:/app/data
       - {{ routstr_log_dir }}:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:{{ routstr_rest_port }}{{ routstr_health_endpoint }} || exit 1"]
+      interval: {{ routstr_healthcheck_interval }}
+      timeout: {{ routstr_healthcheck_timeout }}
+      retries: {{ routstr_healthcheck_retries }}
+      start_period: {{ routstr_healthcheck_start_period }}
     environment:
       PORT: "{{ routstr_rest_port }}"
       DATABASE_URL: "sqlite+aiosqlite:////app/data/routstr.db"

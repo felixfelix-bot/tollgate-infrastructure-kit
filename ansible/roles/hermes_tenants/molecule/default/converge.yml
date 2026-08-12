@@ -45,10 +45,9 @@
         tmpdir=$(mktemp -d)
         cat > "$tmpdir/Dockerfile" <<'DOCKERFILE'
         FROM python:3.12-slim
+        RUN apt-get update && apt-get install -y --no-install-recommends curl procps && rm -rf /var/lib/apt/lists/*
         RUN pip install --no-cache-dir flask
-        RUN printf 'from flask import Flask\napp = Flask(__name__)\n' > /app.py
-        RUN printf '@app.route("/health")\ndef health():\n    return "ok", 200\n' >> /app.py
-        RUN printf 'if __name__ == "__main__":\n    app.run(host="0.0.0.0", port=9000)\n' >> /app.py
+        RUN printf 'from flask import Flask\nfrom threading import Thread\nimport time\n\ndef make_app():\n    app = Flask(__name__)\n    @app.route("/health")\n    def health():\n        return "ok", 200\n    return app\n\ngateway = make_app()\nroutstrd = make_app()\nThread(target=gateway.run, kwargs={"host":"0.0.0.0","port":8080}, daemon=True).start()\nThread(target=routstrd.run, kwargs={"host":"0.0.0.0","port":9000}, daemon=True).start()\nwhile True:\n    time.sleep(1)\n' > /app.py
         CMD ["python", "/app.py"]
         DOCKERFILE
         docker build -t hermes-agent:nostr "$tmpdir"
