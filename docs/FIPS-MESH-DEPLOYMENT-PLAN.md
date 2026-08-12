@@ -1,313 +1,256 @@
-# FIPS Mesh Deployment Plan — All Machines Reachable
+# FIPS Private Mesh Deployment Plan — Fleet Interconnectivity
 
-**Status:** DRAFT v2 — incorporates kimi-consultant review (CHANGES_REQUESTED resolved)  
+**Status:** DRAFT v4 — private mesh, hub-and-spoke via VPS2, all consultant blockers resolved  
 **Date:** 2026-08-12  
 **Author:** Manager (Felix)  
-**Consultant review:** kimi-k2.7-code, 3 blockers + 8 major + 8 minor found
+**Review history:** v2 kimi review (public mesh), v3 kimi review (5 blockers found), v4 resolves all
 
-## Goal
+## Why Private Mesh
 
-Every machine in the fleet runs FIPS v0.4.1 with:
-- Persistent identity (stable npub)
-- Nostr discovery enabled + working (with correct relay URLs)
-- Ethernet transport on the correct interface (WiFi or wired)
-- Mesh firewall enabled with SSH open
-- .fips DNS resolution working
-- Multiple test mesh peers connected (redundancy)
-- Fleet machines registered in /etc/fips/hosts for shortname resolution
+Public FIPS test mesh bloom filters saturate with too many nodes for v0.4.1's static sizes. FIPS v2 (dynamic bloom filters) not released yet. Solution: small private mesh (~5 nodes), all nodes known, direct peering via VPS2 hub.
 
-Result: `ssh user@<machine>.fips` works from any machine to any machine.
-
-## Current Fleet
-
-| Machine | Hostname | Interface | Status | Role |
-|---------|----------|-----------|--------|------|
-| T470 | CobridorWave | wlp58s0 | FIPS 0.3.0-dev, 0 peers, broken | Local dev |
-| T14Gen5 | T14Gen5 | wlp0s20f3 | FIPS 0.4.1, test-us03 connected, no DNS | Local dev |
-| VPS1 | 66.92.204.38 | N/A (VPS) | DOWN since Jul 20, unreachable | Exit node (skipped) |
-| VPS2 | 23.182.128.51 | N/A (VPS) | FIPS 0.4.0-dev, exit node running | Active exit node |
-| DQ05 | 100.90.22.201 | auto-detect | Unknown FIPS state | Nostr relay host |
-| Backup | env-configured | auto-detect | Unknown | Backup server |
-
-## Task Graph (v2)
+## Topology: Hub-and-Spoke via VPS2
 
 ```
-Phase 0: Ansible Role Fixes (worker-fips, sequential)
-  T1: Fix group_vars relay conflict + role bugs
-  T2: Add ansible-lint compliance + jmespath prereq
-  T3: Add Molecule test scaffolding
+                    VPS2 (hub + exit node)
+                    23.182.128.51 (public IP)
+                    npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82
+                   /       |        \
+                  /        |         \
+    T470        T14Gen5      DQ05
+    wlp58s0     wlp0s20f3    Netbird/LAN
+    (LAN)       (LAN)        (remote)
+```
+
+**NOT full mesh.** Hub-and-spoke: all machines peer with VPS2. VPS2 forwards traffic transitively between any two machines that can't reach each other directly. Machines on the same LAN (T470 + T14Gen5) also peer directly for lower latency.
+
+**No public test nodes.** No Nostr discovery on any machine. No connection to public FIPS mesh. Bloom filters stay at ~5 entries.
+
+## Fleet
+
+| Machine | Interface | Reachable via | FIPS npub |
+|---------|-----------|---------------|-----------|
+| T470 | wlp58s0 | LAN | npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72 |
+| T14Gen5 | wlp0s20f3 | LAN | ephemeral -> persistent (T4) |
+| VPS2 | eth0 | Public 23.182.128.51 | npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82 |
+| DQ05 | auto-detect | Netbird 100.90.22.201 | unknown -> persistent (T10) |
+| Backup | auto-detect | env-configured | unknown |
+
+VPS1 skipped — down since Jul 20.
+
+## Key Design Decisions
+
+1. **No Nostr discovery on ANY machine** — including VPS2. Consultant blocker: VPS2 keeping Nostr would re-contaminate bloom filters via gossip. All machines: `nostr.enabled: false`.
+
+2. **Hub-and-spoke, not full mesh.** All machines peer with VPS2 (public IP, always reachable). Same-LAN machines also peer directly. Cross-LAN traffic transits through VPS2.
+
+3. **VPS2 as stable endpoint.** All machines configure VPS2 as a peer with its public IP. VPS2 is the only machine with a guaranteed-reachable address. LAN IPs are secondary/best-effort.
+
+4. **Peering addresses:** VPS2 uses public IP. LAN machines use LAN IPs for direct peering (best-effort). DQ05 uses Netbird IP. No DNS-based addresses for peering.
+
+5. **Two-pass deployment:** Pass 1 installs + generates persistent identity. Pass 2 configures full peer lists + fleet hosts.
+
+6. **SSH firewall restricted to mesh peers.** Not open to all fips0 traffic. Each machine's ssh.nft only accepts connections from known mesh peer IPv6 addresses.
+
+7. **DQ05/Backup deployed in Pass 1** (not Pass 2) to avoid chicken-and-egg npub problem. All machines deploy in Pass 1, all npubs collected in T6, all peers configured in Pass 2.
+
+## Task Graph
+
+```
+Phase 0: Ansible Role Overhaul (worker-fips, sequential)
+  T1: Rewrite role for private mesh
+  T2: ansible-lint + molecule tests
          │
-Phase 1: Deploy Pass 1 — Install + Connect (worker-fips, parallel)
-  T4: Deploy FIPS to T470
-  T5: Deploy FIPS to T14Gen5 (idempotent, already v0.4.1)
+Phase 1: Deploy Pass 1 — Install + Identity (worker-fips, parallel)
+  T3: Deploy FIPS to T470
+  T4: Deploy FIPS to T14Gen5
+  T5: Upgrade VPS2 to v0.4.1
+  T6: Deploy FIPS to DQ05 (if reachable)
+  T7: Deploy FIPS to Backup (if reachable)
          │
 Phase 1.5: Identity Collection (worker-fips)
-  T6: Collect npubs from all deployed machines, populate /etc/fips/hosts
+  T8: Collect all npubs, create fleet registry
          │
-Phase 2: Deploy Pass 2 — Fleet DNS + Remote Machines (worker-fips, parallel)
-  T7: Redeploy T470 + T14Gen5 with fleet hosts entries
-  T8: Deploy FIPS to VPS2 (preserve exit node config)
-  T9: Deploy FIPS to DQ05 (check port conflicts)
-  T10: Deploy FIPS to Backup (if reachable)
+Phase 2: Deploy Pass 2 — Mesh Peering + Fleet DNS (worker-fips, parallel)
+  T9: Redeploy T470 with all peers + fleet hosts
+  T10: Redeploy T14Gen5 with all peers + fleet hosts
+  T11: Redeploy VPS2 with all peers + fleet hosts
+  T12: Redeploy DQ05 with all peers + fleet hosts (if deployed in T6)
+  T13: Redeploy Backup with all peers + fleet hosts (if deployed in T7)
          │
 Phase 3: Cross-Mesh Verification (worker-inspector)
-  T11: Verify all-to-all reachability + SSH over FIPS
+  T14: Verify all-to-all reachability + SSH over FIPS
          │
 Phase 4: Documentation (worker-admin)
-  T12: Write deployment runbook + update PROGRESS.md + ssh config
+  T15: Write deployment runbook + ssh config + authorized_keys
 ```
 
-## Blockers Resolved (from consultant review)
+## Phase 0: Ansible Role Overhaul
 
-### Blocker 1: group_vars/all.yml relay URL conflict
-**Problem:** `group_vars/all.yml` defines `fips_advertise_relays` with `tollgate.local` domains that override the role's defaults (public relays). This silently breaks Nostr discovery.
-**Fix (T1):** Move FIPS relay defaults to the role's `defaults/main.yml` only. Remove `fips_advertise_relays` and `fips_dm_relays` from `group_vars/all.yml`. The role defaults already have the correct public relay URLs (damus, nos.lol, offchain, orangesync, ngit).
+**T1: Rewrite role for private mesh** (worker-fips, no deps)
 
-### Blocker 2: Missing identity collection pass
-**Problem:** Each machine generates a random npub on first boot. No step collects these npubs to populate /etc/fips/hosts for fleet DNS resolution. `ssh user@t470.fips` won't work without fleet hosts entries.
-**Fix (T6 + T7):** Two-pass deployment:
-- Pass 1 (T4/T5): Install FIPS, persistent identity generates stable npub
-- Identity collection (T6): Run `fipsctl show status` on each machine, extract npub, store in group_vars or a fleet-npubs.yml file
-- Pass 2 (T7): Redeploy with `fips_extra_hosts` populated so /etc/fips/hosts has all fleet machines
+Files to change:
+- `defaults/main.yml`: Remove public test node peer (test-us03), remove public relay URLs, remove fips_lan_discovery. Add `fips_mesh_peers: []`, `fips_nostr_enabled: false`, `fips_init_timeout: 30`, `fips_ssh_restrict_to_peers: true`.
+- `templates/fips.yaml.j2`: Nostr block only when `fips_nostr_enabled: true`. Remove LAN discovery block. Peers from `fips_mesh_peers`.
+- `templates/fips-hosts.j2`: REMOVE all 7 public test node entries. Only include entries from `fips_extra_hosts`.
+- `templates/ssh.nft.j2`: Add `flush table inet fips-ssh` at top. When `fips_ssh_restrict_to_peers: true`, generate per-peer source IP allow rules instead of blanket accept.
+- `tasks/main.yml`: Remove json_query usage → direct Jinja2 (`(fips_status.stdout | from_json).npub`). Make peer count assertion conditional on `fips_mesh_peers | length > 0`. DNS check uses first `fips_extra_hosts` key or skips if empty. Use `fips_init_timeout` variable for wait_for. Add config backup step before template deploy. Add fips-firewall restart handler. Remove `fips-dns-setup` command task if fips-dns service handles it (verify).
+- `handlers/main.yml`: Add `restart fips-firewall` handler.
+- `group_vars/all.yml`: Remove ALL fips_* variables (fips_advertise_relays, fips_dm_relays, fips_identity_nsec, fips_mesh_ipv6, fips_mesh_http_port, fips_relay_urls).
+- `.gitignore`: Add `ansible/inventory/group_vars/fips_mesh.yml`.
 
-### Blocker 3: Worker profile inconsistency
-**Problem:** Task graph says `worker-fips` but profiles section proposes `worker-fips-mesh`.
-**Fix:** Use `worker-fips` for all tasks. The existing worker-fips profile is fine — it currently does ESP32 firmware work on the `fips` board, but mesh deployment tasks will be on a separate `fips-mesh-deploy` board. No context contamination across boards.
+Gate 2.5: kimi-consultant cold review on full diff.
 
-## Major Issues Resolved
+**T2: ansible-lint + molecule** (worker-fips, depends on T1)
+- ansible-lint clean (FQCN, task names, no json_query)
+- Molecule: default (no peers, no nostr)
+- Molecule: with peers + ethernet + ssh restrict
+- Syntax check passes
+- Gate 2.5: kimi-consultant cold review
 
-### Major 1: Unnecessary serial dependencies
-**Problem:** T7 (DQ05) and T8 (Backup) depend on T6 (VPS2) but are independent.
-**Fix:** T8, T9, T10 all run in parallel after Phase 1.5. No serial dependency on VPS2.
+## Phase 1: Deploy Pass 1
 
-### Major 2: WiFi interfaces in ethernet transport
-**Problem:** T470 (wlp58s0) and T14Gen5 (wlp0s20f3) use WiFi interfaces in the `ethernet` transport section.
-**Fix:** FIPS ethernet transport works with WiFi interfaces — it's a layer-2 transport that uses raw frames. The `wlp*` prefix is correct. Auto-detect task already matches `^wl|^enp|^eth`. No change needed, but document this in the runbook.
+**T3: Deploy FIPS to T470** (worker-fips, depends on T2)
+- Backup: `cp /etc/fips/fips.yaml /etc/fips/fips.yaml.pre-upgrade`
+- ethernet: wlp58s0, no peers, no nostr
+- Verify: version 0.4.1, transports > 0, persistent npub
+- Record npub (should be unchanged: npub1eak909...)
 
-### Major 3: json_query requires jmespath
-**Problem:** `tasks/main.yml` uses `json_query` which requires the `jmespath` Python package.
-**Fix (T2):** Replace `json_query` with direct Jinja2 attribute access: `fips_status.stdout | from_json | json_query('npub')` -> `(fips_status.stdout | from_json).npub`. No external dependency needed.
+**T4: Deploy FIPS to T14Gen5** (worker-fips, depends on T2, parallel)
+- Backup existing config
+- ethernet: wlp0s20f3, no peers, no nostr
+- NOTE: switches from ephemeral to persistent — npub WILL change
+- Verify: version 0.4.1, transports > 0
+- Record new persistent npub
 
-### Major 4: No handler for fips-firewall restart
-**Problem:** Role deploys ssh.nft but doesn't restart fips-firewall service.
-**Fix (T1):** Add handler `restart fips-firewall` that runs `systemctl restart fips-firewall` and notify it from the ssh.nft deploy task.
+**T5: Upgrade VPS2** (worker-fips, depends on T2, parallel)
+- Backup: `cp /etc/fips/fips.yaml /etc/fips/fips.yaml.pre-upgrade`
+- No ethernet, fips_external_addr: "23.182.128.51"
+- No nostr (private mesh — no discovery)
+- Preserve WireGuard wgexit0 + nftables MASQUERADE
+- Verify: version 0.4.1, wg show wgexit0, nft list table inet fips-exit
+- Record npub (should be unchanged: npub1sqg8fd4ea...)
+- Gate 2.5: kimi-consultant cold review (exit node safety)
 
-### Major 5: Backup excluded from verification matrix
-**Fix:** T11 includes all deployed machines in the test matrix.
+**T6: Deploy FIPS to DQ05** (worker-fips, depends on T2, parallel)
+- Verify reachable: `ping -c 1 100.90.22.201`
+- If unreachable: skip, mark blocked, move on
+- Check port conflicts: `ss -tulnp | grep -E ':2121|:8443|:5354'`
+- Auto-detect interface, no peers, no nostr
+- Record npub
 
-### Major 6: Incomplete acceptance criteria
-**Fix:** Acceptance criteria now require all reachable machines to have mesh connectivity, not just T470<->T14Gen5.
+**T7: Deploy FIPS to Backup** (worker-fips, depends on T2, parallel)
+- Verify reachable
+- If unreachable: skip
+- Auto-detect interface, no peers, no nostr
+- Record npub
 
-### Major 7: Single peer SPOF
-**Problem:** All machines peer only with test-us03.
-**Fix (T1):** Change `fips_peers` default to include 3 peers: test-us01, test-us03, test-us04 (different geographic locations for redundancy).
+## Phase 1.5: Identity Collection
 
-### Major 8: Unused fips_identity_nsec
-**Problem:** group_vars defines `fips_identity_nsec` but template doesn't use it.
-**Fix (T1):** Template already has the nsec conditional from the original role. The variable should come from env or host_vars, not group_vars/all.yml. Remove from group_vars, document as optional host-level override.
-
-## Minor Issues Resolved
-
-- **nft table cleanup:** Add `flush table inet fips-ssh` at top of ssh.nft.j2
-- **wait_for timeout:** Increase to 30 seconds, make configurable via `fips_init_timeout`
-- **DNS check hardcoded:** Use configured peer name, not hardcoded test-us01
-- **Cold review scope:** Apply Gate 2.5 to T1, T3, and T8 (VPS2 deployment touching exit node)
-- **Netbird IP fragility:** Document that DQ05 IP must be verified before T9
-- **Duplicate inventory entries:** Rename t470 under nip29_relays to avoid confusion
-- **Persistent identity verification:** T11 includes reboot test on one machine
-
-## Phase Details
-
-### Phase 0: Ansible Role Fixes
-
-**T1: Fix group_vars relay conflict + role bugs** (worker-fips, no deps)
-- Remove `fips_advertise_relays`, `fips_dm_relays`, `fips_identity_nsec` from `group_vars/all.yml`
-- Role defaults already have correct public relay URLs
-- Add `restart fips-firewall` handler, notify from ssh.nft task
-- Change `fips_peers` default to 3 peers (test-us01, test-us03, test-us04)
-- Replace `json_query` with direct Jinja2 attribute access
-- Add `flush table inet fips-ssh` to ssh.nft.j2
-- Increase wait_for timeout to 30s, add `fips_init_timeout` variable
-- Make DNS check use first configured peer, not hardcoded test-us01
-- Fix assert task: warn instead of fail when no peer connected on fresh install
-- Gate 2.5: kimi-consultant cold review on diff
-
-**T2: ansible-lint compliance** (worker-fips, depends on T1)
-- Run `ansible-lint` against the role
-- Fix all warnings (FQCN module names, task names, etc.)
-- Verify syntax check still passes
-- Install jmespath as Ansible dependency (or remove all json_query usage in T1)
-
-**T3: Molecule test scaffolding** (worker-fips, depends on T1)
-- Create molecule scenario using docker driver
-- Test: default role behavior (installs, starts, enables services)
-- Test: with ethernet_interface set and unset
-- Test: with custom peers and extra_hosts
-- Gate 2.5: kimi-consultant cold review on test code
-
-### Phase 1: Deploy Pass 1 — Install + Connect
-
-**T4: Deploy FIPS to T470** (worker-fips, depends on T2,T3)
-- Run: `ansible-playbook playbooks/13-fips.yml -i inventory/hosts.yml -l t470_local`
-- T470 ethernet: wlp58s0 (WiFi, used as layer-2 ethernet transport)
-- Verify: `fipsctl show status` — version 0.4.1, transports > 0
-- Verify: `fipsctl show peers` — at least 1 peer connected
-- Verify: `dig @::1 -p 5354 test-us01.fips AAAA +short` returns fd97 address
-- Verify: `ping6 -c 3 test-us01.fips` works
-- Record: npub from `fipsctl show status` output (for T6)
-
-**T5: Deploy FIPS to T14Gen5** (worker-fips, depends on T2,T3, parallel with T4)
-- Run: `ansible-playbook playbooks/13-fips.yml -i inventory/hosts.yml -l t14gen5`
-- T14Gen5 ethernet: wlp0s20f3
-- Already has v0.4.1 — role should be idempotent
-- Verify same checks as T4
-- Record: npub from `fipsctl show status` output (for T6)
-
-### Phase 1.5: Identity Collection
-
-**T6: Collect npubs + populate fleet hosts** (worker-fips, depends on T4,T5)
-- Run `fipsctl show status` on T470 and T14Gen5
-- Extract npub from each machine
-- Create `ansible/inventory/group_vars/fips_mesh.yml` with:
+**T8: Collect all npubs, create fleet registry** (worker-fips, depends on T3-T7)
+- Run `fipsctl show status` on every deployed machine
+- Extract npub + fips0 IPv6 address
+- Get LAN IP of each machine: `ip -4 addr show <interface> | grep inet`
+- Create `ansible/inventory/group_vars/fips_mesh.yml` (gitignored):
   ```yaml
   fips_extra_hosts:
-    t470: "<t470 npub>"
-    t14gen5: "<t14gen5 npub>"
+    t470: "<npub>"
+    t14gen5: "<npub>"
+    vps2: "npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82"
+    dq05: "<npub>"  # if deployed
+
+  fips_mesh_peers:
+    # All machines peer with VPS2 (hub)
+    # Same-LAN machines also peer directly
+    # For T470:
+    #   - vps2 at 23.182.128.51:2121
+    #   - t14gen5 at <lan_ip>:2121 (if same LAN)
+    # For T14Gen5:
+    #   - vps2 at 23.182.128.51:2121
+    #   - t470 at <lan_ip>:2121 (if same LAN)
+    # For VPS2:
+    #   - t470 at <lan_ip>:2121
+    #   - t14gen5 at <lan_ip>:2121
+    #   - dq05 at <netbird_ip>:2121
+    # For DQ05:
+    #   - vps2 at 23.182.128.51:2121
   ```
-- This file is NOT committed to git (contains machine-specific identity mappings)
-- Add to .gitignore if not already
 
-### Phase 2: Deploy Pass 2 — Fleet DNS + Remote Machines
+## Phase 2: Deploy Pass 2
 
-**T7: Redeploy local machines with fleet hosts** (worker-fips, depends on T6)
-- Run playbook again on T470 and T14Gen5
-- Now /etc/fips/hosts will include fleet shortnames
-- Verify: `dig @::1 -p 5354 t470.fips AAAA +short` returns T470's fd97 address
-- Verify: `dig @::1 -p 5354 t14gen5.fips AAAA +short` returns T14Gen5's fd97 address
-- Verify: `ping6 -c 3 t14gen5.fips` works from T470 (and vice versa)
+**T9-T13: Redeploy all machines with full mesh config** (worker-fips, parallel)
+- Each machine gets its peer list + fleet hosts entries
+- ssh.nft now restricts SSH to known peer IPv6 addresses only
+- Verify on each: `fipsctl show peers` — shows configured peers connected
+- Verify: `dig @::1 -p 5354 <shortname>.fips AAAA +short` for each fleet member
+- Verify: `ping6 -c 3 <shortname>.fips`
 
-**T8: Deploy FIPS to VPS2** (worker-fips, depends on T6, parallel with T7,T9,T10)
-- VPS2 already has FIPS 0.4.0-dev as exit node
-- Role MUST be idempotent and preserve existing exit node config
-- Back up existing /etc/fips/fips.yaml before deploying: `cp /etc/fips/fips.yaml /etc/fips/fips.yaml.bak`
-- VPS2: no ethernet interface, fips_external_addr: "23.182.128.51"
-- Verify: `fipsctl show status` — version 0.4.1
-- Verify: `wg show wgexit0` — exit node still functional
-- Verify: `nft list table inet fips-exit` — MASQUERADE still loaded
-- Record: VPS2 npub for fleet hosts
-- Gate 2.5: kimi-consultant cold review on deployment diff (exit node safety)
+## Phase 3: Verification
 
-**T9: Deploy FIPS to DQ05** (worker-fips, depends on T6, parallel with T7,T8,T10)
-- Verify DQ05 reachable: `ping -c 1 100.90.22.201`
-- Check port conflicts: `ss -tulnp | grep -E ':2121|:8443|:5354'`
-- Auto-detect ethernet interface
-- Deploy playbook
-- Record: DQ05 npub for fleet hosts
+**T14: All-to-all verification** (worker-inspector, depends on T9-T13)
+- Test matrix: ping6 -c 3 for every pair
+- SSH tests:
+  - `ssh c03rad0r@t470.fips` from T14Gen5 (primary)
+  - `ssh c08rad0r@t14gen5.fips` from T470 (reverse)
+  - `ssh root@vps2.fips` from T470
+- Reboot one machine: verify npub unchanged
+- `fipsctl show bloom` on all machines: < 10 entries (private mesh, no public nodes)
+- Document any failures with root cause
 
-**T10: Deploy FIPS to Backup** (worker-fips, depends on T6, parallel with T7,T8,T9)
-- Verify backup machine reachable
-- Auto-detect ethernet interface
-- Deploy playbook
-- Record: Backup npub for fleet hosts
+## Phase 4: Documentation
 
-### Phase 3: Cross-Mesh Verification
-
-**T11: Verify all-to-all reachability** (worker-inspector, depends on T7,T8,T9,T10)
-- Update fleet hosts on all machines with all collected npubs
-- Final redeploy to all machines with complete /etc/fips/hosts
-- Test matrix (ping6 -c 3 for each pair):
-  - T470 -> T14Gen5, VPS2, DQ05, Backup
-  - T14Gen5 -> T470, VPS2, DQ05, Backup
-  - VPS2 -> T470, T14Gen5, DQ05, Backup
-  - DQ05 -> T470, T14Gen5, VPS2, Backup
-- Test SSH: `ssh c03rad0r@t470.fips` from T14Gen5 (primary goal)
-- Test SSH: `ssh c03rad0r@t14gen5.fips` from T470 (reverse)
-- Reboot one machine, verify npub unchanged (persistent identity proof)
-- Document: which pairs work directly vs through mesh forwarding
-
-### Phase 4: Documentation
-
-**T12: Write deployment runbook** (worker-admin, depends on T11)
-- Document the full deployment process in ~/tollgate-infrastructure-kit/docs/
-- Include: prerequisites, playbook commands, verification steps
-- Include: how to add a new machine to the mesh
-- Include: troubleshooting guide (DNS not resolving, peer not connecting)
-- Update ~/tollgate-infrastructure-kit/PROGRESS.md
-- Create ~/.ssh/config entries for .fips hostnames:
-  ```
-  Host t470.fips
-    User c03rad0r
-    AddressFamily inet6
-  Host t14gen5.fips
-    User c08rad0r
-    AddressFamily inet6
-  ```
+**T15: Runbook + SSH config + keys** (worker-admin, depends on T14)
+- Deployment runbook with prerequisites, commands, verification
+- How to add a new machine to the private mesh
+- Troubleshooting guide
+- ~/.ssh/config entries for all .fips hostnames
+- Ensure authorized_keys distributed across all machines for mesh SSH
+- Update PROGRESS.md
 - Commit + push
 
 ## Worker Profiles
 
-### Existing Profiles Used (no new profile needed)
+| Profile | Model | Tasks |
+|---------|-------|-------|
+| worker-fips | glm-5.2 | T1-T13 |
+| worker-inspector | glm-5.2 | T14 |
+| worker-admin | glm-5.2 | T15 |
+| kimi-consultant | kimi-k2.7-code | Cold review: T1, T2, T5 |
 
-| Profile | Model | Role | Tasks |
-|---------|-------|------|-------|
-| worker-fips | glm-5.2 | FIPS implementation + deployment | T1-T10 |
-| worker-inspector | glm-5.2 | Verification + testing | T11 |
-| worker-admin | glm-5.2 | Documentation | T12 |
-| kimi-consultant | kimi-k2.7-code | Cold review (Gate 2.5) | T1, T3, T8 |
+## Quality Gates
 
-**No new profile created.** worker-fips handles both ESP32 firmware (on `fips` board) and mesh deployment (on `fips-mesh-deploy` board). Context isolation is maintained by board separation, not profile separation.
-
-## Quality Gates (per task)
-
-Every task MUST pass:
-1. **Gate 1 (TDD):** Ansible tasks use molecule/ansible-lint as tests. Write the test first.
-2. **Gate 2 (tests pass):** ansible-lint clean, molecule passes, syntax-check passes.
-3. **Gate 2.5 (cold review):** Cross-family review using kimi-consultant on T1, T3, T8.
-4. **Gate 3 (docs updated):** Role changes update PROGRESS.md or docs/.
-5. **Gate 4 (atomic commits):** One concern per commit, conventional messages.
-6. **Gate 5 (pushed):** git push to ngit verified exit 0.
-7. **Gate 6 (manager review):** Task status = review, not done.
+1. Gate 1 (TDD): molecule tests first
+2. Gate 2 (tests pass): ansible-lint + molecule + syntax-check
+3. Gate 2.5 (cold review): kimi on T1, T2, T5
+4. Gate 3 (docs): PROGRESS.md updated with each phase
+5. Gate 4 (atomic commits): one concern per commit
+6. Gate 5 (pushed): git push verified
+7. Gate 6 (manager review): status = review
+8. Bloom filter check: `fipsctl show bloom` < 10 entries on all machines
 
 ## Kanban Board
 
-Board: `fips-mesh-deploy` (new board, separate from `fips` board)
-
+Board: `fips-mesh-deploy`
 ```bash
 hermes kanban boards create fips-mesh-deploy \
-  --name "FIPS Mesh Deployment" \
-  --description "Deploy FIPS v0.4.1 to all machines, enable SSH over mesh" \
-  --icon "🌐" --color "#0066cc" --switch
+  --name "FIPS Private Mesh" \
+  --description "Private FIPS mesh for fleet SSH connectivity" \
+  --icon "🔒" --color "#0066cc" --switch
 ```
-
-## Dependencies
-
-- VPS1 is DOWN — skipped entirely (not a blocker)
-- DQ05 must be reachable via Netbird for T9
-- Backup machine must be reachable for T10
-- T4/T5 (local machines) are prerequisites for identity collection (T6)
-- T6 is prerequisite for all Phase 2 tasks
-- Phase 2 tasks (T7-T10) run in parallel
-
-## Risk Mitigation
-
-- **VPS2 exit node:** T8 backs up existing config before deploying. Gate 2.5 cold review on VPS2 deployment.
-- **DQ05 port conflicts:** T9 checks ports before deploying. FIPS uses 2121, 8443, 5354 — DQ05 runs relays on 7777, 8080, 3001, 3002 — no conflicts expected.
-- **Group membership:** Adding user to `fips` group requires re-login. Playbook output includes a note. T11 reboots one machine for testing.
-- **Stale identity:** T14Gen5 currently has ephemeral identity. Switching to persistent changes its npub. T6 collects the new npub after deployment.
-- **Netbird IP fragility:** DQ05's Netbird IP (100.90.22.201) can change. Document in runbook. T9 verifies reachability first.
-- **Single peer SPOF:** Default config includes 3 test mesh peers (test-us01, test-us03, test-us04) for redundancy.
 
 ## Acceptance Criteria
 
-The plan is complete when:
-1. All reachable machines (T470, T14Gen5, VPS2, DQ05, Backup) run FIPS v0.4.1
-2. All machines have persistent identity (verified by reboot test on one machine)
-3. All machines have at least 1 mesh peer connected (target: 3 peers)
-4. .fips DNS resolution works on all machines
-5. Mesh firewall enabled with SSH open on all machines
-6. /etc/fips/hosts on all machines contains shortname entries for all fleet machines
-7. `ssh c03rad0r@t470.fips` works from T14Gen5 (primary goal)
-8. `ssh c08rad0r@t14gen5.fips` works from T470 (reverse direction)
-9. ping6 works between all reachable machine pairs
-10. Deployment is reproducible via `ansible-playbook playbooks/13-fips.yml`
-11. Documentation committed to ~/tollgate-infrastructure-kit/docs/
+1. T470, T14Gen5, VPS2 run FIPS v0.4.1
+2. Persistent identity on all (reboot test on one)
+3. No public test mesh peers — private mesh only
+4. No Nostr discovery on any machine
+5. Bloom filter < 10 entries on all machines
+6. .fips DNS resolves all fleet shortnames
+7. SSH firewall restricted to known mesh peer IPs only
+8. `ssh c03rad0r@t470.fips` from T14Gen5 works
+9. `ssh c08rad0r@t14gen5.fips` from T470 works
+10. `ssh root@vps2.fips` from T470 works
+11. All deployed machines ping6 each other (direct or via VPS2)
+12. authorized_keys distributed for mesh SSH
+13. Deployment reproducible via ansible-playbook
+14. Documentation committed
