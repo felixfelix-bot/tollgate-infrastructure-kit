@@ -1,0 +1,41 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+driver:
+  name: docker
+platforms:
+  - name: hermes-tenants-instance
+    image: geerlingguy/docker-debian12-ansible:latest
+    command: /sbin/init
+    cgroupns_mode: host
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/lib/docker
+    pre_build_image: true
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: "../../.."
+  inventory:
+    host_vars:
+      hermes-tenants-instance:
+        hermes_tenants_base_dir: /opt/tollgate/hermes
+        hermes_tenants_deployment_admin_nsec: "nsec1testadminkeyplaceholder000000000000000000"
+        hermes_tenants_tenants:
+          - name: alice
+            npub: "npub1alice0000000000000000000000000000000000000000000000000000"
+            nsec: "nsec1alice000000000000000000000000000000000000000000000000000"
+            zai_api_key: "test-key-alice"
+          - name: bob
+            npub: "npub1bob00000000000000000000000000000000000000000000000000000"
+            nsec: "nsec1bob0000000000000000000000000000000000000000000000000000"
+            zai_api_key: "test-key-bob"
+          - name: carol
+            npub: "npub1carol0000000000000000000000000000000000000000000000000000"
+            nsec: "nsec1carol000000000000000000000000000000000000000000000000000"
+            zai_api_key: "test-key-carol"
+verifier:
+  name: ansible

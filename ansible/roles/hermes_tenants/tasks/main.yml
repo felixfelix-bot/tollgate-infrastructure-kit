@@ -32,6 +32,16 @@
   loop_control:
     label: "{{ item.0.name }}/{{ item.1 }}"
 
+- name: Check if nsec file already exists for tenants without keys
+  ansible.builtin.stat:
+    path: "{{ hermes_tenants_base_dir }}/{{ item.name }}/nsec/nsec.txt"
+  register: hermes_tenants_nsec_check
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+    index_var: nsec_idx
+  when: item.nsec is not defined or item.nsec | length == 0
+
 - name: Generate nsec/npub keypair for tenants without keys
   ansible.builtin.shell: |
     python3 -c "
@@ -45,7 +55,10 @@
   loop: "{{ hermes_tenants_tenants }}"
   loop_control:
     label: "{{ item.name }}"
-  when: item.nsec is not defined or item.nsec | length == 0
+    index_var: gen_idx
+  when:
+    - item.nsec is not defined or item.nsec | length == 0
+    - hermes_tenants_nsec_check.results[gen_idx].stat is not defined or not hermes_tenants_nsec_check.results[gen_idx].stat.exists
 
 - name: Write generated nsec files
   ansible.builtin.copy:
@@ -57,6 +70,7 @@
   loop_control:
     label: "{{ item.item.name }}"
   when: item.stdout_lines is defined and item.stdout_lines | length > 0
+  register: hermes_tenants_nsec_write
 
 - name: Create per-tenant Docker network (isolate friends)
   community.docker.docker_network:
@@ -98,7 +112,7 @@
     content: |
       HERMES_NPUB={{ item.npub | default('') }}
       HERMES_NSEC={{ item.nsec | default('') }}
-      ZAI_API_KEY=*** item.zai_api_key }}
+      ZAI_API_KEY={{ item.zai_api_key }}
       NOSTR_RELAYS={{ hermes_tenants_nostr_relays }}
       NOSTR_GROUPS={{ hermes_tenants_nostr_groups }}
       NOSTR_NSEC_PATH=/nsec/nsec.txt

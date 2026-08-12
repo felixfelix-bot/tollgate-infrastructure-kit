@@ -1,0 +1,57 @@
+---
+- name: Converge — apply hermes_tenants role with 3 tenants
+  hosts: all
+  become: true
+  vars:
+    docker_install_compose: false
+  pre_tasks:
+    - name: Install Docker dependencies
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - python3-docker
+          - python3-pip
+          - curl
+        state: present
+        update_cache: true
+    - name: Install Docker Compose plugin
+      ansible.builtin.shell: |
+        mkdir -p /usr/libexec/docker/cli-plugins
+        curl -SL "https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-$(uname -m)" \
+          -o /usr/libexec/docker/cli-plugins/docker-compose
+        chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+      args:
+        creates: /usr/libexec/docker/cli-plugins/docker-compose
+    - name: Start Docker service
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+    - name: Install community.docker collection
+      ansible.builtin.command: ansible-galaxy collection install community.docker
+      changed_when: false
+    - name: Install pynostr
+      ansible.builtin.pip:
+        name: pynostr
+        state: present
+        extra_args: "--break-system-packages"
+    - name: Check if hermes-agent test image exists
+      ansible.builtin.command: docker image inspect hermes-agent:nostr
+      register: image_check
+      changed_when: false
+      failed_when: false
+    - name: Create dummy hermes-agent image for testing
+      ansible.builtin.shell: |
+        tmpdir=$(mktemp -d)
+        cat > "$tmpdir/Dockerfile" <<'DOCKERFILE'
+        FROM python:3.12-slim
+        RUN pip install --no-cache-dir flask
+        RUN printf 'from flask import Flask\napp = Flask(__name__)\n@app.route("/health")\ndef health():\n    return "ok", 200\nif __name__ == "__main__":\n    app.run(host="0.0.0.0", port=9000)\n' > /app.py
+        CMD ["python", "/app.py"]
+        DOCKERFILE
+        docker build -t hermes-agent:nostr "$tmpdir"
+        rm -rf "$tmpdir"
+      when: image_check.rc != 0
+      changed_when: false
+  roles:
+    - role: hermes_tenants

@@ -1,0 +1,187 @@
+---
+- name: Verify hermes_tenants role — 3 containers, 3 networks, 3 volumes, log config
+  hosts: all
+  become: true
+  tasks:
+    - name: Get running Hermes containers
+      ansible.builtin.shell: docker ps --filter "name=hermes-" --format "{{ '{{.Names}}' }}"
+      register: hermes_containers
+      changed_when: false
+
+    - name: Assert 3 Hermes containers are running
+      ansible.builtin.assert:
+        that:
+          - hermes_containers.stdout_lines | length == 3
+        fail_msg: "Expected 3 Hermes containers, got {{ hermes_containers.stdout_lines | length }}: {{ hermes_containers.stdout }}"
+        success_msg: "3 Hermes containers running: {{ hermes_containers.stdout_lines | join(', ') }}"
+
+    - name: Assert expected container names
+      ansible.builtin.assert:
+        that:
+          - "'hermes-alice' in hermes_containers.stdout_lines"
+          - "'hermes-bob' in hermes_containers.stdout_lines"
+          - "'hermes-carol' in hermes_containers.stdout_lines"
+        fail_msg: "Missing expected container names. Found: {{ hermes_containers.stdout_lines }}"
+        success_msg: "All 3 expected container names present"
+
+    - name: Get Docker networks
+      ansible.builtin.shell: docker network ls --filter "name=hermes-net-" --format "{{ '{{.Name}}' }}"
+      register: hermes_networks
+      changed_when: false
+
+    - name: Assert 3 Docker networks exist
+      ansible.builtin.assert:
+        that:
+          - hermes_networks.stdout_lines | length >= 3
+        fail_msg: "Expected at least 3 hermes-net- networks, got {{ hermes_networks.stdout_lines | length }}: {{ hermes_networks.stdout }}"
+        success_msg: "3 Docker networks exist: {{ hermes_networks.stdout_lines | join(', ') }}"
+
+    - name: Assert expected network names
+      ansible.builtin.assert:
+        that:
+          - "'hermes-net-alice' in hermes_networks.stdout_lines"
+          - "'hermes-net-bob' in hermes_networks.stdout_lines"
+          - "'hermes-net-carol' in hermes_networks.stdout_lines"
+        fail_msg: "Missing expected network names. Found: {{ hermes_networks.stdout_lines }}"
+        success_msg: "All 3 expected network names present"
+
+    - name: Get Docker volumes
+      ansible.builtin.shell: docker volume ls --filter "name=hermes-" --format "{{ '{{.Name}}' }}"
+      register: hermes_volumes
+      changed_when: false
+
+    - name: Assert 3 Docker volumes exist
+      ansible.builtin.assert:
+        that:
+          - hermes_volumes.stdout_lines | length >= 3
+        fail_msg: "Expected at least 3 hermes- volumes, got {{ hermes_volumes.stdout_lines | length }}: {{ hermes_volumes.stdout }}"
+        success_msg: "3 Docker volumes exist: {{ hermes_volumes.stdout_lines | join(', ') }}"
+
+    - name: Assert expected volume names
+      ansible.builtin.assert:
+        that:
+          - "'hermes-alice-data' in hermes_volumes.stdout_lines"
+          - "'hermes-bob-data' in hermes_volumes.stdout_lines"
+          - "'hermes-carol-data' in hermes_volumes.stdout_lines"
+        fail_msg: "Missing expected volume names. Found: {{ hermes_volumes.stdout_lines }}"
+        success_msg: "All 3 expected volume names present"
+
+    - name: Get log config for each container
+      ansible.builtin.shell: docker inspect --format '{{ '{{.HostConfig.LogConfig.Type}}' }}' hermes-{{ item }}
+      register: log_driver_check
+      changed_when: false
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert log driver is json-file for all containers
+      ansible.builtin.assert:
+        that:
+          - item.stdout == "json-file"
+        fail_msg: "Container log driver is '{{ item.stdout }}', expected 'json-file'"
+        success_msg: "Log driver json-file verified for {{ item.item }}"
+      loop: "{{ log_driver_check.results }}"
+
+    - name: Get log max-size for each container
+      ansible.builtin.shell: docker inspect --format '{{ '{{ index .HostConfig.LogConfig.Config "max-size" }}' }}' hermes-{{ item }}
+      register: log_max_size_check
+      changed_when: false
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert log max-size is 10m for all containers
+      ansible.builtin.assert:
+        that:
+          - item.stdout == "10m"
+        fail_msg: "Log max-size is '{{ item.stdout }}', expected '10m'"
+        success_msg: "Log max-size 10m verified for {{ item.item }}"
+      loop: "{{ log_max_size_check.results }}"
+
+    - name: Get log max-file for each container
+      ansible.builtin.shell: docker inspect --format '{{ '{{ index .HostConfig.LogConfig.Config "max-file" }}' }}' hermes-{{ item }}
+      register: log_max_file_check
+      changed_when: false
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert log max-file is 3 for all containers
+      ansible.builtin.assert:
+        that:
+          - item.stdout == "3"
+        fail_msg: "Log max-file is '{{ item.stdout }}', expected '3'"
+        success_msg: "Log max-file 3 verified for {{ item.item }}"
+      loop: "{{ log_max_file_check.results }}"
+
+    - name: Get security_opt for each container
+      ansible.builtin.shell: docker inspect --format '{{ '{{ .HostConfig.SecurityOpt }}' }}' hermes-{{ item }}
+      register: security_opt_check
+      changed_when: false
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert no-new-privileges is set for all containers
+      ansible.builtin.assert:
+        that:
+          - "'no-new-privileges:true' in item.stdout"
+        fail_msg: "no-new-privileges not set for {{ item.item }}: {{ item.stdout }}"
+        success_msg: "no-new-privileges verified for {{ item.item }}"
+      loop: "{{ security_opt_check.results }}"
+
+    - name: Verify per-tenant directories exist
+      ansible.builtin.stat:
+        path: "/opt/tollgate/hermes/{{ item }}"
+      register: tenant_dir_check
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert tenant directories exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.mode == "0700"
+        fail_msg: "Directory /opt/tollgate/hermes/{{ item.item }} missing or wrong mode"
+        success_msg: "Directory /opt/tollgate/hermes/{{ item.item }} exists with mode 0700"
+      loop: "{{ tenant_dir_check.results }}"
+
+    - name: Verify docker-compose.yml exists for each tenant
+      ansible.builtin.stat:
+        path: "/opt/tollgate/hermes/{{ item }}/docker-compose.yml"
+      register: compose_file_check
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert docker-compose.yml files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: "docker-compose.yml missing for {{ item.item }}"
+        success_msg: "docker-compose.yml exists for {{ item.item }}"
+      loop: "{{ compose_file_check.results }}"
+
+    - name: Verify .env file exists for each tenant
+      ansible.builtin.stat:
+        path: "/opt/tollgate/hermes/{{ item }}/.env"
+      register: env_file_check
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert .env files exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+        fail_msg: ".env missing for {{ item.item }}"
+        success_msg: ".env exists for {{ item.item }}"
+      loop: "{{ env_file_check.results }}"
