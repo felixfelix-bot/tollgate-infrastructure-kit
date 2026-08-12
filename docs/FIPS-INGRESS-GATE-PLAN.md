@@ -1,6 +1,6 @@
 # FIPS Ingress Gate — Public Internet → FIPS Mesh Reverse Proxy
 
-## Status: DRAFT — Awaiting operator approval
+## Status: Phase 1 COMPLETE — PoC verified
 ## Date: 2026-08-12
 
 ## Problem Statement
@@ -307,10 +307,71 @@ Nginx: would work but Caddy already running, adds nothing.
 
 ## Next Action
 
-**Awaiting operator approval of this plan.**
+Phase 1 PoC complete. Next phases can proceed:
 
-Immediate next step upon approval:
-1. Identify a home machine with a web server for Phase 1 PoC
-2. Add first Caddy route
-3. Add DNS record
-4. Test from external network
+- **Phase 2**: TCP/SSH proxy via socat
+- **Phase 3**: Dynamic routing with on-demand TLS ask endpoint
+- **Phase 4**: Access control + nftables integration
+- **Phase 5**: Bidirectional gate (unified with fips-exit-gate)
+
+## Phase 1 PoC Results (2026-08-12)
+
+### What was done
+
+1. **Test web server**: Wrote `scripts/fips-poc-server.py` — Python HTTP
+   server bound to T470's FIPS IPv6 address (fd97:77d4:...:dee8) on port 8888.
+   Serves a simple HTML page: "FIPS Ingress Gate PoC - served from T470".
+
+2. **FIPS mesh peering fix**: VPS2 did not have T470 as a configured peer.
+   Added T470 (npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72)
+   to VPS2's `/etc/fips/fips.yaml` peers list. Updated Ansible defaults
+   (`ansible/roles/fips/defaults/main.yml`) for persistence.
+
+3. **Caddy reverse proxy route**: Added to VPS2 `/etc/caddy/Caddyfile`:
+   ```
+   poc.orangesync.tech {
+       reverse_proxy [fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8]:8888
+   }
+   ```
+
+4. **DNS**: Wildcard `*.orangesync.tech` A record already points to
+   23.182.128.51 — no new DNS record needed. Caddy on-demand TLS handles
+   certificate provisioning automatically.
+
+5. **Reloaded Caddy**: `caddy reload --config /etc/caddy/Caddyfile` —
+   config validated successfully.
+
+### Verification (Gate 2)
+
+- **Local (T470)**: `curl -g "http://[fd97:...:dee8]:8888/"` → 200, "FIPS Ingress Gate PoC"
+- **VPS2 → T470 via FIPS mesh**: `curl -g "http://[fd97:...:dee8]:8888/"` → 200, "FIPS Ingress Gate PoC"
+- **External (public internet)**: `curl https://poc.orangesync.tech/` → 200, "FIPS Ingress Gate PoC"
+- **VPS2 → public URL**: `curl https://poc.orangesync.tech/` → 200, "FIPS Ingress Gate PoC"
+
+All tests returned HTTP 200 with the expected page content.
+
+### Key Findings
+
+- **FIPS mesh peering must be bidirectional**: VPS2 needed T470 in its peer
+  config for the Noise handshake to authenticate. T470 had VPS2 configured
+  but VPS2 did not reciprocate. The `configured_only` Nostr discovery policy
+  means only listed peers get authenticated.
+
+- **Wildcard DNS simplifies ingress**: The existing `*.orangesync.tech`
+  wildcard A record means new FIPS ingress subdomains need no DNS changes —
+  just add a Caddy route and reload.
+
+- **Caddy on-demand TLS works seamlessly**: Certificate was automatically
+  provisioned on first request to `poc.orangesync.tech`.
+
+- **FIPS mesh carries HTTP traffic natively**: VPS2 reached T470's web
+  server through the FIPS mesh (fips0 interface) with no additional routing
+  configuration beyond the peer peering fix.
+
+### Artifacts
+
+- `scripts/fips-poc-server.py` — PoC web server script
+- `ansible/roles/fips/defaults/main.yml` — Updated with T470 peer config
+- `docs/FIPS-INGRESS-GATE-PLAN.md` — This document, updated with PoC results
+- VPS2 `/etc/caddy/Caddyfile` — Added poc.orangesync.tech route (live)
+- VPS2 `/etc/fips/fips.yaml` — Added T470 peer (live)
