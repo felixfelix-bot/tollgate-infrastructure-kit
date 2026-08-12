@@ -10,12 +10,17 @@ Usage:
 
 import argparse
 import html
+import socket
 import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
 PAGE_TITLE = "FIPS Ingress Gate PoC"
 PAGE_BODY = "FIPS Ingress Gate PoC - served from T470"
+
+
+class IPv6HTTPServer(HTTPServer):
+    address_family = socket.AF_INET6
 
 
 class PoCHandler(BaseHTTPRequestHandler):
@@ -43,7 +48,7 @@ def main():
     args = parser.parse_args()
 
     addr = (args.host, args.port, 0, 0)
-    server = HTTPServer(addr, PoCHandler)
+    server = IPv6HTTPServer(addr, PoCHandler)
     print(f"[fips-poc] listening on [{args.host}]:{args.port}", file=sys.stderr)
     try:
         server.serve_forever()
