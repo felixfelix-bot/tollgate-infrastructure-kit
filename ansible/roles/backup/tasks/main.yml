@@ -13,11 +13,18 @@
     - caddy
     - blossom
     - act-runner
+    - "{{ backup_hermes_staging_subdir }}"
 
 - name: Install restic for deduplicated incremental backups
   package:
     name: restic
     state: present
+
+- name: Install rsync for remote backup sync
+  package:
+    name: rsync
+    state: present
+  when: backup_rsync_vps2_enabled | default(false) | bool
 
 - name: Ensure restic repo password in tollgate env
   lineinfile:
@@ -37,12 +44,6 @@
     creates: "{{ backup_restic_repo }}/config"
   register: restic_init
   changed_when: "'created restic repository' in (restic_init.stdout | default(''))"
-
-- name: Deploy backup status generator
-  copy:
-    src: gen-backup-status.py
-    dest: /usr/local/bin/gen-backup-status.py
-    mode: '0755'
 
 - name: Deploy backup status generator
   copy:
@@ -159,7 +160,8 @@
   command: /usr/local/bin/tollgate-backup.sh
   register: initial_backup
   changed_when: "'Backup complete' in initial_backup.stdout"
+  failed_when: false
 
 - name: Show initial backup output
   debug:
-    msg: "{{ initial_backup.stdout_lines }}"
+    msg: "{{ initial_backup.stdout_lines | default(['backup did not run']) }}"

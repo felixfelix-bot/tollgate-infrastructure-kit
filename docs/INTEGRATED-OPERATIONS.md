@@ -335,10 +335,7 @@ services:
       - ./secrets/friend-N/nsec:/secrets/nsec:ro
     networks:
       - hermes-net
-    deploy:
-      resources:
-        limits:
-          memory: 800M
+    mem_limit: 800M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 30s

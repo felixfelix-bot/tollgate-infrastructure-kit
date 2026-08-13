@@ -126,10 +126,6 @@ services:
     networks:
       - hermes-net
     mem_limit: 1g
-    deploy:
-      resources:
-        limits:
-          memory: 1G
 volumes:
   hermes-friend-N-data:
 networks:

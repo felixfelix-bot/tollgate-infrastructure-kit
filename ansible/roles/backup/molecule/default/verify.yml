@@ -1,0 +1,139 @@
+---
+- name: Verify backup role — script, timer, restic, Hermes staging dir
+  hosts: all
+  become: true
+  tasks:
+    - name: Verify backup script exists and is executable
+      ansible.builtin.stat:
+        path: /usr/local/bin/tollgate-backup.sh
+      register: backup_script_check
+
+    - name: Assert backup script exists and is executable
+      ansible.builtin.assert:
+        that:
+          - backup_script_check.stat.exists
+          - backup_script_check.stat.mode == "0755"
+        fail_msg: "Backup script missing or not executable"
+        success_msg: "Backup script exists and is executable"
+
+    - name: Verify backup systemd service exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/tollgate-backup.service
+      register: backup_service_check
+
+    - name: Assert backup service exists
+      ansible.builtin.assert:
+        that:
+          - backup_service_check.stat.exists
+        fail_msg: "Backup systemd service missing"
+        success_msg: "Backup systemd service exists"
+
+    - name: Verify backup systemd timer exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/tollgate-backup.timer
+      register: backup_timer_check
+
+    - name: Assert backup timer exists
+      ansible.builtin.assert:
+        that:
+          - backup_timer_check.stat.exists
+        fail_msg: "Backup systemd timer missing"
+        success_msg: "Backup systemd timer exists"
+
+    - name: Verify restic is installed
+      ansible.builtin.command: which restic
+      register: restic_check
+      changed_when: false
+
+    - name: Assert restic is installed
+      ansible.builtin.assert:
+        that:
+          - restic_check.rc == 0
+        fail_msg: "restic not installed"
+        success_msg: "restic is installed"
+
+    - name: Verify Hermes staging directory exists
+      ansible.builtin.stat:
+        path: "{{ tollgate_base_dir }}/backups/hermes"
+      register: hermes_staging_check
+
+    - name: Assert Hermes staging directory exists
+      ansible.builtin.assert:
+        that:
+          - hermes_staging_check.stat.exists
+          - hermes_staging_check.stat.isdir
+        fail_msg: "Hermes staging directory missing"
+        success_msg: "Hermes staging directory exists"
+
+    - name: Verify backup script contains Hermes volume backup logic
+      ansible.builtin.shell: grep -c 'hermes-.*-data' /usr/local/bin/tollgate-backup.sh
+      register: hermes_logic_check
+      changed_when: false
+
+    - name: Assert backup script has Hermes volume backup logic
+      ansible.builtin.assert:
+        that:
+          - hermes_logic_check.stdout | int > 0
+        fail_msg: "Backup script does not contain Hermes volume backup logic"
+        success_msg: "Backup script contains Hermes volume backup logic"
+
+    - name: Verify backup script contains rsync logic (disabled, should not be present)
+      ansible.builtin.shell: grep -c 'Rsyncing backups to VPS2' /usr/local/bin/tollgate-backup.sh
+      register: rsync_logic_check
+      changed_when: false
+      failed_when: false
+
+    - name: Assert rsync logic is absent when backup_rsync_vps2_enabled is false
+      ansible.builtin.assert:
+        that:
+          - rsync_logic_check.stdout | int == 0
+        fail_msg: "Rsync logic should not be present when backup_rsync_vps2_enabled is false"
+        success_msg: "Rsync logic correctly absent when disabled"
+
+    - name: Verify backup script contains 7-day retention cleanup
+      ansible.builtin.shell: grep -c 'RETENTION_DAYS' /usr/local/bin/tollgate-backup.sh
+      register: retention_check
+      changed_when: false
+
+    - name: Assert retention cleanup present
+      ansible.builtin.assert:
+        that:
+          - retention_check.stdout | int > 0
+        fail_msg: "Retention cleanup logic missing"
+        success_msg: "Retention cleanup logic present"
+
+    - name: Verify backup status generator exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/gen-backup-status.py
+      register: status_gen_check
+
+    - name: Assert backup status generator exists
+      ansible.builtin.assert:
+        that:
+          - status_gen_check.stat.exists
+        fail_msg: "gen-backup-status.py missing"
+        success_msg: "gen-backup-status.py exists"
+
+    - name: Verify backup timer is enabled
+      ansible.builtin.command: systemctl is-enabled tollgate-backup.timer
+      register: timer_enabled_check
+      changed_when: false
+
+    - name: Assert backup timer is enabled
+      ansible.builtin.assert:
+        that:
+          - "'enabled' in timer_enabled_check.stdout"
+        fail_msg: "Backup timer not enabled: {{ timer_enabled_check.stdout }}"
+        success_msg: "Backup timer is enabled"
+
+    - name: Verify restic repo config exists
+      ansible.builtin.stat:
+        path: "{{ tollgate_base_dir }}/backups/restic/config"
+      register: restic_repo_check
+
+    - name: Assert restic repo was initialised
+      ansible.builtin.assert:
+        that:
+          - restic_repo_check.stat.exists
+        fail_msg: "Restic repo not initialised"
+        success_msg: "Restic repo initialised"

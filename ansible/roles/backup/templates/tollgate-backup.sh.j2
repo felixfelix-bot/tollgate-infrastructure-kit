@@ -136,10 +136,49 @@ else
     log "SKIP: Caddy data dir not found"
 fi
 
+# --- Hermes tenant volume backups ---
+{% if backup_hermes_enabled %}
+HERMES_STAGING="$BACKUP_DIR/{{ backup_hermes_staging_subdir }}"
+mkdir -p "$HERMES_STAGING"
+{% for tenant in backup_hermes_tenants %}
+if docker volume inspect hermes-{{ tenant.name }}-data >/dev/null 2>&1; then
+    TMPFILE="$HERMES_STAGING/{{ tenant.name }}_${TIMESTAMP}.tar.gz"
+    log "Backing up Hermes volume: hermes-{{ tenant.name }}-data..."
+    if docker run --rm -v hermes-{{ tenant.name }}-data:/data:ro -v "$HERMES_STAGING":/backup alpine \
+        tar czf "/backup/{{ tenant.name }}_${TIMESTAMP}.tar.gz" -C /data . 2>/dev/null; then
+        log "Hermes volume backup done: {{ tenant.name }} ($(du -h "$TMPFILE" | cut -f1))"
+        if restic_add "$TMPFILE" hermes-{{ tenant.name }}; then
+            rm -f "$TMPFILE"
+        fi
+    else
+        rm -f "$TMPFILE"
+        bail "Hermes volume backup failed: {{ tenant.name }}"
+    fi
+else
+    log "SKIP: Hermes volume hermes-{{ tenant.name }}-data not found"
+fi
+{% endfor %}
+
+# Cleanup old Hermes volume archives
+find "$HERMES_STAGING" -name '*.tar.gz' -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+{% endif %}
+
+# --- rsync backups to VPS2 ---
+{% if backup_rsync_vps2_enabled and backup_rsync_vps2_host | length > 0 %}
+log "Rsyncing backups to VPS2 ({{ backup_rsync_vps2_host }})..."
+if rsync -az --delete -e "ssh -i {{ backup_rsync_vps2_key }} -o StrictHostKeyChecking=no" \
+    "$BACKUP_DIR/" "{{ backup_rsync_vps2_user }}@{{ backup_rsync_vps2_host }}:{{ backup_rsync_vps2_path }}/" 2>/dev/null; then
+    log "Rsync to VPS2 complete"
+else
+    bail "Rsync to VPS2 failed"
+fi
+{% endif %}
+
 # --- Cleanup old backups ---
 log "Cleaning up backups older than $RETENTION_DAYS days..."
 find "$BACKUP_DIR" -name '*.jsonl' -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
 find "$BACKUP_DIR" -name '*.tmp' -type f -mtime +1 -delete 2>/dev/null || true
+find "$BACKUP_DIR" -name '*.tar.gz' -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
 
 # --- restic retention (dedup snapshots: keep last N, prune rest) ---
 if restic_ready; then

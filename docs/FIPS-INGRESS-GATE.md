@@ -223,6 +223,15 @@ gate will expose similar services to the public internet via subdomains on
 - [x] Restart fips.service — now running, fips0 interface UP
 - [x] VPS2 FIPS address: `fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149`
 - [x] Peers connecting (Andre + 2 NAT-traversed peers)
+- [x] VPS2 firewall: opened 8443/tcp + 2121/udp (ufw)
+- [x] VPS2 nftables: added /etc/fips/fips.d/services.nft (port 22, 80, 443)
+- [x] T14Gen5 added VPS2 as peer in /etc/fips/fips.yaml
+- [x] Bidirectional ping confirmed (165-333ms RTT via mesh)
+- [x] SSH via FIPS mesh confirmed (root@testserver2, needs 30s timeout)
+- [x] Root cause of initial failures: FIPS mesh routing takes ~30s after peer handshake to establish data plane. Not a firewall issue.
+
+**Key finding:** SSH over FIPS mesh works but needs generous timeouts due to
+mesh latency (165-333ms RTT). Use `ConnectTimeout=30` in ssh config.
 
 ### Phase 2: Caddy FIPS routing
 

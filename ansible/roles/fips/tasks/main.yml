@@ -31,6 +31,28 @@
     path: /etc/fips
     state: directory
     mode: '0755'
+  tags: config
+
+- name: Apply UDP socket buffer sysctls
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value | string }}"
+    state: present
+    sysctl_set: yes
+    reload: yes
+  loop:
+    - { name: net.core.rmem_max, value: "{{ fips_rmem_max }}" }
+    - { name: net.core.wmem_max, value: "{{ fips_wmem_max }}" }
+    - { name: net.core.rmem_default, value: "{{ fips_rmem_default }}" }
+    - { name: net.core.wmem_default, value: "{{ fips_wmem_default }}" }
+  tags: config
+
+- name: Verify rmem_max is at least 2097152
+  shell: "test $(cat /proc/sys/net/core/rmem_max) -ge 2097152 && test $(cat /proc/sys/net/core/wmem_max) -ge 2097152"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  tags: verify
 
 - name: Auto-detect ethernet/wifi interface
   set_fact:

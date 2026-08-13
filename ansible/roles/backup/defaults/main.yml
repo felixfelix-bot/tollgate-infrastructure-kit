@@ -10,3 +10,13 @@ backup_grasp_git_dir: "{{ tollgate_base_dir }}/grasp/data/git"
 backup_mints_dir: "{{ tollgate_base_dir }}/mints"
 backup_routstr_dir: "{{ tollgate_base_dir }}/routstr/data"
 backup_caddy_dir: "{{ tollgate_base_dir }}/caddy/data"
+
+backup_hermes_enabled: true
+backup_hermes_base_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/hermes"
+backup_hermes_tenants: []
+backup_hermes_staging_subdir: hermes
+backup_rsync_vps2_enabled: false
+backup_rsync_vps2_host: "{{ vps2_ip | default('') }}"
+backup_rsync_vps2_user: "rsync-backup"
+backup_rsync_vps2_path: "/home/{{ backup_rsync_vps2_user }}/tollgate-backups"
+backup_rsync_vps2_key: "~/.ssh/id_ed25519"

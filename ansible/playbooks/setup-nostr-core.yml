@@ -1,0 +1,41 @@
+---
+- name: Deploy Nostr core infrastructure (minimal, Tier 1 only)
+  hosts: vps1
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    # --- Base infrastructure ---
+    - zram
+    - system
+    - docker
+    - cloudflare_dns
+    - caddy
+    # --- Tier 1: Core Nostr services ---
+    - strfry
+    - strfry_agg
+    - obelisk_relay
+    - blossom
+    - nsite_gateway
+    - ngit_relay
+    - nsyte_cli
+  vars:
+    blossom_mirror_enabled: false
+    blossom_upload_max_size: 10485760
+    strfry_agg_mapsize: "10G"
+    docker_log_max_size: "50m"
+    docker_log_max_file: "3"
+
+# Tier 2/3 services are opt-in via their individual playbooks:
+#   15-grasp, 22-backup, 23-relay-adv, 40-wot-sync, 11-mint-orchestrator,
+#   33-jitsi-meet, 34-bitcoin-core, etc. — run with:
+#   ansible-playbook ansible/playbooks/NN-service.yml
+# Full deploy (everything): make deploy  ->  setup-all.yml
+
+- name: Deploy watchdog (local health monitor + auto-redeploy)
+  hosts: localhost
+  connection: local
+  become: no
+  gather_facts: yes
+  roles:
+    - watchdog

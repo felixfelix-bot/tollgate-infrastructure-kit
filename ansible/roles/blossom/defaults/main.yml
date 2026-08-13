@@ -1,0 +1,13 @@
+---
+# blossom — Nostr file server (NIP-96 / Blossom BLOBs)
+
+# Mirror mode auto-downloads EVERY file referenced in any Nostr event the
+# server processes — not just your users' uploads, but any file from any npub
+# on any relay. Unauthenticated, uncapped, ~1GB/day growth. Off by default;
+# enable only behind a dedicated mirror-quota instance.
+blossom_mirror_enabled: false
+
+# Whitelist mode: only allow uploads from npubs in the follower graph
+# of blossom_whitelist_anchor_npub. When true, requirePubkeyInRule is set
+# and storage rules include the whitelist pubkeys.
+blossom_whitelist_enabled: true

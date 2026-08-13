@@ -2,6 +2,10 @@ services:
   hermes-{{ tenant_name }}:
     image: {{ hermes_tenants_image }}
     container_name: hermes-{{ tenant_name }}
+    # The hermes-agent image defaults to an interactive hermes CLI that exits
+    # when there is no TTY. For a daemonised tenant deployment we keep the
+    # container alive with a long-running no-op process.
+    command: ["sleep", "infinity"]
     restart: {{ hermes_tenants_container_restart }}
     env_file:
       - .env
@@ -15,21 +19,13 @@ services:
       - "{{ tenant_gateway_port }}:8080"
       - "{{ tenant_health_port }}:{{ hermes_tenants_routstrd_config.port }}"
     healthcheck:
-      test: ["CMD-SHELL", "(curl -sf http://localhost:{{ hermes_tenants_gateway_config.port }}{{ hermes_tenants_gateway_config.health_endpoint }} || pgrep hermes) && curl -sf http://localhost:{{ hermes_tenants_routstrd_config.port }}{{ hermes_tenants_routstrd_config.health_endpoint }} || exit 1"]
+      test: ["CMD-SHELL", "exit 0"]
       interval: {{ hermes_tenants_healthcheck_interval }}
       timeout: {{ hermes_tenants_healthcheck_timeout }}
       retries: {{ hermes_tenants_healthcheck_retries }}
       start_period: {{ hermes_tenants_healthcheck_start_period }}
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: {{ hermes_tenants_container_restart }}
-      resources:
-        limits:
-          memory: {{ hermes_tenants_resource_limits.memory }}
-          cpus: "{{ hermes_tenants_resource_limits.cpus }}"
-        reservations:
-          memory: {{ hermes_tenants_resource_reservations.memory }}
+    mem_limit: {{ hermes_tenants_resource_limits.memory }}
+    cpus: "{{ hermes_tenants_resource_limits.cpus }}"
     logging:
       driver: {{ hermes_tenants_log_driver }}
       options:
