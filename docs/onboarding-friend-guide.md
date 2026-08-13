@@ -30,6 +30,42 @@ https://chat.<your-domain>
 
 Replace `<your-domain>` with the domain your operator gave you (for example, `orangesync.tech`). The web client works in Chrome, Firefox, and Safari. Your identity is stored in the browser, so use the same browser every time.
 
+### CLI install via cargo (advanced)
+
+If you prefer a command-line client — or you want to script/automate messages to your Hermes bot — you can build `buzz-cli` from the official Buzz workspace. `buzz-cli` is the agent-first client: JSON in, JSON out, designed for terminals and automation.
+
+**Prerequisites:** Rust toolchain with Cargo (install from https://rustup.rs if you do not have it).
+
+**Build and install:**
+
+```bash
+git clone https://github.com/block/buzz.git
+cd buzz
+# Optional: check out a stable release tag
+# git checkout $(git describe --tags --abbrev=0)
+cargo install --path crates/buzz-cli --bin buzz-cli
+```
+
+This compiles `buzz-cli` and places the binary in `~/.cargo/bin/buzz-cli` (or wherever your Cargo install root is). Make sure `~/.cargo/bin` is on your `PATH`.
+
+**First-run configuration:**
+
+```bash
+export BUZZ_RELAY_URL="wss://relay.<your-domain>"
+export BUZZ_PRIVATE_KEY="nsec1..."
+buzz-cli status
+```
+
+Replace `wss://relay.<your-domain>` with your operator's relay URL and `nsec1...` with your Nostr secret key. If you do not have a key yet, generate one with Buzz desktop or any Nostr key tool first, and share the resulting `npub1...` with your operator.
+
+**When to use the CLI**
+
+- You work mostly in a terminal and want to send messages without a GUI.
+- You plan to write scripts or cron jobs that post to your Hermes group.
+- You are comfortable compiling Rust software from source.
+
+For most friends, the desktop or web client is the easier starting point. Use the CLI only if you need the terminal workflow.
+
 ### Importing an existing key (optional)
 
 If you already have a Nostr key (for example from Damus, Amethyst, or another client):
