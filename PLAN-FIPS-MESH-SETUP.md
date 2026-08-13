@@ -110,10 +110,10 @@ We run our own small mesh with only 4 machines (VPS2, DQ05, T14Gen5, T470). With
 |-----------|---------------------------------------------------|-------------------|-----------|--------------------------------|
 | VPS2 (HUB)| `npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82` | UDP + TCP (inbound) | TBD (auto-assigned by fips0) | Public IP 23.182.128.51, accepts inbound on UDP:2121 + TCP:8443 |
 | DQ05      | `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72` | UDP + Ethernet | TBD (auto-assigned by fips0) | FIPS v0.4.1 installed, config manually edited |
-| T14Gen5   | TBD (run `fipsctl show status`)                    | UDP + Ethernet    | TBD       | FIPS v0.4.1 installed, was peering with test-us03 (working). npub discovered after FIPS restarts with new config |
+| T14Gen5   | `npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh` | UDP + Ethernet | `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0` | FIPS v0.4.1 installed, was peering with test-us03 (working). Persistent identity confirmed |
 | T470      | TBD                                                | UDP + Ethernet    | TBD       | Backup machine, not yet set up. npub discovered after first FIPS install |
 
-> **Note on npub discovery:** T14Gen5 and T470 npubs are not yet known. FIPS generates a persistent identity on first run — the npub is created and stored in the identity file. After FIPS starts on these machines, run `fipsctl show status` to discover and record their npubs. Then add them to `fips_mesh_hosts` in the Ansible defaults and to `/etc/fips/hosts` on all other machines.
+> **Note on npub discovery:** T14Gen5's npub is now known: `npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh` (mesh IPv6: `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0`). T470's npub is still unknown — FIPS generates a persistent identity on first run. After FIPS starts on T470, run `fipsctl show status` to discover and record its npub. Then add it to `fips_mesh_hosts` in the Ansible defaults and to `/etc/fips/hosts` on all other machines.
 
 ### 1.3 Nostr Discovery
 
@@ -150,8 +150,8 @@ Other nodes in the mesh subscribe to the same relays with the same app tag and l
 | **Role**             | Laptop (spoke)                | Laptop (spoke)                | VPS (hub, exit node)          | Backup (spoke)                |
 | **FIPS version**     | v0.4.1 (installed)            | v0.4.1 (installed)            | v0.4.0-dev (needs upgrade)    | TBD (not yet installed)       |
 | **Target version**   | v0.4.1                        | v0.4.1                        | v0.4.1                        | v0.4.1                        |
-| **npub**             | `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72` | TBD (discover after restart) | `npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82` | TBD (discover after install) |
-| **Mesh IPv6**        | Auto-assigned by fips0         | Auto-assigned by fips0        | Auto-assigned by fips0        | Auto-assigned by fips0        |
+| **npub**             | `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72` | `npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh` | `npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82` | TBD (discover after install) |
+| **Mesh IPv6**        | Auto-assigned by fips0         | `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0` | Auto-assigned by fips0 | Auto-assigned by fips0 |
 | **Peer (private mesh)** | vps2 (23.182.128.51, UDP:2121 + TCP:8443) | vps2 (23.182.128.51, UDP:2121 + TCP:8443) | — (hub, accepts inbound from all laptops) | vps2 (23.182.128.51, UDP:2121 + TCP:8443) |
 | **Ethernet iface**   | wlp58s0 (auto-detect or manual)| wlp0s20f3 (set in inventory)  | N/A (VPS, no ethernet transport) | wlp58s0 (auto-detect or manual) |
 | **SSH user**         | c03rad0r                      | c03rad0r (local)              | debian                        | c03rad0r                      |
@@ -197,10 +197,10 @@ The following aliases are configured in `/etc/fips/hosts` on all machines:
 |-----------|----------------------------------------------------------------------|
 | vps2      | `npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82`  |
 | dq05      | `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72`  |
-| t14gen5   | TBD (add after discovering npub via `fipsctl show status`)          |
+| t14gen5   | `npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh` |
 | t470      | TBD (add after discovering npub via `fipsctl show status`)          |
 
-> T14Gen5 and T470 npubs are added to `fips_mesh_hosts` in the Ansible defaults and to the `fips-hosts.j2` template after their persistent identities are generated on first FIPS run.
+> T14Gen5's npub is now known and already added to `fips_mesh_hosts` in the Ansible defaults. T470's npub will be added after its persistent identity is generated on first FIPS run.
 
 ---
 
@@ -248,8 +248,8 @@ The following aliases are configured in `/etc/fips/hosts` on all machines:
 - Confirm T14Gen5's npub by running `fipsctl show status` before Ansible run
 
 **Steps (high-level):**
-1. Run `fipsctl show status` on T14Gen5 to discover and record the npub (persistent identity already exists from previous FIPS runs)
-2. Add T14Gen5's npub to the machine table in this document and to `/etc/fips/hosts` on other machines (via `fips_mesh_hosts` in Ansible defaults)
+1. Run `fipsctl show status` on T14Gen5 to confirm the npub (`npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh` — already recorded in this plan)
+2. T14Gen5's npub is already in `fips_mesh_hosts` in the Ansible defaults and `/etc/fips/hosts` template
 3. Ensure `t14gen5` inventory host has correct vars: `fips_ethernet_interface: wlp0s20f3`, peer=vps2
 4. Run the `fips` role against T14Gen5 (tag: `config`) — deploys config with VPS2 as peer
 5. Verify ethernet transport is active alongside UDP
@@ -343,7 +343,7 @@ The following aliases are configured in `/etc/fips/hosts` on all machines:
 1. Compile the full list of machine npubs:
    - VPS2: `npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82`
    - DQ05: `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72`
-   - T14Gen5: (from Phase 2 — discovered via `fipsctl show status`)
+   - T14Gen5: `npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh`
    - T470: (from Phase 4 — discovered via `fipsctl show status`)
 2. Update `fips_mesh_hosts` in `ansible/roles/fips/defaults/main.yml` to include all 4 machine shortname→npub mappings
 3. Update `/etc/fips/hosts` on each machine via the `fips-hosts.j2` template to include aliases for all 4 machines (vps2, dq05, t14gen5, t470)
@@ -455,11 +455,11 @@ Each task is designed as a kanban card suitable for assignment to a worker profi
 
 | Field              | Value |
 |--------------------|-------|
-| **Title**          | Apply Ansible fips role to T14Gen5 and record npub |
+| **Title**          | Apply Ansible fips role to T14Gen5 and confirm npub |
 | **Phase**          | 2 |
 | **Worker**         | worker-fips |
-| **Description**    | T14Gen5 has FIPS v0.4.1 with a previously working test-us03 peer (UDP). Run the Ansible `fips` role to formalize the config with VPS2 as peer (replacing test-us03). Discover and record the npub via `fipsctl show status`. Ensure ethernet transport is enabled on wlp0s20f3. |
-| **Acceptance criteria** | npub recorded in this plan; `fipsctl show peers` shows vps2; ethernet transport active; DNS resolves; idempotent |
+| **Description**    | T14Gen5 has FIPS v0.4.1 with a previously working test-us03 peer (UDP). Run the Ansible `fips` role to formalize the config with VPS2 as peer (replacing test-us03). Confirm the npub (`npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh`) via `fipsctl show status`. Ensure ethernet transport is enabled on wlp0s20f3. |
+| **Acceptance criteria** | npub confirmed (`npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh`); `fipsctl show peers` shows vps2; ethernet transport active; DNS resolves; idempotent |
 | **Quality gates**  | TDD: role idempotency check; tests: `--check` passes; docs: update machine table with npub; atomic commit; push |
 
 ### TASK-FIPS-04: Upgrade VPS2 FIPS to v0.4.1
