@@ -1,12 +1,123 @@
-# Friend Onboarding Guide
+# Friend Onboarding Guide — FIPS Mesh Edition
 
-This guide walks you through everything you need to start using your personal AI assistant hosted on the Tollgate infrastructure. You will learn how to install the Buzz chat client, connect to the relay, authenticate with your Nostr identity, talk to your Hermes AI agent, manage kanban tasks, dispatch workers, understand quality gates, use Cashu credits, and set up a NIP-05 identity.
+This guide walks you through everything you need to start using your personal AI assistant hosted on the Tollgate infrastructure. You will learn how to install the FIPS mesh software, configure a peer connection, install the Buzz chat client, connect to the relay, authenticate with your Nostr identity, talk to your Hermes AI agent, manage kanban tasks, dispatch workers, understand quality gates, use Cashu credits, verify your identity, SSH between mesh machines, and fix common problems.
 
 No prior knowledge of Nostr, Bitcoin, or AI tooling is required. Each section builds on the previous one. Follow them in order the first time; afterwards you can skip to whichever section you need as a reference.
 
 ---
 
-## 1. Installing Buzz
+## 1. Installing FIPS
+
+FIPS is the mesh networking layer that connects your machine to the Tollgate infrastructure and the other machines in the private mesh. It gives every machine a stable IPv6 address on the `fips0` TUN interface and lets you SSH between machines over that overlay, even when they are behind NAT.
+
+### What you need before starting
+
+- A Debian or Ubuntu machine (x86_64, either a laptop or a VPS)
+- `sudo` access
+- The FIPS `.deb` package URL for version `0.4.1`
+- Your operator has given you the bootstrap peer for the private mesh (VPS2)
+
+### Install the package
+
+```bash
+wget https://github.com/jmcorgan/fips/releases/download/v0.4.1/fips_0.4.1_amd64.deb
+sudo apt install ./fips_0.4.1_amd64.deb
+sudo systemctl enable --now fips fips-dns fips-firewall
+```
+
+This installs three systemd services:
+
+| Service | Purpose |
+|---|---|
+| `fips` | Main daemon — TUN interface, peer connections, transports |
+| `fips-dns` | DNS resolver for `*.fips` hostnames |
+| `fips-firewall` | nftables management for the fips0 interface |
+
+### Verify the install
+
+```bash
+sudo fipsctl show status
+```
+
+You should see:
+
+- FIPS version `0.4.1`
+- A generated npub (a long string starting with `npub1...`) — this is your machine's persistent mesh identity
+- The `fips0` interface is up
+
+If the command is not found, make sure `/usr/bin/fipsctl` exists and the package installed correctly. If the service failed to start, see Section 12.
+
+### First-run identity
+
+FIPS generates a persistent identity on first run. That identity is your machine's npub. Write it down — you will share it with your operator so they can add your machine to the mesh config, relay whitelist, and Buzz group.
+
+---
+
+## 2. Configuring Your Peer (Andre)
+
+Your operator has a private mesh with a hub at VPS2. You are adding an external peer — Andre — using the npub and UDP endpoint supplied by your operator.
+
+### Peer details
+
+| Field | Value |
+|---|---|
+| Alias | `Andre` |
+| npub | `npub1k3aerhf3f4ed9mrlu2zcusx3yruvzqyeut0kz5we5xd023jfgl0s8wcl6n` |
+| Transport | UDP |
+| Endpoint | `194.191.252.108:2121` |
+| Policy | `auto_connect` |
+
+### Add the peer to `/etc/fips/fips.yaml`
+
+Edit the file with `sudo`:
+
+```bash
+sudo nano /etc/fips/fips.yaml
+```
+
+Under the `peers:` key, add:
+
+```yaml
+peers:
+  - npub: "npub1k3aerhf3f4ed9mrlu2zcusx3yruvzqyeut0kz5we5xd023jfgl0s8wcl6n"
+    alias: "Andre"
+    addresses:
+      - transport: udp
+        addr: "194.191.252.108:2121"
+    connect_policy: auto_connect
+```
+
+Make sure the YAML indentation uses spaces, not tabs. Save and exit.
+
+### Add the host alias to `/etc/fips/hosts`
+
+```bash
+echo 'andre npub1k3aerhf3f4ed9mrlu2zcusx3yruvzqyeut0kz5we5xd023jfgl0s8wcl6n' | sudo tee -a /etc/fips/hosts
+```
+
+This lets you resolve `andre.fips` to Andre's mesh IPv6 address.
+
+### Restart FIPS
+
+```bash
+sudo systemctl restart fips
+sleep 30
+sudo fipsctl show peers
+```
+
+After about 30 seconds you should see Andre listed as `connected`. If not, see Section 12 (Troubleshooting).
+
+### Verify DNS
+
+```bash
+dig @::1 -p 5354 andre.fips AAAA +short
+```
+
+You should get back an IPv6 address in the FIPS mesh range.
+
+---
+
+## 3. Installing Buzz
 
 Buzz is a desktop and mobile Nostr client that supports NIP-29 group chat. It is the front-end you use to interact with your Hermes agent — think of it as your chat window into the system.
 
@@ -87,7 +198,7 @@ Once Buzz is set up, copy your npub (`npub1...`) and send it to your operator (t
 
 ---
 
-## 2. Connecting to the Relay
+## 4. Connecting to the Relay
 
 The relay is the server that routes messages between you and your Hermes agent. It uses the Nostr protocol over WebSocket. Your operator has deployed a relay at a specific URL.
 
@@ -122,7 +233,7 @@ Your operator runs a private relay with NIP-42 authentication. Public relays lik
 
 ---
 
-## 3. NIP-42 Authentication
+## 5. NIP-42 Authentication
 
 NIP-42 is the Nostr authentication protocol that lets the relay verify you are who you claim to be. The relay challenges you to sign a cryptographic proof with your private key. This prevents impersonation and keeps the relay private.
 
@@ -149,7 +260,7 @@ Your private key (`nsec`) never leaves your device. Buzz signs the challenge loc
 
 ---
 
-## 4. Joining Your Group
+## 6. Joining Your Group
 
 Once authenticated, you need to join the NIP-29 group that was created for you. A group is a channel where you and your Hermes bot exchange messages. Think of it as a private chat room.
 
@@ -165,7 +276,7 @@ If you do not see any groups:
 
 - Confirm with your operator that your npub was added to the group.
 - Try refreshing Buzz (close and reopen).
-- Check that you are connected to the correct relay (Section 2).
+- Check that you are connected to the correct relay (Section 4).
 
 ### Group structure
 
@@ -189,7 +300,7 @@ or paste the bot's npub directly. The bot will respond in the same channel.
 
 ---
 
-## 5. Messaging Hermes
+## 7. Messaging Hermes
 
 Hermes is your AI assistant. You talk to it through the Buzz group chat, just like messaging a person. Hermes can answer questions, write code, research topics, manage tasks, and run automated workflows.
 
@@ -205,9 +316,9 @@ Hermes processes your message, routes it through the Routstr LLM proxy to the AI
 ### What Hermes can do
 
 - **Answer questions** — general knowledge, coding help, research, writing
-- **Create and manage tasks** — using the kanban system (Section 6)
-- **Dispatch workers** — spin up sub-agents for parallel work (Section 7)
-- **Run quality gates** — enforce testing and review standards (Section 8)
+- **Create and manage tasks** — using the kanban system (Section 8)
+- **Dispatch workers** — spin up sub-agents for parallel work (Section 9)
+- **Run quality gates** — enforce testing and review standards (Section 10)
 - **Schedule cron jobs** — recurring automated tasks
 - **Read and write files** — within its workspace
 - **Search the web** — for up-to-date information
@@ -225,7 +336,7 @@ If you have a large request (a long document, multiple files, a detailed spec), 
 
 ---
 
-## 6. Kanban Boards
+## 8. Kanban Boards and Task Management
 
 Kanban is a task management system built into Hermes. It lets you create tasks, assign them to workers, and track progress through stages. You interact with kanban boards by messaging Hermes in the Buzz group.
 
@@ -272,7 +383,7 @@ Hermes will list all tasks and their columns, along with any comments or notes f
 
 ### Task assignment
 
-Each task can be assigned to a worker profile. By default, Hermes works on tasks itself. For parallel work, you can dispatch tasks to specialist workers (Section 7).
+Each task can be assigned to a worker profile. By default, Hermes works on tasks itself. For parallel work, you can dispatch tasks to specialist workers (Section 9).
 
 ```
 Assign task "Write integration tests" to worker-inspector
@@ -290,13 +401,13 @@ Comments are visible to all workers and persist across sessions.
 
 ---
 
-## 7. Dispatching Workers
+## 9. Dispatching Workers
 
 Workers are specialised sub-agents that Hermes can spawn to handle tasks in parallel. Each worker has its own conversation context, terminal session, and toolset. Workers are useful for long-running or complex tasks that should not block your main conversation.
 
 ### How dispatching works
 
-1. You create a task on a kanban board (Section 6).
+1. You create a task on a kanban board (Section 8).
 2. You tell Hermes to dispatch it to a worker.
 3. Hermes spawns the worker with the task details.
 4. The worker runs independently, reports progress, and completes the task.
@@ -352,7 +463,7 @@ Hermes will report which workers are running, what they are doing, and any resul
 
 ---
 
-## 8. Quality Gates
+## 10. Quality Gates
 
 Quality gates are automated checks that run on code changes before they are considered complete. They enforce testing, review, and code quality standards. You do not need to set them up — they are pre-loaded into your Hermes instance.
 
@@ -399,7 +510,7 @@ They prevent common problems: untested code, security vulnerabilities, broken bu
 
 ---
 
-## 9. Cashu Credits Flow
+## 11. Cashu Credits Flow
 
 Cashu is a Bitcoin-based ecash system that handles AI credits. Your Hermes instance uses Cashu tokens to pay for LLM inference through the Routstr proxy. Credits are issued by your operator and consumed as you use the AI.
 
@@ -461,76 +572,166 @@ Each friend has their own API key in Routstr with its own quota. Your usage does
 
 ---
 
-## 10. NIP-05 Identity Verification
+## 12. SSH via the FIPS Mesh
 
-NIP-05 is a Nostr standard for verifying that a Nostr identity belongs to a specific internet domain. It is similar to the blue checkmark on social media — it proves you control the domain associated with your npub.
+Once FIPS is running and peers are connected, every machine gets a stable `.fips` hostname. You can SSH between machines over the encrypted mesh overlay instead of using public IP addresses or a separate VPN.
 
-### Why it matters
+### DNS hostnames in the mesh
 
-Without NIP-05, anyone can create a Nostr key and claim to be anyone. NIP-05 links your npub to a domain you control, letting others verify your identity. This matters for:
+| Hostname | Machine | Example user |
+|---|---|---|
+| `vps2.fips` | VPS2 hub | `debian` |
+| `dq05.fips` | DQ05 laptop | `c03rad0r` |
+| `t14gen5.fips` | T14Gen5 laptop | `c03rad0r` |
+| `t470.fips` | T470 laptop | `c03rad0r` |
+| `andre.fips` | Andre's machine | (operator-supplied) |
 
-- **Trust** — other users can confirm you are who you say you are.
-- **Relay access** — some relays use NIP-05 as an additional authentication factor.
-- **Profile discovery** — NIP-05 verified profiles appear in directories and search.
+### Simple SSH over FIPS
 
-### How NIP-05 works
+From a machine that is part of the mesh:
 
-A NIP-05 record is a JSON file hosted on a web domain at a well-known URL:
-
-```
-https://<your-domain>/.well-known/nostr.json?name=<username>
-```
-
-The file maps a username to an npub:
-
-```json
-{
-  "names": {
-    "alice": "npub1abcdef..."
-  }
-}
+```bash
+ssh debian@vps2.fips
 ```
 
-When a client (like Buzz) looks up `alice@your-domain`, it fetches this URL and checks that the npub matches.
+If DNS, peer connectivity, and SSH keys are set up correctly, you will be logged into VPS2 over the `fips0` interface.
 
-### Setting up NIP-05 (if your operator provides it)
+### Handy `~/.ssh/config` snippet
 
-Your operator may offer NIP-05 verification through the infrastructure. If so:
+Add this once to make all `.fips` hostnames easy to use:
 
-1. Ask the operator to add your npub to the NIP-05 configuration.
-2. Provide your preferred username (for example, `alice`).
-3. The operator adds your entry to the `.well-known/nostr.json` file on the domain.
-4. In Buzz, go to your profile settings and set your NIP-05 identifier to `alice@your-domain`.
-5. Buzz will verify the identifier. If it matches, you get a verified badge.
-
-### Setting up NIP-05 (on your own domain)
-
-If you have your own domain:
-
-1. Create a directory `.well-known/` on your web server.
-2. Create a file `nostr.json` with your npub:
-
-```json
-{
-  "names": {
-    "yourname": "npub1yournpubhere..."
-  }
-}
+```ssh-config
+Host *.fips
+    User c03rad0r
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
 ```
 
-3. Serve it at `https://yourdomain.com/.well-known/nostr.json` with CORS headers (`Access-Control-Allow-Origin: *`).
-4. In Buzz, set your NIP-05 identifier to `yourname@yourdomain.com`.
-5. Verify in Buzz settings.
+For hosts that use a different username (like `debian` on VPS2), specify the user on the command line:
 
-### Verifying it works
+```bash
+ssh debian@vps2.fips
+```
 
-Once configured, your profile in Buzz (and any Nostr client) will show a verified checkmark next to your NIP-05 identifier. Other users can look you up by `yourname@yourdomain.com` instead of copying your npub.
+### Verifying you are using FIPS
 
-### Troubleshooting NIP-05
+On the target machine, check the incoming connection:
 
-- **Not verifying**: Check that the JSON file is accessible at the correct URL in a browser. Check CORS headers are set. Verify the npub in the file matches your npub exactly.
-- **Wrong domain**: The domain in your NIP-05 identifier must match the domain hosting the `.well-known/nostr.json` file.
-- **Cached old result**: Some clients cache NIP-05 lookups. Restart Buzz to force a re-check.
+```bash
+ss -tn | grep :22
+```
+
+The source address should be a mesh IPv6 address, not your public or LAN IP.
+
+---
+
+## 13. Troubleshooting
+
+If something is not working, use the commands below to diagnose the most common problems.
+
+### FIPS daemon not starting
+
+```bash
+# Check service status
+sudo systemctl status fips fips-dns fips-firewall
+
+# Read recent logs
+journalctl -u fips -n 50 --no-pager
+
+# Make sure the TUN module is loaded
+sudo modprobe tun
+
+# Check config syntax
+sudo cat /etc/fips/fips.yaml
+
+# Verify installed package
+sudo dpkg -l | grep fips
+```
+
+### No peers connected
+
+```bash
+# Show peer states
+sudo fipsctl show peers
+
+# Check the peer config
+sudo grep -A5 'peers:' /etc/fips/fips.yaml
+
+# Test reachability to the peer's UDP port
+nc -zv 194.191.252.108 2121
+
+# Check Nostr relay reachability
+curl -s -o /dev/null -w "%{http_code}" https://relay.damus.io
+
+# Restart FIPS and wait
+sudo systemctl restart fips
+sleep 30
+sudo fipsctl show peers
+```
+
+### `.fips` DNS not resolving
+
+```bash
+# Check fips-dns is listening
+ss -lunp | grep 5354
+
+# Query directly
+sudo dig @::1 -p 5354 andre.fips AAAA +short
+
+# Check /etc/fips/hosts
+sudo cat /etc/fips/hosts
+
+# Re-run DNS setup
+sudo /usr/lib/fips/fips-dns-setup
+sudo systemctl restart systemd-resolved
+```
+
+### SSH over FIPS fails
+
+```bash
+# Verify DNS resolves
+dig @::1 -p 5354 vps2.fips AAAA +short
+
+# Verify peer is connected
+sudo fipsctl show peers
+
+# Verify fips0 is up
+ip link show fips0
+
+# Check the SSH nftables rule
+sudo nft list table inet fips-ssh
+
+# Try without SSH config quirks
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null debian@vps2.fips
+```
+
+### Relay or Buzz authentication fails
+
+- Confirm your npub is whitelisted by the operator.
+- Confirm you are connecting to `wss://relay.<your-domain>` and not a public relay.
+- Restart Buzz and wait 10 seconds for NIP-42 authentication.
+- Ask the operator to check relay logs for your npub.
+
+### Cashu credits not working
+
+```
+How many AI credits do I have left?
+```
+
+If Hermes reports zero or an error, message your operator. They can check the Routstr proxy and mint-orchestrator status.
+
+### General check
+
+Run this quick health check from any mesh node:
+
+```bash
+sudo systemctl is-active fips fips-dns fips-firewall
+sudo fipsctl show status
+sudo fipsctl show peers
+sudo dig @::1 -p 5354 vps2.fips AAAA +short
+```
+
+If all four commands return good results, the mesh layer is healthy and the problem is likely in Buzz, the relay, or Hermes configuration.
 
 ---
 
@@ -538,7 +739,10 @@ Once configured, your profile in Buzz (and any Nostr client) will show a verifie
 
 | What | Where | How |
 |---|---|---|
-| Chat client | Buzz desktop app or `https://chat.<domain>` | Install, connect to relay |
+| Mesh software | FIPS daemon | `sudo apt install ./fips_0.4.1_amd64.deb` |
+| Peer config | `/etc/fips/fips.yaml` | Add Andre's npub + UDP endpoint |
+| Host aliases | `/etc/fips/hosts` | `andre <npub>` |
+| Chat client | Buzz desktop or `https://chat.<domain>` | Install, connect to relay |
 | Relay URL | `wss://relay.<domain>` | Add in Buzz relay settings |
 | Authentication | NIP-42 (automatic) | Whitelist your npub with operator |
 | Group chat | NIP-29 group in Buzz | Operator adds your npub to group |
@@ -547,7 +751,7 @@ Once configured, your profile in Buzz (and any Nostr client) will show a verifie
 | Workers | Dispatch via Hermes | `Dispatch task "..." to worker-admin` |
 | Quality gates | Automatic on code tasks | `Show quality gate results` |
 | AI credits | Cashu via Routstr | `How many credits do I have?` |
-| Identity | NIP-05 on your domain | Set in Buzz profile settings |
+| SSH over mesh | `<host>.fips` | `ssh debian@vps2.fips` |
 
 ---
 
@@ -556,11 +760,8 @@ Once configured, your profile in Buzz (and any Nostr client) will show a verifie
 If something is not working:
 
 1. Check the relevant section of this guide.
-2. Ask in the Buzz group — your operator and Hermes bot are both there.
-3. For infrastructure issues (relay down, credits not working, container crashes), message your operator directly.
+2. Run the quick health check in Section 13.
+3. Ask in the Buzz group — your operator and Hermes bot are both there.
+4. For infrastructure issues (relay down, credits not working, FIPS daemon crashes), message your operator directly.
 
-Your operator has access to server logs, container status, and the mint configuration. Most issues are resolved by the operator restarting a service or adjusting a configuration.
-
----
-
-*This guide is part of the Tollgate Infrastructure Kit. For the operator-facing documentation, see [Getting Started](getting-started.md) and [Configuration Reference](configuration.md).*
+Your operator has access to server logs, container status, FIPS peer state, and the mint configuration. Most issues are resolved by the operator restarting a service or adjusting a configuration.
