@@ -1,0 +1,25 @@
+fips_external_addr: "23.182.128.51:8443"
+# Pin to the relay list currently live in VPS2's /etc/fips/fips.yaml
+fips_advertise_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://offchain.pub"
+fips_dm_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://offchain.pub"
+fips_peers:
+  - npub: "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
+    alias: "T470"
+    via_nostr: true
+    addresses:
+      - transport: udp
+        addr: "85.242.81.234:2121"
+      - transport: tcp
+        addr: "85.242.81.234:8443"
+    connect_policy: auto_connect
+  - npub: "npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh"
+    alias: "t14gen5"
+    via_nostr: true
+    addresses: []
+    connect_policy: auto_connect

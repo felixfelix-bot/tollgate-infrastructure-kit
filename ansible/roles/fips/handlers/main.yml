@@ -9,7 +9,7 @@
     state: restarted
 
 - name: reload nftables
-  command: nft -f /etc/fips/fips.d/ssh.nft
+  command: nft -f /etc/fips/fips.nft
   when: ansible_facts['distribution'] == 'Debian'
 
 - name: restart fips-dns

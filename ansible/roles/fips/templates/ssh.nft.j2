@@ -1,6 +1,4 @@
-table inet fips-ssh {
-    chain input {
-        type filter hook input priority 0; policy accept;
-        iifname "fips0" tcp dport {{ fips_mesh_ssh_port }} accept
-    }
-}
+# Included inline into the inbound chain of table inet fips via
+# /etc/fips/fips.nft: include "/etc/fips/fips.d/*.nft"
+# Must contain bare rules only (no table/chain wrapper).
+tcp dport {{ fips_mesh_ssh_port }} accept
