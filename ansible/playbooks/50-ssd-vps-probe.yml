@@ -1,0 +1,16 @@
+---
+- name: Deploy SSD VPS Dual-Vantage Probe
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    # Override these for your environment
+    ssd_vps_probe_targets:
+      - 64.188.7.38
+      - 66.92.204.38
+    ssd_vps_probe_v2_11_task_id: t_v2_11_ssd_ready
+
+  roles:
+    - role: ssd_vps_probe
+      tags: [probe, ssd]
