@@ -892,6 +892,7 @@ multi-tenant deployment (B1-B5). C1-C4 can proceed in parallel once A8
 - [FIPS Ingress Gate](FIPS-INGRESS-GATE.md) — public internet → FIPS mesh reverse proxy
 - [FIPS Mesh Deployment Plan](FIPS-MESH-DEPLOYMENT-PLAN.md) — deployment execution plan
 - [Friend Onboarding Guide](onboarding-friend-guide.md) — user-facing guide for friends
+- [Operator Guide](operator-guide.md) — operator-facing guide: add/remove friends, credits, monitoring, backup
 - [Multi-Tenant Comprehensive Plan](../PLAN-multi-tenant-comprehensive.md) — full implementation plan
 - [Roadmap](../ROADMAP.md) — decisions, adversarial review findings, task breakdown
 - [Services Overview](services.md) — full service inventory

@@ -1,6 +1,6 @@
 # Friend Onboarding Guide — FIPS Mesh Edition
 
-This guide walks you through everything you need to start using your personal AI assistant hosted on the Tollgate infrastructure. You will learn how to install the FIPS mesh software, configure a peer connection, install the Buzz chat client, connect to the relay, authenticate with your Nostr identity, talk to your Hermes AI agent, manage kanban tasks, dispatch workers, understand quality gates, use Cashu credits, verify your identity, SSH between mesh machines, and fix common problems.
+This guide walks you through everything you need to start using your personal AI assistant hosted on the Tollgate infrastructure. You will learn how to install the FIPS mesh software, configure a peer connection, install the Buzz chat client, connect to the relay, authenticate with your Nostr identity, talk to your Hermes AI agent, manage kanban tasks, dispatch workers, understand quality gates, use Cashu credits, SSH between mesh machines, and fix common problems.
 
 No prior knowledge of Nostr, Bitcoin, or AI tooling is required. Each section builds on the previous one. Follow them in order the first time; afterwards you can skip to whichever section you need as a reference.
 
@@ -123,7 +123,7 @@ Buzz is a desktop and mobile Nostr client that supports NIP-29 group chat. It is
 
 ### Desktop (recommended)
 
-1. Go to the Buzz releases page: https://github.com/obelisk-app/buzz/releases
+1. Go to the Buzz releases page: https://github.com/block/buzz/releases
 2. Download the build for your operating system:
    - **macOS**: `.dmg` file (Apple Silicon or Intel depending on your Mac)
    - **Windows**: `.exe` installer
@@ -162,12 +162,12 @@ This compiles `buzz-cli` and places the binary in `~/.cargo/bin/buzz-cli` (or wh
 **First-run configuration:**
 
 ```bash
-export BUZZ_RELAY_URL="wss://relay.<your-domain>"
+export BUZZ_RELAY_URL="wss://chat.<your-domain>"
 export BUZZ_PRIVATE_KEY="nsec1..."
 buzz-cli status
 ```
 
-Replace `wss://relay.<your-domain>` with your operator's relay URL and `nsec1...` with your Nostr secret key. If you do not have a key yet, generate one with Buzz desktop or any Nostr key tool first, and share the resulting `npub1...` with your operator.
+Replace `wss://chat.<your-domain>` with your operator's chat relay URL and `nsec1...` with your Nostr secret key. If you do not have a key yet, generate one with Buzz desktop or any Nostr key tool first, and share the resulting `npub1...` with your operator.
 
 **When to use the CLI**
 
@@ -200,36 +200,42 @@ Once Buzz is set up, copy your npub (`npub1...`) and send it to your operator (t
 
 ## 4. Connecting to the Relay
 
-The relay is the server that routes messages between you and your Hermes agent. It uses the Nostr protocol over WebSocket. Your operator has deployed a relay at a specific URL.
+The relay is the server that routes messages between you and your Hermes agent. It uses the Nostr protocol over WebSocket. Your operator has deployed two relays:
+
+- **Chat relay** (`chat.<your-domain>`) — the NIP-29 group-chat relay where your Hermes bot lives. This is the one you need.
+- **General relay** (`relay.<your-domain>`) — a general-purpose Nostr relay for event storage. Optional for friends; Buzz can use it for profile metadata and public posts.
 
 ### Relay URL
 
-Ask your operator for the relay URL. It looks like:
+Ask your operator for the chat relay URL. It looks like:
 
 ```
-wss://relay.<your-domain>
+wss://chat.<your-domain>
 ```
 
-For example: `wss://relay.orangesync.tech`
+For example: `wss://chat.orangesync.tech`
+
+> **Important:** Use the `chat.` subdomain, not `relay.`. The `relay.` subdomain is a general-purpose Nostr relay (strfry) that does not host NIP-29 groups. Your Hermes bot only listens on the chat relay.
 
 ### Adding the relay in Buzz
 
 1. Open Buzz settings.
 2. Navigate to the **Relays** section.
 3. Click **Add Relay** (or the `+` button).
-4. Paste the relay URL: `wss://relay.<your-domain>`
+4. Paste the chat relay URL: `wss://chat.<your-domain>`
 5. Enable both **Read** and **Write** for this relay.
 6. Save.
 
 Buzz will attempt to connect immediately. You should see a green or connected indicator next to the relay. If it stays red or says "disconnected":
 
 - Check that the URL is correct (no trailing slash, starts with `wss://`)
+- Verify you are using `chat.` and not `relay.` — the two subdomains serve different relays
 - Verify your internet connection
 - Ask the operator to confirm the relay is running
 
 ### Why only this relay
 
-Your operator runs a private relay with NIP-42 authentication. Public relays like `wss://relay.damus.io` will not have your groups or your Hermes bot. Always connect to your operator's relay. You can connect to public relays for general Nostr use, but your Hermes interaction happens exclusively on the private relay.
+Your operator runs a private chat relay with NIP-42 authentication. Public relays like `wss://relay.damus.io` will not have your groups or your Hermes bot. Always connect to your operator's chat relay. You can connect to public relays for general Nostr use, but your Hermes interaction happens exclusively on the private chat relay.
 
 ---
 
@@ -708,7 +714,7 @@ ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null debian@vps2.fips
 ### Relay or Buzz authentication fails
 
 - Confirm your npub is whitelisted by the operator.
-- Confirm you are connecting to `wss://relay.<your-domain>` and not a public relay.
+- Confirm you are connecting to `wss://chat.<your-domain>` and not a public relay or the `relay.` subdomain.
 - Restart Buzz and wait 10 seconds for NIP-42 authentication.
 - Ask the operator to check relay logs for your npub.
 
@@ -743,7 +749,7 @@ If all four commands return good results, the mesh layer is healthy and the prob
 | Peer config | `/etc/fips/fips.yaml` | Add Andre's npub + UDP endpoint |
 | Host aliases | `/etc/fips/hosts` | `andre <npub>` |
 | Chat client | Buzz desktop or `https://chat.<domain>` | Install, connect to relay |
-| Relay URL | `wss://relay.<domain>` | Add in Buzz relay settings |
+| Relay URL | `wss://chat.<domain>` | Add in Buzz relay settings (not `relay.`) |
 | Authentication | NIP-42 (automatic) | Whitelist your npub with operator |
 | Group chat | NIP-29 group in Buzz | Operator adds your npub to group |
 | AI assistant | Message in group | `@botname <your message>` |
