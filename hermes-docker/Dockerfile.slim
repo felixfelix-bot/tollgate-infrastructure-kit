@@ -31,6 +31,10 @@ RUN touch ./README.md
 # Use --extra messaging for nostr adapter, --extra anthropic for z.ai
 RUN uv sync --frozen --no-install-project --extra messaging --extra anthropic
 
+# Explicitly install coincurve for Nostr signing (lazy import, not in extras)
+# Pinned to known-good version with cp313 wheels
+RUN uv pip install --no-cache-dir "coincurve==21.0.0"
+
 # Copy source and install hermes itself
 COPY . .
 RUN uv pip install --no-cache-dir --no-deps -e "."
@@ -145,6 +149,19 @@ RUN if [ -n "${HERMES_GIT_SHA}" ]; then \
         printf '%s\n' "${HERMES_GIT_SHA}" > /opt/hermes/.hermes_build_sha && \
         chmod a-w /opt/hermes /opt/hermes/.hermes_build_sha; \
     fi
+
+# ---------- BUILD-TIME HARD GATE ----------
+# Verify coincurve is importable and can sign (non-lazy verification)
+# This ensures the image fails to build if coincurve is missing or broken
+RUN /opt/hermes/.venv/bin/python -c "
+import coincurve
+from coincurve import PrivateKey
+# Test actual signing - this would fail if ABI is broken
+pk = PrivateKey(bytes(range(32)))
+sig = pk.sign(b'x')
+assert len(sig) > 0, 'Signing failed'
+print('coincurve gate: OK - import and sign working')
+"
 
 ENTRYPOINT [ "/init", "/opt/hermes/docker/main-wrapper.sh" ]
 CMD [ ]
