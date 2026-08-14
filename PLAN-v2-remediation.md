@@ -282,3 +282,13 @@ ANYTIME    T5.1 SSD probe (cron) ──► on SSD return: T5.2 checklist ──�
 | 3 retry-budget burn | — | T3.1 gate + T3.2 pause/resume + T3.3 worker taxonomy |
 | 4 VPS2 meltdown | (tmux/off-peak ops discipline) | T4.1 caps + slice guards + zram, T4.2 early alerts, T4.3 post-mortem |
 | 5 SSD VPS offline | — | T5.1 probe+ticket, T5.2 rehearsal, D10 policy |
+
+## DECISIONS LOCKED (operator, 2026-08-15 ~04:15 IST)
+
+Top-level: D1=A (in-place fix AND bake coincurve into image) · D2=C (pause free by default, kimi-k3 overflow only per-task with operator approval) · D3=A (caps on VPS2 now) · D4=A+B (operator checks provider console; probe cron watches) · D5=A (E2E first, debts parallel).
+
+Consultant D1–D10: adopt all recommendations (canary tag :nostr-slim2, HTTP-only healthcheck immediate, board-pause + sweeper, proxy-log 503 detection, FIPS peer OOB, 1g/1.0 caps per hermes tenant, converge after E2E green off-peak, worker-skill patch manager-applied, 48h SSD window).
+
+Defaults approved: (1) scratch VPS ~$5/mo YES if SSD still dark after console check / 48h window — used for V2-12 rehearsal + second E2E target; (2) cross-profile kanban-worker skill edit YES (T3.3, manager applies patch).
+
+Scheduling: 16 tasks on hermes-for-friends board 04:09 IST, task_links enforced. Reminder to operator: SSD console check Sun Aug 16 lunch (cron a2e7c162b33c).
