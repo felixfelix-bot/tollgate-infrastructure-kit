@@ -8,6 +8,9 @@ services:
     restart: {{ hermes_tenants_container_restart }}
     env_file:
       - .env
+    environment:
+      # Route LLM calls through routstrd sidecar for Cashu payment handling
+      LLM_PROXY_URL: http://routstrd-{{ tenant_name }}:8008/v1
     volumes:
       - hermes-{{ tenant_name }}-data:/data
       - ./config:/config
@@ -17,7 +20,9 @@ services:
       - hermes-net-{{ tenant_name }}
     ports:
       - "{{ tenant_gateway_port }}:8080"
-      - "{{ tenant_health_port }}:{{ hermes_tenants_routstrd_config.port }}"
+    depends_on:
+      routstrd-{{ tenant_name }}:
+        condition: service_healthy
     healthcheck:
       # Check that the Hermes gateway HTTP endpoint is responding
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
@@ -35,10 +40,38 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  routstrd-{{ tenant_name }}:
+    image: {{ hermes_tenants_routstrd_image }}
+    container_name: routstrd-{{ tenant_name }}
+    restart: {{ hermes_tenants_container_restart }}
+    volumes:
+      - routstrd-{{ tenant_name }}-data:/data
+    networks:
+      - routstr_default
+      - hermes-net-{{ tenant_name }}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8008/health || exit 1"]
+      interval: {{ hermes_tenants_healthcheck_interval }}
+      timeout: {{ hermes_tenants_healthcheck_timeout }}
+      retries: {{ hermes_tenants_healthcheck_retries }}
+      start_period: {{ hermes_tenants_healthcheck_start_period }}
+    mem_limit: {{ hermes_tenants_routstrd_resource_limits.memory }}
+    cpus: "{{ hermes_tenants_routstrd_resource_limits.cpus }}"
+    logging:
+      driver: {{ hermes_tenants_log_driver }}
+      options:
+        max-size: {{ hermes_tenants_log_max_size }}
+        max-file: "{{ hermes_tenants_log_max_file }}"
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   hermes-{{ tenant_name }}-data:
     external: true
     name: hermes-{{ tenant_name }}-data
+  routstrd-{{ tenant_name }}-data:
+    external: true
+    name: routstrd-{{ tenant_name }}-data
 
 networks:
   routstr_default:

@@ -90,6 +90,14 @@
   loop_control:
     label: "{{ item.name }}"
 
+- name: Create per-tenant routstrd volume for wallet persistence
+  community.docker.docker_volume:
+    name: "routstrd-{{ item.name }}-data"
+    state: present
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Deploy per-tenant Docker Compose files
   ansible.builtin.template:
     src: docker-compose.tenant.yml.j2
@@ -116,10 +124,7 @@
       NOSTR_RELAYS={{ hermes_tenants_nostr_relays }}
       NOSTR_GROUPS={{ hermes_tenants_nostr_groups }}
       NOSTR_NSEC_PATH=/nsec/nsec.txt
-      LLM_PROXY_URL={{ hermes_tenants_llm_proxy_url }}
       DEPLOYMENT_ADMIN_NSEC={{ hermes_tenants_deployment_admin_nsec }}
-      ROUTSTRD_PORT={{ hermes_tenants_routstrd_config.port }}
-      ROUTSTRD_HEALTH_ENDPOINT={{ hermes_tenants_routstrd_config.health_endpoint }}
     dest: "{{ hermes_tenants_base_dir }}/{{ item.name }}/.env"
     mode: "0600"
   no_log: true
@@ -148,6 +153,18 @@
   loop_control:
     label: "{{ item.name }}"
 
+- name: Wait for routstrd sidecar containers to be healthy
+  ansible.builtin.command: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} routstrd-{{ item.name }}"
+  register: routstrd_health_check
+  until: routstrd_health_check.stdout == "healthy"
+  retries: 30
+  delay: 5
+  changed_when: false
+  failed_when: false
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Display Hermes tenant deployment info
   ansible.builtin.debug:
     msg: |
@@ -156,7 +173,10 @@
       Base dir: {{ hermes_tenants_base_dir }}
       Networks: {{ hermes_tenants_tenants | map(attribute='name') | map('regex_replace', '^', 'hermes-net-') | join(', ') }}
       Relay: {{ hermes_tenants_relay_url }}
-      Image: {{ hermes_tenants_image }}
+      Hermes image: {{ hermes_tenants_image }}
+      Routstrd image: {{ hermes_tenants_routstrd_image }}
+      LLM proxy: {{ hermes_tenants_llm_proxy_url }}
       Log config: {{ hermes_tenants_log_driver }}, max-size={{ hermes_tenants_log_max_size }}, max-file={{ hermes_tenants_log_max_file }}
-      Resource limits: memory={{ hermes_tenants_resource_limits.memory }}, cpus={{ hermes_tenants_resource_limits.cpus }}
+      Hermes resource limits: memory={{ hermes_tenants_resource_limits.memory }}, cpus={{ hermes_tenants_resource_limits.cpus }}
+      Routstrd resource limits: memory={{ hermes_tenants_routstrd_resource_limits.memory }}, cpus={{ hermes_tenants_routstrd_resource_limits.cpus }}
       Docker socket mount: {{ 'DISABLED (security)' if hermes_tenants_no_docker_socket else 'ENABLED' }}

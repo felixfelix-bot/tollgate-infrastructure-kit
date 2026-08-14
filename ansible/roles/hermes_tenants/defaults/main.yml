@@ -1,5 +1,6 @@
 ---
-hermes_tenants_image: "hermes-agent:nostr"
+hermes_tenants_image: "hermes-agent:nostr-slim"
+hermes_tenants_routstrd_image: "routstrd:latest"
 hermes_tenants_base_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/hermes"
 hermes_tenants_relay_url: "ws://nip29-relay:7780"
 hermes_tenants_deployment_admin_nsec: ""
@@ -21,14 +22,18 @@ hermes_tenants_resource_limits:
   memory: 512m
   cpus: "1.0"
 
+hermes_tenants_routstrd_resource_limits:
+  memory: 256m
+  cpus: "0.5"
+
 hermes_tenants_resource_reservations:
   memory: 256m
 
 hermes_tenants_nostr_relays: "ws://nip29-relay:7780,wss://relay.damus.io,wss://nos.lol"
 hermes_tenants_nostr_groups: ""
-hermes_tenants_llm_proxy_url: "http://routstr:8000"
+hermes_tenants_llm_proxy_url: "http://routstrd:8008/v1"
 hermes_tenants_routstrd_config:
-  port: 9000
+  port: 8008
   health_endpoint: "/health"
 
 hermes_tenants_gateway_config:
