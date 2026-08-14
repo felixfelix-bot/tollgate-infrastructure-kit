@@ -1,0 +1,46 @@
+---
+- name: Deploy Hermes health check script
+  ansible.builtin.copy:
+    src: hermes-health-check.sh
+    dest: /opt/tollgate/scripts/hermes-health-check.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Ensure log directory exists
+  ansible.builtin.file:
+    path: /var/log
+    state: directory
+    mode: "0755"
+
+- name: Ensure log files exist with proper permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: touch
+    mode: "0644"
+    owner: root
+    group: root
+  loop:
+    - /var/log/hermes-health-check.log
+    - /var/log/hermes-health-check.alert
+
+- name: Install Hermes health check cron job
+  ansible.builtin.cron:
+    name: "Hermes container health check"
+    minute: "*/15"
+    hour: "*"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    job: "/opt/tollgate/scripts/hermes-health-check.sh"
+    user: root
+    state: present
+
+- name: Display health check deployment info
+  ansible.builtin.debug:
+    msg: |
+      Hermes health check deployed!
+      Script: /opt/tollgate/scripts/hermes-health-check.sh
+      Schedule: Every 15 minutes
+      Log: /var/log/hermes-health-check.log
+      Alerts: /var/log/hermes-health-check.alert
