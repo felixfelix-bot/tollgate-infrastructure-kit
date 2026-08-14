@@ -14,12 +14,15 @@ services:
       - ./config:/config
       - ./nsec:/nsec:ro
     networks:
+      - routstr_default
       - hermes-net-{{ tenant_name }}
     ports:
       - "{{ tenant_gateway_port }}:8080"
       - "{{ tenant_health_port }}:{{ hermes_tenants_routstrd_config.port }}"
     healthcheck:
-      test: ["CMD-SHELL", "exit 0"]
+      # V1: routstrd sidecar is not deployed yet. Check that the Hermes
+      # gateway process is running instead of HTTP endpoints.
+      test: ["CMD-SHELL", "pgrep -f 'hermes gateway run' || exit 1"]
       interval: {{ hermes_tenants_healthcheck_interval }}
       timeout: {{ hermes_tenants_healthcheck_timeout }}
       retries: {{ hermes_tenants_healthcheck_retries }}
@@ -40,6 +43,8 @@ volumes:
     name: hermes-{{ tenant_name }}-data
 
 networks:
+  routstr_default:
+    external: true
   hermes-net-{{ tenant_name }}:
     external: true
     name: hermes-net-{{ tenant_name }}
