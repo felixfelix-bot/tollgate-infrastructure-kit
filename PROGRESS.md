@@ -427,6 +427,13 @@
 - [ ] **AI triage** — awaiting ppq.ai key + user criteria to run `follow-triage.py`
 - [ ] **Curated purge** — awaiting Amber bunker URI + triage keep-set to run `follow-apply.py`
 
+### Hermes for Friends v2 — Onboarding Docs (Aug 2026)
+- [x] **Friend guide** — `docs/onboarding-friend-guide.md` complete: FIPS mesh, Nostr key, Buzz install, relay connect, NIP-42, groups, Hermes chat, kanban, workers, quality gates, Cashu credits, SSH, troubleshooting, quick reference
+- [x] **Operator guide** — `docs/operator-guide.md` complete: add/remove friends, issue AI credits (mint-approve), monitor, update images, backup/restore, relay + group management
+- [x] **Live-verified against VPS2** — relay `wss://relay.orangesync.tech` (buzz-relay :3007, NIP-42+NIP-29), LLM proxy `ai.orangesync.tech` (routstr-proxy :8009), mint `mint.orangesync.tech` (:8085), Caddy = host systemd unit, NIP-29 kinds (9007 create-group, 9000 put-user), `crates/buzz-cli` exists in block/buzz
+- [x] **Verification script** — `scripts/verify-onboarding-docs.sh` (doc token scan + live endpoint probes), run passes
+- [ ] **Non-technical user walkthrough** — hand the guide to an actual friend, note friction points (follow-up)
+
 ## Blocked / Upstream
 - [ ] True custom unit support (MB, KB, GB, min in keyset) — requires gRPC payment processor or CDK upstream fix
 - [ ] Routstr AI inference via cashu Python lib — keyset ID format mismatch. Pre-built Docker image, needs upstream update or custom build
