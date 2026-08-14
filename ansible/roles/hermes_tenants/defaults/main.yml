@@ -39,3 +39,5 @@ hermes_tenants_gateway_port_base: 9000
 hermes_tenants_health_port_base: 9100
 
 hermes_tenants_no_docker_socket: true
+
+hermes_tenants_enable_monitoring: true

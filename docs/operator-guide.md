@@ -31,13 +31,16 @@ obelisk-relay (NIP-29 group chat, NIP-42 auth)
     ▼
 Hermes container (hermes-<tenant-name>)
     │ Nostr adapter reads group messages
-    │ LLM calls route through Routstr
+    │ LLM calls route through routstrd sidecar
     ▼
-Routstr (LLM proxy, :8000)
-    │ Per-friend API key + Cashu token payment
+routstrd sidecar (per-tenant LLM proxy, :8008)
+    │ Per-friend Cashu wallet + token payment
+    │ Auto-discovers cheapest provider via Nostr
     ▼
-z.ai API (glm-5.2)
+Routstr node → z.ai API (glm-5.2)
 ```
+
+> **Note:** The routstrd sidecar (V2-07) is being integrated. In the current V1 deployment, Hermes containers connect to a shared Routstr proxy on the `routstr_default` Docker network. The V2 architecture deploys a routstrd sidecar per tenant for wallet isolation and provider auto-discovery.
 
 Key infrastructure paths on VPS2:
 
@@ -386,6 +389,30 @@ systemctl status tollgate-watchdog
 
 # Dry-run all checks
 python3 /opt/tollgate/scripts/watchdog.py --dry-run
+```
+
+### Hermes health-check script
+
+A dedicated health-check script (`scripts/hermes-health-check.sh`) runs every 15 minutes via cron. It checks:
+
+- Container health status for all tenants (sitarani, chiefmonkey, bekka)
+- Gateway endpoints on ports 9000-9002
+- Buzz relay (optional, warning only)
+- Routstr / LLM proxy (optional, warning only)
+
+The script is silent on success and writes alerts to a log file on failure. Deploy it via the Ansible monitoring tasks:
+
+```bash
+# Run the health check manually
+bash scripts/hermes-health-check.sh
+
+# Check recent alerts
+tail -20 /var/log/hermes-health-check.log
+
+# The cron job is deployed by the Ansible playbook
+ansible-playbook ansible/playbooks/45-multi-tenant-hermes.yml \
+  --extra-vars "target_ip=23.182.128.51" \
+  --tags hermes_tenants_monitoring
 ```
 
 ### Log locations

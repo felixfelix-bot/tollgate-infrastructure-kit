@@ -148,6 +148,10 @@
   loop_control:
     label: "{{ item.name }}"
 
+- name: Include monitoring tasks
+  ansible.builtin.include_tasks: monitoring.yml
+  when: hermes_tenants_enable_monitoring | bool
+
 - name: Display Hermes tenant deployment info
   ansible.builtin.debug:
     msg: |
@@ -160,3 +164,4 @@
       Log config: {{ hermes_tenants_log_driver }}, max-size={{ hermes_tenants_log_max_size }}, max-file={{ hermes_tenants_log_max_file }}
       Resource limits: memory={{ hermes_tenants_resource_limits.memory }}, cpus={{ hermes_tenants_resource_limits.cpus }}
       Docker socket mount: {{ 'DISABLED (security)' if hermes_tenants_no_docker_socket else 'ENABLED' }}
+      Monitoring: {{ 'ENABLED' if hermes_tenants_enable_monitoring else 'DISABLED' }}
