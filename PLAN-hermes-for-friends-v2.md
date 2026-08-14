@@ -590,10 +590,12 @@ For documentation tasks (8):
 
 ---
 
-## Open Questions
+## Resolved Questions (operator answers Aug 14)
 
-1. **Buzz relay URL:** Is `relay.orangesync.tech` pointing to VPS2? Or do we need a new subdomain?
-2. **Friend npubs:** Do sitarani, chiefmonkey, bekka have Nostr identities already, or generate fresh?
-3. **z.ai API keys:** Per-tenant keys, or shared? (Current: shared via routstr-proxy)
-4. **Domain for SSD VPS:** Same domain (orangesync.tech) or new?
-5. **Buzz relay on SSD VPS:** Migrate the existing one, or deploy fresh?
+1. **Buzz relay URL:** `relay.orangesync.tech` → VPS2 (23.182.128.51). Two relays: `relay.` (general strfry) + `chat.` (Buzz/NIP-29). Both DNS-pointed to VPS2. ✅
+2. **Friend npubs:** They have main npubs. Generate fresh nsecs per friend (not main keys). Known npubs: sitarani=npub1a3um269aaf3u5cy37kuykrrrnsg2pyv7za06pxjduv25lq5sdujs2qmdj6, bekka=npub18ekka6n399pskjzjusvduscem5c99dewg2swe3u68vdce92cmxgszeht3g. Chiefmonkey npub TBD (generate fresh nsec regardless).
+3. **LLM routing:** All traffic through routstrd → Routstr node → cheapest endpoint. routstrd in each container auto-discovers providers via Nostr, picks cheapest, pays with Cashu. Per-friend wallet for quota isolation. No per-tenant z.ai keys needed.
+4. **Domain:** Same domain (orangesync.tech) for SSD VPS.
+5. **Buzz relay migration:** Migrate existing Buzz relay to SSD VPS when it comes online. Deploy fresh strfry.
+6. **VPS2 SSH:** Currently timing out on banner exchange — likely overloaded (3 Hermes + Buzz + infra on 4GB RAM). Not blocking for planning; workers should use `ssh -o ConnectTimeout=30`.
+7. **routstrd:** Bun/TypeScript app (not Rust). Dockerfile exists but dev-oriented. Production image: `CMD ["routstrd", "start"]`. Has `--hermes` client integration.
