@@ -1,4 +1,6 @@
 # Included inline into the inbound chain of table inet fips via
 # /etc/fips/fips.nft: include "/etc/fips/fips.d/*.nft"
 # Must contain bare rules only (no table/chain wrapper).
+# The parent inbound chain returns early for iifname != "fips0", so this rule
+# only ever matches traffic arriving on the FIPS mesh interface.
 tcp dport {{ fips_mesh_ssh_port }} accept
