@@ -1,0 +1,186 @@
+#!/command/with-contenv python3
+"""Nostr platform bootstrap (cont-init.d/03).
+
+Renders the nostr platform config into $HERMES_HOME/config.yaml from
+NOSTR_RELAYS / NOSTR_GROUPS / NOSTR_NSEC_PATH environment variables,
+write-only-if-absent: an existing nostr block is never clobbered.
+
+Layering (see ansible/roles/hermes_tenants/README.md):
+  1. If $HERMES_HOME/config.yaml already has a top-level `nostr:` block,
+     this script does nothing (role/hand edits win).
+  2. Else if /config/config.yaml exists (role layer mount), copy it whole.
+  3. Else render from env. Exits 0 without writing when no relays are
+     configured (an empty nostr block would enable a broken platform).
+
+Also ensures $HERMES_HOME is writable by uid 10000 so a container booted
+from an EMPTY volume can persist state before s6 stage 2 drops privileges.
+"""
+import os
+import sys
+
+HERMES_UID = int(os.environ.get("HERMES_BOOTSTRAP_UID", "10000"))
+HERMES_GID = int(os.environ.get("HERMES_BOOTSTRAP_GID", "10000"))
+HOME = os.environ.get("HERMES_HOME", "/opt/data")
+CFG = os.path.join(HOME, "config.yaml")
+ROLE_CFG = "/config/config.yaml"
+
+
+def log(msg):
+    print(f"[03-nostr-bootstrap] {msg}", flush=True)
+
+
+def is_toplevel(line):
+    return bool(line) and not line.startswith((" ", "\t", "#"))
+
+
+def find_toplevel(lines, key):
+    prefix = f"{key}:"
+    for i, line in enumerate(lines):
+        if is_toplevel(line) and (line == prefix or line.startswith(prefix)):
+            return i
+    return -1
+
+
+def platforms_block_end(lines, plat):
+    for i in range(plat + 1, len(lines)):
+        if is_toplevel(lines[i]):
+            return i
+    return len(lines)
+
+
+def has_platform_child(lines, plat_idx, key):
+    child = f"  {key}:"
+    for line in lines[plat_idx + 1:]:
+        if is_toplevel(line):
+            return False
+        if line == child or line.startswith(child):
+            return True
+    return False
+
+
+def block_lines(lines, start):
+    out = [lines[start]]
+    for line in lines[start + 1:]:
+        if is_toplevel(line):
+            break
+        out.append(line)
+    return out
+
+
+def ensure_dir_writable(path):
+    if not os.path.isdir(path):
+        os.makedirs(path, exist_ok=True)
+    if os.geteuid() == 0:
+        st = os.stat(path)
+        if st.st_uid != HERMES_UID or st.st_gid != HERMES_GID:
+            os.chown(path, HERMES_UID, HERMES_GID)
+            log(f"chowned {path} -> {HERMES_UID}:{HERMES_GID}")
+
+
+def chown_if_root(path):
+    if os.geteuid() == 0:
+        os.chown(path, HERMES_UID, HERMES_GID)
+
+
+def write_config(lines):
+    tmp = CFG + ".bootstrap-tmp"
+    with open(tmp, "w") as fh:
+        fh.writelines(lines)
+    os.chmod(tmp, 0o640)
+    chown_if_root(tmp)
+    os.replace(tmp, CFG)
+    log(f"wrote {CFG}")
+
+
+def render_nostr_block(relays, groups, nsec_path):
+    out = ["nostr:\n", "  relays:\n"]
+    out += [f"  - {r}\n" for r in relays]
+    out.append("  groups:\n")
+    out += [f"  - {g}\n" for g in groups]
+    out.append(f"  nsec_path: {nsec_path}\n")
+    return out
+
+
+def merge(lines, relays, groups, nsec_path):
+    changed = False
+    if find_toplevel(lines, "nostr") == -1:
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        lines += ["\n"] if lines else []
+        lines += render_nostr_block(relays, groups, nsec_path)
+        changed = True
+        log("appended nostr: block")
+    plat = find_toplevel(lines, "platforms")
+    if plat == -1:
+        lines += ["\n", "platforms:\n"]
+        plat = len(lines) - 1
+        changed = True
+        log("created platforms: block")
+    if lines[plat].strip() != "platforms:":
+        log("platforms: uses inline/flow style; leaving untouched")
+        return changed
+    for key in ("nostr", "api_server"):
+        if not has_platform_child(lines, plat, key):
+            insert_at = platforms_block_end(lines, plat)
+            body = [f"  {key}:\n", "    enabled: true\n"]
+            lines[insert_at:insert_at] = body
+            plat = find_toplevel(lines, "platforms")
+            changed = True
+            log(f"enabled platforms.{key}")
+    return changed
+
+
+def main():
+    if os.environ.get("NOSTR_BOOTSTRAP", "1") == "0":
+        log("disabled via NOSTR_BOOTSTRAP=0")
+        return 0
+    ensure_dir_writable(HOME)
+    dot_hermes = os.path.join(HOME, ".hermes")
+    if not os.path.isdir(dot_hermes):
+        ensure_dir_writable(dot_hermes)
+
+    if os.path.isfile(CFG):
+        with open(CFG) as fh:
+            lines = fh.readlines()
+        if find_toplevel(lines, "nostr") != -1:
+            log(f"{CFG} already has nostr config; never clobber")
+            return 0
+        relays = [r for r in (x.strip() for x in os.environ.get("NOSTR_RELAYS", "").split(",")) if r]
+        if not relays:
+            log(f"{CFG} exists without nostr block and NOSTR_RELAYS is empty; leaving untouched")
+            return 0
+        groups = [g for g in (x.strip() for x in os.environ.get("NOSTR_GROUPS", "").split(",")) if g]
+        nsec_path = os.environ.get("NOSTR_NSEC_PATH", "/nsec/nsec.txt")
+        if merge(lines, relays, groups, nsec_path):
+            write_config(lines)
+        return 0
+
+    if os.path.isfile(ROLE_CFG):
+        with open(ROLE_CFG) as fh:
+            data = fh.read()
+        if "nostr:" not in data:
+            log(f"{ROLE_CFG} has no nostr config; ignoring role layer file")
+        else:
+            tmp = CFG + ".bootstrap-tmp"
+            with open(tmp, "w") as fh:
+                fh.write(data)
+            os.chmod(tmp, 0o640)
+            chown_if_root(tmp)
+            os.replace(tmp, CFG)
+            log(f"seeded {CFG} from role layer {ROLE_CFG}")
+            return 0
+
+    relays = [r for r in (x.strip() for x in os.environ.get("NOSTR_RELAYS", "").split(",")) if r]
+    if not relays:
+        log("no config and no NOSTR_RELAYS; nothing to bootstrap")
+        return 0
+    groups = [g for g in (x.strip() for x in os.environ.get("NOSTR_GROUPS", "").split(",")) if g]
+    nsec_path = os.environ.get("NOSTR_NSEC_PATH", "/nsec/nsec.txt")
+    lines = render_nostr_block(relays, groups, nsec_path)
+    lines += ["platforms:\n", "  nostr:\n", "    enabled: true\n", "  api_server:\n", "    enabled: true\n"]
+    write_config(lines)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
