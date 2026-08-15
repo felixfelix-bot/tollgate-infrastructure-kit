@@ -212,14 +212,30 @@
         - bob
         - carol
 
-    - name: Assert healthcheck tests both gateway and routstrd endpoints
+    - name: Assert healthcheck tests the gateway HTTP endpoint
       ansible.builtin.assert:
         that:
           - "'8080' in item.stdout"
-          - "'9000' in item.stdout"
-        fail_msg: "Healthcheck for {{ item.item }} does not test both gateway (8080) and routstrd (9000): {{ item.stdout }}"
-        success_msg: "Healthcheck tests both gateway and routstrd endpoints for {{ item.item }}"
+        fail_msg: "Healthcheck for {{ item.item }} does not test gateway (8080): {{ item.stdout }}"
+        success_msg: "Healthcheck tests gateway endpoint for {{ item.item }}"
       loop: "{{ hermes_tenants_healthcheck_cmd.results }}"
+
+    - name: Get healthcheck test command for each routstrd sidecar
+      ansible.builtin.shell: docker inspect --format '{{ '{{index .Config.Healthcheck.Test 1}}' }}' routstrd-{{ item }}
+      register: hermes_tenants_routstrd_healthcheck_cmd
+      changed_when: false
+      loop:
+        - alice
+        - bob
+        - carol
+
+    - name: Assert routstrd sidecar healthchecks test the 8008 endpoint
+      ansible.builtin.assert:
+        that:
+          - "'8008' in item.stdout"
+        fail_msg: "routstrd healthcheck for {{ item.item }} does not test port 8008: {{ item.stdout }}"
+        success_msg: "routstrd healthcheck tests 8008 endpoint for {{ item.item }}"
+      loop: "{{ hermes_tenants_routstrd_healthcheck_cmd.results }}"
 
     - name: Get restart policy for each container
       ansible.builtin.shell: docker inspect --format '{{ '{{.HostConfig.RestartPolicy.Name}}' }}' hermes-{{ item }}

@@ -24,6 +24,12 @@
     - { key: HISTORY, value: "28" }
   notify: Restart sysstat collection
 
+- name: Ensure sysstat-collect timer drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/sysstat-collect.timer.d
+    state: directory
+    mode: "0755"
+
 - name: Drop-in sysstat timer override for 5-minute sampling
   ansible.builtin.copy:
     dest: /etc/systemd/system/sysstat-collect.timer.d/5min.conf
@@ -55,7 +61,7 @@
 
 - name: Deploy Hermes health check script
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../scripts/hermes-health-check.sh"
+    src: "{{ role_path }}/../../../scripts/hermes-health-check.sh"
     dest: /opt/tollgate/scripts/hermes-health-check.sh
     mode: "0755"
 

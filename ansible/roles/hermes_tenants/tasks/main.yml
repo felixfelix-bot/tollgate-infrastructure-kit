@@ -121,6 +121,13 @@
     label: "{{ item.item.name }}"
   when: item.stat is defined and item.stat.exists
 
+- name: Create shared routstrd network used by all tenant sidecars
+  community.docker.docker_network:
+    name: routstr_default
+    state: present
+    driver: bridge
+    internal: false
+
 - name: Create per-tenant Docker network (isolate friends)
   community.docker.docker_network:
     name: "hermes-net-{{ item.name }}"
