@@ -75,3 +75,25 @@ override `hermes_health_ntfy_url` (e.g. `-e` or host_vars — not committed).
 The role also removes the legacy `/opt/tollgate/hermes/monitor.sh` cron that
 still watched pre-rename containers (`hermes-ours/friend1/friend2`) and
 alerted into a dead log every 5 minutes.
+
+## Live findings on VPS2 at deploy time (Aug 15, input for T4.3)
+
+The first live run correctly paged on all of these — evidence the ladder
+surfaces real conditions, not just load:
+
+- **`/` at 99%** (1.2G free of 99G) — the pre-existing legacy monitor had
+  been logging this into a dead file for days.
+- **All three gateway `/health` checks fail**: containers report `healthy`,
+  but the docker healthcheck is still the fake `pgrep -f 'hermes gateway
+  run'` (the D3 anti-pattern). Inside the containers nothing listens on the
+  mapped ports (8080→900x, 9000→910x); gateway-default died after a
+  non-retryable z.ai **HTTP 401 "token expired"** abort at 15:55 Aug 14 and
+  s6-supervise kept the flag green. The LLM leg is down for all tenants.
+- **`sleep infinity` still runs** inside the containers (PID 103) — the
+  V2-04 compose entrypoint fix never converged to the live box.
+- Docker-proxy accepts TCP on 900x/910x then never answers (wedged-backend
+  signature) — HTTP probes, not TCP connects, are the honest signal.
+
+These are convergence work (V2-12 / T2.x), not monitoring work — recorded
+here because the alert ladder is what surfaced them.
+

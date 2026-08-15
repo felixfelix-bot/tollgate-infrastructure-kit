@@ -194,7 +194,9 @@ fi
 echo ""
 echo "Unit: tenant + gateway regression (V2-10 checks retained)"
 assert_equals "sitarani chiefmonkey bekka" "${TENANTS[*]}" "TENANTS list"
-assert_equals "9000 9001 9002" "${GATEWAY_PORTS[*]}" "GATEWAY_PORTS list"
+assert_equals "9100 9101 9102" "${HEALTH_PORTS[*]}" "HEALTH_PORTS list (role health_port_base 9100)"
+assert_equals "http://localhost:3007" "$BUZZ_RELAY_URL" "BUZZ_RELAY_URL host-binding 127.0.0.1:3007"
+assert_equals "http://localhost:8009/v1/models" "$ROUTSTR_URL" "ROUTSTR_URL routstr-proxy 8009"
 
 # Summary
 echo ""

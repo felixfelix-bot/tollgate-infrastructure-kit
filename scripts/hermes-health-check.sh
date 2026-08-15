@@ -40,9 +40,11 @@ MEMINFO_FILE="${MEMINFO_FILE:-/proc/meminfo}"
 : "${REPEAT_MELTDOWN:=600}"
 
 TENANTS=("sitarani" "chiefmonkey" "bekka")
-GATEWAY_PORTS=(9000 9001 9002)
-BUZZ_RELAY_URL="http://localhost:3000"
-ROUTSTR_URL="http://localhost:8000/v1/models"
+HEALTH_PORTS=(9100 9101 9102)
+: "${HERMES_BUZZ_RELAY_URL:=http://localhost:3007}"
+: "${HERMES_ROUTSTR_URL:=http://localhost:8009/v1/models}"
+BUZZ_RELAY_URL="$HERMES_BUZZ_RELAY_URL"
+ROUTSTR_URL="$HERMES_ROUTSTR_URL"
 
 FAILURES=()
 WARNINGS=()
@@ -253,15 +255,17 @@ check_gateway() {
     local url="http://localhost:$port/health"
 
     if ! curl -sf --max-time 5 "$url" &>/dev/null; then
-        FAILURES+=("hermes-$name gateway: no response on port $port")
+        FAILURES+=("hermes-$name gateway /health: no response on port $port")
         return 1
     fi
     return 0
 }
 
 check_buzz_relay() {
-    if ! curl -sf --max-time 5 "$BUZZ_RELAY_URL" &>/dev/null; then
-        WARNINGS+=("Buzz relay: no response on $BUZZ_RELAY_URL")
+    local code
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BUZZ_RELAY_URL" 2>/dev/null || echo 000)
+    if [[ "$code" == "000" ]]; then
+        WARNINGS+=("Buzz relay: no HTTP response on $BUZZ_RELAY_URL")
         return 1
     fi
     return 0
@@ -382,7 +386,7 @@ main() {
 
     for i in "${!TENANTS[@]}"; do
         check_container_health "${TENANTS[$i]}" || true
-        check_gateway "${TENANTS[$i]}" "${GATEWAY_PORTS[$i]}" || true
+        check_gateway "${TENANTS[$i]}" "${HEALTH_PORTS[$i]}" || true
     done
 
     check_buzz_relay || true
@@ -393,12 +397,14 @@ main() {
         for f in "${FAILURES[@]}"; do
             notify "page" "svc" "$f"
         done
+        level=$(max_level "$level" "page")
     fi
     if [[ ${#WARNINGS[@]} -gt 0 ]]; then
         local w
         for w in "${WARNINGS[@]}"; do
             notify "warn" "svc-opt" "$w"
         done
+        level=$(max_level "$level" "warn")
     fi
 
     level=$(max_level "$level" "$(check_load)" "$(check_disk)" "$(check_ram)" "$(check_swap)")
