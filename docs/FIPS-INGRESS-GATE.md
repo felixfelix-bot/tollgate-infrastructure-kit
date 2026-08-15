@@ -1,6 +1,6 @@
 # FIPS Ingress Gate — Public Internet → FIPS Mesh
 
-> **Status:** Design / Planning
+> **Status:** Phases 1–3 deployed and verified (see §8)
 > **Created:** 2026-08-12
 > **Owner:** Felix (c03rad0r)
 > **Repo:** `tollgate-infrastructure-kit`
@@ -86,19 +86,26 @@ app.orangesync.tech {
 VPS2 already has SSH on :22 and can route to fips0. Use SSH ProxyJump:
 
 ```ssh-config
-# ~/.ssh/config
-Host dq05.fips
-    ProxyJump root@23.182.128.51
-    HostName fd00::dq05-addr
-    User c03rad0r
+# ~/.ssh/config — full verified template in templates/ssh-config-fips.conf
+Host vps2
+    HostName 23.182.128.51
+    User root
 
-Host t470.fips
-    ProxyJump root@23.182.128.51
-    HostName fd00::t470-addr
+Host dq05.fips t470.fips
+    HostName fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8
     User c03rad0r
+    ProxyJump vps2
+    ConnectTimeout 30
+
+Host t14gen5.fips
+    HostName fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0
+    User c03rad0r
+    ProxyJump vps2
+    ConnectTimeout 30
 ```
 
 Then: `ssh dq05.fips` — transparent SSH into any FIPS machine via VPS2.
+Target machines need `/etc/fips/fips.d/ssh.nft` (`tcp dport 22 accept`).
 
 Alternative: Caddy layer4 plugin for TCP stream proxy:
 ```caddy
@@ -135,9 +142,8 @@ FIPS addresses are derived from npub via `SHA-256(pubkey)[0:15]` prefixed with
 | Alias | npub | FIPS Address | Machine |
 |-------|------|-------------|---------|
 | vps2 | `npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82` | `fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149` | VPS2 (public IP hub) |
-| dq05 | `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72` | (derived) | DQ05 laptop |
-| t14gen5 | (derived) | (derived) | T14Gen5 laptop |
-| t470 | (derived) | (derived) | T470 backup laptop |
+| dq05 / t470 | `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72` | `fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8` | CobradorWave ("dq05" locally, "T470" on VPS2) |
+| t14gen5 | `npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh` | `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0` | T14Gen5 laptop |
 
 ### 4.2 FIPS URL Convention
 
@@ -239,11 +245,49 @@ mesh latency (165-333ms RTT). Use `ConnectTimeout=30` in ssh config.
 - [ ] Verify TLS + reverse_proxy works to FIPS address
 - [ ] Document Caddy reload procedure
 
-### Phase 3: SSH ProxyJump
+### Phase 3: SSH ProxyJump ✅ (2026-08-14, task t_39d269b3)
 
-- [ ] Configure `~/.ssh/config` with ProxyJump for FIPS machines
-- [ ] Test SSH to each home machine via VPS2
-- [ ] Document SSH access patterns
+- [x] Allow tcp/22 inbound on fips0 for mesh machines (drop-in `/etc/fips/fips.d/ssh.nft`)
+- [x] Peer t14gen5 with VPS2 (`via_nostr: true` — no static address needed)
+- [x] Fix stale home IP in VPS2's T470 peer entry (75.159.198.60 → 85.242.81.234 + via_nostr)
+- [x] Commit ssh config template → `templates/ssh-config-fips.conf`
+- [x] Test: `ssh dq05.fips` connects through VPS2 into the mesh (returns `CobradorWave`)
+
+**Verified setup (2026-08-14):**
+
+| Item | Value |
+|------|-------|
+| Jump host | `root@23.182.128.51` (VPS2 / testserver2, Debian 13, OpenSSH 10.0) |
+| dq05.fips / t470.fips | `fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8` (CobradorWave, npub `npub1eak…kac72`) |
+| t14gen5.fips | `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0` (npub `npub1srs…ufhh`) |
+| vps2 mesh addr | `fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149` |
+| RTT | 300–1500 ms → use `ConnectTimeout 30`, `ServerAliveInterval 15` |
+
+**Gotchas found while enabling this:**
+
+1. **fips.nft drop-ins are included INLINE** into the `inbound` chain — a drop-in
+   containing its own `table …/chain …` wrapper breaks `nft -f` with
+   "statement after terminal statement". Drop-ins must be bare rules.
+   (ansible `ssh.nft.j2` fixed accordingly; its reload handler now runs
+   `nft -f /etc/fips/fips.nft` instead of the drop-in.)
+2. **Drop-in files must end with a newline** — nft's include is a token splice;
+   a missing trailing newline glues the last rule of one drop-in onto the first
+   rule of the next (same parse error). Fixed `hermes.nft` locally.
+3. **fips peers without a static address need `via_nostr: true`** — fips exits
+   with "must specify at least one address, or set via_nostr = true".
+4. **Home IP is DHCP** — static peer addresses go stale. `via_nostr: true`
+   lets the peer resolve the current advertised endpoint from Nostr.
+5. **t470/dq05 naming**: npub `npub1eak…kac72` is CobradorWave — called "dq05"
+   in its own `/etc/fips/hosts`, "T470" on VPS2. Both ssh aliases point at the
+   same machine until the physical DQ05 desktop joins the mesh.
+6. **Auth is end-to-end**: the jump host (VPS2) needs no key on the target —
+   ProxyJump only relays TCP. The client key must be in the target's
+   `authorized_keys` (id_ed25519 works for dq05; t14gen5 needs the operator's
+   key added).
+
+**Status of the Phase-2 socat proxy (`:2222`)**: now works again too — it was
+silently broken by the missing tcp/22 mesh firewall rule on CobradorWave.
+ProxyJump (this phase) supersedes it for SSH; prefer `dq05.fips` over `-p 2222`.
 
 ### Phase 4: Arbitrary TCP
 

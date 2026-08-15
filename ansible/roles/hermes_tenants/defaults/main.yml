@@ -23,6 +23,10 @@ hermes_tenants_resource_limits:
   memory: 1g
   cpus: "1.0"
 
+hermes_tenants_routstrd_resource_limits:
+  memory: 256m
+  cpus: "0.5"
+
 hermes_tenants_resource_reservations:
   memory: 256m
 

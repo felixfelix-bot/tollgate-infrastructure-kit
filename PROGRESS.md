@@ -133,6 +133,15 @@
 - [x] **Deployed to VPS** via `13-fips.yml` + `04-caddy.yml`
 - [x] **Verified** — FIPS mesh responds on `[fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149]:80`
 
+### FIPS Ingress Gate — SSH ProxyJump (Phase 3, task t_39d269b3)
+- [x] **Live**: tcp/22 allowed on CobradorWave fips0 (`/etc/fips/fips.d/ssh.nft`), fips-firewall enabled for boot
+- [x] **Live**: VPS2 peers T470 (fresh home IP + via_nostr) and t14gen5 (via_nostr) — `docs/FIPS-INGRESS-GATE.md` §8
+- [x] **Live**: `t470` alias added to `/etc/fips/hosts` on CobradorWave
+- [x] **Repo**: `templates/ssh-config-fips.conf` — verified template (`ssh dq05.fips` → CobradorWave)
+- [x] **Repo**: ansible fips fixes — `ssh.nft.j2` bare-rule form, handler reloads `fips.nft`, `fips.yaml.j2` conditional addresses, `host_vars/vps2.yml` peers, `t470` mesh-hosts alias
+- [ ] Operator: install template block into `~/.ssh/config` on external machines (staged: `/tmp/ssh-config-merged-t39d269b3` on CobradorWave)
+- [ ] Operator: add client key to t14gen5 `authorized_keys`
+
 ### Auditable Voting v0.1.62 Redeploy
 - [x] **Plan doc** — `docs/auditable-voting-v0.1.62-deploy.md` with checklist
 - [x] **E2E test repo** — `/home/c03rad0r/auditable-voting-tests/` (27 Playwright tests, pushed to ngit)

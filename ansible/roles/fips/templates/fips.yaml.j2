@@ -58,10 +58,12 @@ peers:
 {% if peer.via_nostr is defined and peer.via_nostr %}
     via_nostr: true
 {% endif %}
+{% if peer.addresses is defined and peer.addresses | length > 0 %}
     addresses:
 {% for addr in peer.addresses %}
       - transport: {{ addr.transport }}
         addr: "{{ addr.addr }}"
 {% endfor %}
+{% endif %}
     connect_policy: {{ peer.connect_policy | default('auto_connect') }}
 {% endfor %}
