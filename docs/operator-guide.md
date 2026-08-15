@@ -1,770 +1,470 @@
 # Operator Guide — Hermes for Friends
 
-> **Audience:** Felix (c03rad0r), the operator of the Tollgate infrastructure.
-> **Purpose:** How to add/remove friends, issue AI credits, monitor containers, update Hermes images, and back up / restore data.
-> **Related docs:** [Integrated Operations](INTEGRATED-OPERATIONS.md), [Friend Onboarding Guide](onboarding-friend-guide.md), [Services Overview](services.md), [Troubleshooting](troubleshooting.md)
+Operations runbook for the operator (Felix). This is the counterpart to
+`docs/onboarding-friend-guide.md` (what friends see). Everything here is written
+against the **live VPS2 deployment** (verified Aug 2026):
+
+- Containers: `hermes-sitarani`, `hermes-chiefmonkey`, `hermes-bekka`,
+  `buzz-relay` (+ `buzz-relay-postgres`, `buzz-relay-redis`), `routstr-proxy`,
+  `cdk-mintd`, `mint-orchestrator`, `tollgate-strfry`, `tollgate-strfry-agg`,
+  `tollgate-nsite-gateway`, `blossom`, `ngit`
+- Caddy runs as a **host systemd service** (`caddy`, config
+  `/etc/caddy/Caddyfile`) — it is *not* a container. (An unused docker-caddy
+  setup exists at `/opt/tollgate/caddy/` — ignore it.)
+
+Related docs: `INTEGRATED-OPERATIONS.md` (overall infra), `services.md`
+(service inventory), `troubleshooting.md`, `FIPS-MESH-OPERATIONS.md` (mesh),
+`docs/onboarding-friend-guide.md` (friend-facing).
 
 ---
 
-## Table of Contents
+## 1. Architecture
 
-1. [Architecture Recap](#1-architecture-recap)
-2. [Adding a New Friend](#2-adding-a-new-friend)
-3. [Removing a Friend](#3-removing-a-friend)
-4. [Issuing AI Credits](#4-issuing-ai-credits)
-5. [Monitoring Containers](#5-monitoring-containers)
-6. [Updating Hermes Images](#6-updating-hermes-images)
-7. [Backup and Restore](#7-backup-and-restore)
-8. [Relay and Group Management](#8-relay-and-group-management)
-9. [Troubleshooting](#9-troubleshooting)
-
----
-
-## 1. Architecture Recap
-
-```
-Friend (Buzz client)
-    │ wss://chat.<domain>  (Caddy → obelisk-relay :8080)
+```text
+Internet
+    │
     ▼
-obelisk-relay (NIP-29 group chat, NIP-42 auth)
-    │ kind:9007 create group, kind:9000 add user
-    ▼
-Hermes container (hermes-<tenant-name>)
-    │ Nostr adapter reads group messages
-    │ LLM calls route through routstrd sidecar
-    ▼
-routstrd sidecar (per-tenant LLM proxy, :8008)
-    │ Per-friend Cashu wallet + token payment
-    │ Auto-discovers cheapest provider via Nostr
-    ▼
-Routstr node → z.ai API (glm-5.2)
+Caddy  (host systemd, :80/:443, /etc/caddy/Caddyfile)
+    │
+    ├── relay.orangesync.tech ──► 127.0.0.1:3007  buzz-relay
+    │                                 │           (NIP-42 AUTH, NIP-29 groups)
+    │                                 ├── buzz-relay-postgres
+    │                                 └── buzz-relay-redis
+    │
+    ├── ai.orangesync.tech ─────► localhost:8009  routstr-proxy
+    │                                 (LLM proxy, z.ai GLM, per-friend API keys)
+    │
+    ├── mint.orangesync.tech ───► localhost:8085  cdk-mintd
+    │                                 (Cashu mint)
+    │                                 ▲
+    │                                 └── mint-orchestrator
+    │                                     (watches kind:38010 approvals on the
+    │                                      relay, mints Cashu tokens)
+    │
+    └── hermes-mesh.fips ───────► Hermes tenant gateways (:9000-9002)
+
+Hermes tenants:   hermes-sitarani :9000   hermes-chiefmonkey :9001
+                  hermes-bekka    :9002   (image hermes-agent:nostr)
+
+FIPS mesh routes (from mesh machines):
+    http://buzz-relay.fips  → 3007     http://routstr.fips → 8009
+    http://mint.fips        → 8085
 ```
 
-> **Note:** The routstrd sidecar (V2-07) is being integrated. In the current V1 deployment, Hermes containers connect to a shared Routstr proxy on the `routstr_default` Docker network. The V2 architecture deploys a routstrd sidecar per tenant for wallet isolation and provider auto-discovery.
+Notes:
 
-Key infrastructure paths on VPS2:
+- **One relay for friends.** `wss://relay.orangesync.tech` is the Buzz relay
+  (NIP-29 group chat + NIP-42 auth). There is **no** `chat.` subdomain — do not
+  hand friends a `wss://chat.…` URL. (The relay serves its NIP-11-style JSON
+  at `https://relay.orangesync.tech/` — handy as a health check.)
+- strfry (`tollgate-strfry`, 127.0.0.1:7777) is internal infrastructure, not
+  the friends' chat relay. Friends never connect to it.
+- **LLM proxy**: routstr-proxy, host port **8009** (container port 8000).
+  Compose/config lives in `/home/debian/routstr/`. Public URL
+  `https://ai.orangesync.tech` (self-identifies at `/v1/info`).
+- **Mint**: cdk-mintd on localhost:8085, public `https://mint.orangesync.tech`
+  (also `http://mint.fips` over the mesh).
+- **routstrd sidecar (V2-07)** is being integrated per-tenant; until it lands,
+  tenants reach the LLM proxy through `routstr-proxy` at
+  `https://ai.orangesync.tech`.
 
-| Path | Purpose |
-|------|---------|
-| `/opt/tollgate/hermes/<tenant>/` | Per-tenant compose, .env, nsec, data |
-| `/opt/tollgate/hermes/<tenant>/docker-compose.yml` | Tenant compose (from j2 template) |
-| `/opt/tollgate/hermes/<tenant>/.env` | Tenant env vars (nsec, API key, relay URL) |
-| `/opt/tollgate/hermes/<tenant>/nsec/nsec.txt` | Friend's Nostr private key |
-| `/opt/tollgate/mints/registry.json` | Cashu mint registry |
-| `/opt/tollgate/obelisk/` | obelisk-relay docker-compose |
-| `/opt/tollgate/caddy/Caddyfile` | Caddy reverse proxy config |
-| `/etc/fips/fips.yaml` | FIPS mesh config |
+### Where things live
 
-Two relays are deployed via Caddy:
+| Component | Path on VPS2 |
+|---|---|
+| Caddy config | `/etc/caddy/Caddyfile` (host systemd unit `caddy`) |
+| Buzz relay compose | `/opt/buzz-relay/docker-compose.yml` |
+| Hermes tenant dirs | `/opt/tollgate/hermes/<tenant>/` (sitarani, chiefmonkey, bekka) |
+| routstr compose | `/home/debian/routstr/` |
+| This kit (ansible, scripts, docs) | `~/tollgate-infrastructure-kit` |
 
-| Subdomain | Backend | Port | Purpose |
-|-----------|--------|------|---------|
-| `chat.<domain>` | obelisk-relay | 8080 | NIP-29 group chat (friends connect here) |
-| `relay.<domain>` | strfry | 7777 | General-purpose Nostr relay (optional for friends) |
+### URL map
 
-> **Critical:** Friends must connect to `wss://chat.<domain>`, not `wss://relay.<domain>`. The `relay.` subdomain serves strfry, which does not host NIP-29 groups. The onboarding guide reflects this.
+| URL | Service | Purpose |
+|---|---|---|
+| `wss://relay.orangesync.tech` | buzz-relay (127.0.0.1:3007) | Friends' NIP-29 groups, NIP-42 auth |
+| `https://ai.orangesync.tech` | routstr-proxy (:8009) | LLM proxy for Hermes tenants |
+| `https://mint.orangesync.tech` | cdk-mintd (:8085) | Cashu mint backing AI credits |
+| `https://relay.orangesync.tech/` | buzz-relay | NIP-11-style status JSON (health check) |
 
 ---
 
-## 2. Adding a New Friend
+## 2. Adding a friend
 
-### Prerequisites
+Prerequisites: ssh access (`ssh debian@vps2.fips` from a mesh machine, or
+`root@23.182.128.51`), the friend's npub, and a name for their tenant
+(short, lowercase — e.g. `chiefmonkey`).
 
-- SSH access to VPS2 (`ssh debian@vps2.fips` or `ssh root@23.182.128.51`)
-- `.env` file at `/opt/tollgate/hermes/.env` or the repo root
-- Ansible installed on your controller machine
-- The friend's npub (ask them to send it from Buzz)
+### Step 1 — Get the friend set up on the mesh (optional but recommended)
 
-### Step-by-step
+Have the friend complete Sections 1–3 of `docs/onboarding-friend-guide.md`:
+install FIPS, add your mesh peer config, generate their Nostr key, and send
+you the npub. If they are not on the mesh, they can still use the relay over
+the public internet — the mesh is a convenience, not a requirement.
 
-1. **Generate or collect the friend's Nostr keypair.**
+### Step 2 — Create their NIP-29 group on the relay
 
-   If the friend already has a Nostr key (from Damus, Amethyst, etc.), use their existing npub. Otherwise generate a fresh keypair:
-
-   ```bash
-   python3 -c "
-   from pynostr.key import PrivateKey
-   pk = PrivateKey()
-   print('nsec:', pk.bech32())
-   print('npub:', pk.public_key.bech32())
-   "
-   ```
-
-   Store the nsec securely. The friend gets the npub; you keep the nsec for their Hermes container.
-
-2. **Add the friend to `.env`.**
-
-   Edit the `.env` file in the repo root (or `/opt/tollgate/hermes/.env` on VPS2). Add:
-
-   ```bash
-   FRIEND<N>_NPUB=npub1...
-   FRIEND<N>_NSEC=nsec1...
-   ZAI_API_KEY_FRIEND<N>=sk-...
-   ```
-
-   Use the next available friend number (FRIEND4, FRIEND5, etc.).
-
-3. **Add the friend to the Ansible playbook.**
-
-   Edit `ansible/playbooks/45-multi-tenant-hermes.yml`. Under `hermes_tenants_tenants`, add a new entry:
-
-   ```yaml
-   hermes_tenants_tenants:
-     - name: "sitarani"          # existing
-       npub: "{{ lookup('env', 'FRIEND1_NPUB') }}"
-       nsec: "{{ lookup('env', 'FRIEND1_NSEC') }}"
-       zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_OURS') }}"
-     - name: "chiefmonkey"       # existing
-       npub: "{{ lookup('env', 'FRIEND2_NPUB') }}"
-       nsec: "{{ lookup('env', 'FRIEND2_NSEC') }}"
-       zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_FRIEND') }}"
-     - name: "bekka"             # existing
-       npub: "{{ lookup('env', 'FRIEND3_NPUB') }}"
-       nsec: "{{ lookup('env', 'FRIEND3_NSEC') }}"
-       zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_FRIEND') }}"
-     - name: "newfriend"         # NEW
-       npub: "{{ lookup('env', 'FRIEND4_NPUB') }}"
-       nsec: "{{ lookup('env', 'FRIEND4_NSEC') }}"
-       zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_FRIEND4') }}"
-   ```
-
-   The `name` becomes the container name (`hermes-newfriend`), the Docker network (`hermes-net-newfriend`), and the volume (`hermes-newfriend-data`).
-
-4. **Run the playbook.**
-
-   ```bash
-   cd /path/to/tollgate-infrastructure-kit
-   ansible-playbook ansible/playbooks/45-multi-tenant-hermes.yml \
-     --extra-vars "target_ip=23.182.128.51"
-   ```
-
-   This creates the per-tenant directories, Docker network, volume, compose file, .env, and starts the container. The healthcheck waits for the container to be healthy.
-
-5. **Create a NIP-29 group on obelisk-relay.**
-
-   The obelisk-relay needs a group for the friend. Use the relay admin nsec (NOT your personal nsec) to create a group and add the friend's npub:
-
-   ```bash
-   # Create a group (kind 9007) — replace GROUP_ID and GROUP_NAME
-   # Add the friend to the group (kind 9000)
-   # This is done via Nostr events to the obelisk-relay
-   # Use nak or buzz-cli for this:
-   nak event --kind 9007 --content '{"name":"newfriend-ai"}' \
-     --tag d:newfriend-ai \
-     --tag p:<FRIEND_NPUB> \
-     wss://chat.orangesync.tech
-   ```
-
-   Or use the obelisk-relay admin UI at `https://chat.<domain>/admin` (if available).
-
-6. **Whitelist the friend's npub on the relay.**
-
-   The obelisk-relay uses NIP-42 authentication. The friend's npub must be in the relay's whitelist. Check the relay config:
-
-   ```bash
-   docker exec tollgate-obelisk cat /app/data/config.json
-   ```
-
-   Add the friend's npub to the allowed pubkeys list and restart the relay:
-
-   ```bash
-   docker restart tollgate-obelisk
-   ```
-
-7. **Issue initial AI credits.**
-
-   See [Section 4](#4-issuing-ai-credits) below.
-
-8. **Send the friend the onboarding guide.**
-
-   Point them to `docs/onboarding-friend-guide.md` (or send the URL if hosted on nsite). They need:
-   - Their npub (you generated it or they provided it)
-   - The chat relay URL: `wss://chat.<your-domain>`
-   - The Buzz download link: `https://github.com/block/buzz/releases`
-
-### Verification
+The relay is a full NIP-29 implementation. As the group admin (a key the relay
+already recognises — check `BUZZ_ADMIN_*` / env in `/opt/buzz-relay/docker-compose.yml`),
+create a group and add the friend:
 
 ```bash
-# Container is running and healthy
-docker ps --filter name=hermes-newfriend --format "{{.Names}}: {{.Status}}"
+# create-group (kind 9007) — h tag is the group id (use the tenant name)
+nak event --sec <admin-nsec> --kind 9007 \
+  --tag h=<tenant-name> \
+  --tag name="<Friend Name>" \
+  --relay wss://relay.orangesync.tech
 
-# Gateway process is running inside
-docker exec hermes-newfriend pgrep -f "hermes gateway run"
-
-# Relay sees the friend's group
-docker logs tollgate-obelisk --tail 20 | grep newfriend
+# put-user (kind 9000) — adds the friend's pubkey to the group
+nak event --sec <admin-nsec> --kind 9000 \
+  --tag h=<tenant-name> \
+  --tag p=<friend-pubkey-hex> \
+  --relay wss://relay.orangesync.tech
 ```
 
----
+NIP-29 admin kinds for reference (see NIP-29 for the full list):
 
-## 3. Removing a Friend
+| Kind | Meaning |
+|---|---|
+| 9007 | create-group |
+| 9000 | put-user (add member) |
+| 9001 | remove-user |
+| 9002 | edit-metadata |
+| 9008 | delete-group |
+| 9021 | join request (sent by users) |
 
-1. **Stop and remove the container:**
+> If you do not have an admin key handy, you can also create the group from
+> the Buzz client itself (signed in as your admin identity) — the relay treats
+> the group creator as its admin.
 
-   ```bash
-   cd /opt/tollgate/hermes/<tenant-name>
-   docker compose down
-   ```
+### Step 3 — Whitelist the friend for NIP-42 auth
 
-2. **Remove the Docker volume** (destroys all friend data — back up first if needed):
-
-   ```bash
-   docker volume rm hermes-<tenant-name>-data
-   docker network rm hermes-net-<tenant-name>
-   ```
-
-3. **Remove the friend from the Ansible playbook** (`45-multi-tenant-hermes.yml`):
-   Delete their entry from `hermes_tenants_tenants`.
-
-4. **Remove the friend from `.env`:**
-   Delete `FRIEND<N>_NPUB`, `FRIEND<N>_NSEC`, `ZAI_API_KEY_FRIEND<N>`.
-
-5. **Remove the friend from the relay whitelist and group:**
-   - Remove their npub from obelisk-relay's allowed pubkeys.
-   - Delete or deactivate the NIP-29 group (kind 9007 with the group ID).
-
-6. **Revoke their Routstr API key** (if per-friend keys are used):
-   ```bash
-   curl -X DELETE http://localhost:8000/admin/keys/<key-id> \
-     -H "Authorization: Bearer $ROUTSTR_ADMIN_PASSWORD"
-   ```
-
-7. **Commit and push** the Ansible and .env changes.
-
----
-
-## 4. Issuing AI Credits
-
-AI credits are Cashu tokens. The flow: you create a mint quote, sign a Nostr approval event (kind 38010), the mint-orchestrator marks the quote as paid, and the friend's Hermes instance mints tokens from it.
-
-### Prerequisites
-
-- The Cashu mint is running (`docker ps | grep cdk-mint`)
-- The mint-orchestrator is running (`docker ps | grep mint-orchestrator`)
-- You have the deployment admin nsec (NOT your personal nsec)
-- The friend's Hermes container is configured with `LLM_PROXY_URL` pointing to Routstr
-
-### Issuing credits
-
-1. **Create a mint quote on the Cashu mint:**
-
-   ```bash
-   # Get a quote from the CDK mint
-   curl -X POST http://localhost:8085/v1/quote/mint \
-     -H "Content-Type: application/json" \
-     -d '{"amount": 10000, "unit": "sat"}'
-   ```
-
-   This returns a `quote_id`. Note it.
-
-2. **Sign and publish a kind 38010 approval event:**
-
-   Use the `mint-approve` CLI tool:
-
-   ```bash
-   cd /path/to/tollgate-infrastructure-kit
-   python -m tollgate_mint_approve.cli \
-     --nsec "$DEPLOYMENT_ADMIN_NSEC" \
-     --mint "https://mints.orangesync.tech" \
-     --quote "<quote_id>" \
-     --amount 10000 \
-     --unit sat \
-     --relay "wss://relay.orangesync.tech"
-   ```
-
-   Or via the installed CLI:
-
-   ```bash
-   mint-approve \
-     --nsec "$DEPLOYMENT_ADMIN_NSEC" \
-     --mint "https://mints.orangesync.tech" \
-     --quote "<quote_id>" \
-     --amount 10000 \
-     --unit sat
-   ```
-
-   The `--relay` defaults to `wss://relay.orangesync.tech`. The mint-orchestrator listens on this relay for kind 38010 events.
-
-3. **Verify the orchestrator processed the approval:**
-
-   ```bash
-   # Check orchestrator logs
-   docker logs mint-orchestrator --tail 20
-
-   # Check audit log
-   tail -5 /var/log/tollgate/mint-approvals.jsonl
-   ```
-
-   You should see the quote marked as PAID.
-
-4. **Verify the friend's balance increased:**
-
-   Ask the friend to check in Buzz:
-   ```
-   How many AI credits do I have left?
-   ```
-
-   Or check Routstr directly:
-   ```bash
-   curl http://localhost:8000/v1/info
-   ```
-
-### Credit amounts
-
-| Amount (sat) | Approximate usage |
-|--------------|-------------------|
-| 1,000 | ~20-50 short messages |
-| 10,000 | ~200-500 messages, or a few complex coding tasks |
-| 50,000 | ~1000+ messages, heavy daily use for a month |
-
-Typical cost per message: 1-50 sats depending on input/output length and model. A short question costs ~1-5 sats; a long coding task costs ~20-50 sats.
-
-### Per-friend isolation
-
-Each friend has their own API key in Routstr with its own quota. One friend cannot exhaust another's credits. Quotas are managed centrally via the Routstr admin API.
-
----
-
-## 5. Monitoring Containers
-
-### Quick health check
+The relay challenges every connection (NIP-42). Access is controlled from
+`/opt/buzz-relay/docker-compose.yml` (env vars such as
+`BUZZ_REQUIRE_AUTH_TOKEN`, `BUZZ_REQUIRE_RELAY_MEMBERSHIP`) plus group
+membership from Step 2:
 
 ```bash
-# All Hermes containers
-docker ps --filter name=hermes- --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-# All infrastructure containers
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "obelisk|routstr|caddy|mint|orchestrator"
-
-# FIPS mesh
-sudo fipsctl show status
-sudo fipsctl show peers
+cd /opt/buzz-relay
+# review env: BUZZ_REQUIRE_AUTH_TOKEN / BUZZ_REQUIRE_RELAY_MEMBERSHIP / etc.
+$EDITOR docker-compose.yml
+docker compose up -d      # recreate with new env
+docker logs buzz-relay --tail 20
 ```
 
-### Per-container health
+Buzz clients complete the NIP-42 challenge automatically — friends never see
+this step; it just works when their key is authorised.
+
+### Step 4 — Deploy their Hermes tenant
+
+Per-tenant compose lives in `/opt/tollgate/hermes/<tenant>/`:
 
 ```bash
-# Check healthcheck status
-docker inspect --format '{{.State.Health.Status}}' hermes-sitarani
-docker inspect --format '{{.State.Health.Status}}' hermes-chiefmonkey
-docker inspect --format '{{.State.Health.Status}}' hermes-bekka
-
-# Check gateway process inside container
-docker exec hermes-sitarani pgrep -f "hermes gateway run"
-
-# Check memory usage
-docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}" | grep hermes
-```
-
-### Relay health
-
-```bash
-# obelisk-relay (chat relay)
-curl -sf http://localhost:8080/health || echo "obelisk DOWN"
-
-# strfry (general relay)
-curl -sf http://localhost:7777/ || echo "strfry DOWN"
-```
-
-### LLM routing health
-
-```bash
-# Routstr is responding
-curl -sf http://localhost:8000/v1/info || echo "routstr DOWN"
-
-# Check recent LLM requests
-docker logs routstr --tail 50 | grep -E "POST|200|error"
-
-# Check z.ai API key is valid
-curl -sf -H "Authorization: Bearer $ZAI_API_KEY" https://api.z.ai/v1/models | head -5
-```
-
-### Watchdog
-
-The VPS has a watchdog system that monitors 16 services:
-
-```bash
-# Check watchdog status
-systemctl status tollgate-watchdog
-
-# Dry-run all checks
-python3 /opt/tollgate/scripts/watchdog.py --dry-run
-```
-
-### Hermes health-check script
-
-A dedicated health-check script (`scripts/hermes-health-check.sh`) runs every 15 minutes via cron. It checks:
-
-- Container health status for all tenants (sitarani, chiefmonkey, bekka)
-- Gateway endpoints on ports 9000-9002
-- Buzz relay (optional, warning only)
-- Routstr / LLM proxy (optional, warning only)
-
-The script is silent on success and writes alerts to a log file on failure. Deploy it via the Ansible monitoring tasks:
-
-```bash
-# Run the health check manually
-bash scripts/hermes-health-check.sh
-
-# Check recent alerts
-tail -20 /var/log/hermes-health-check.log
-
-# The cron job is deployed by the Ansible playbook
-ansible-playbook ansible/playbooks/45-multi-tenant-hermes.yml \
-  --extra-vars "target_ip=23.182.128.51" \
-  --tags hermes_tenants_monitoring
-```
-
-### Log locations
-
-| Service | Log location |
-|---------|-------------|
-| Hermes containers | `docker logs hermes-<tenant>` |
-| obelisk-relay | `docker logs tollgate-obelisk` |
-| Routstr | `docker logs routstr` |
-| Cashu mint | `docker logs cdk-mintd` |
-| mint-orchestrator | `docker logs mint-orchestrator` |
-| Caddy | `docker logs tollgate-caddy` |
-| FIPS | `journalctl -u fips` |
-| Mint approvals | `/var/log/tollgate/mint-approvals.jsonl` |
-
----
-
-## 6. Updating Hermes Images
-
-### Pull and rebuild
-
-```bash
-# Pull the latest image
-docker pull hermes-agent:nostr
-
-# Or build from source if using a custom image
-cd /path/to/tollgate-infrastructure-kit
-docker build -t hermes-agent:nostr -f hermes-docker/Dockerfile .
-```
-
-### Recreate containers
-
-```bash
-cd /opt/tollgate/hermes
-# Recreate all tenant containers with the new image
-for tenant in sitarani chiefmonkey bekka; do
-  cd /opt/tollgate/hermes/$tenant
-  docker compose up -d
-done
-```
-
-Or via Ansible:
-
-```bash
-ansible-playbook ansible/playbooks/45-multi-tenant-hermes.yml \
-  --extra-vars "target_ip=23.182.128.51" \
-  --tags hermes_tenants
-```
-
-### Verify after update
-
-```bash
-# All containers healthy
-docker ps --filter name=hermes- --format "{{.Names}}: {{.Status}}"
-
-# Hermes version inside container
-docker exec hermes-sitarani hermes --version
-
-# Nostr adapter loaded
-docker logs hermes-sitarani 2>&1 | grep -i "nostr\|relay\|adapter"
-```
-
-### Rollback
-
-If the new image is broken:
-
-```bash
-# Pull the previous known-good image
-docker pull hermes-agent:nostr-previous  # if tagged
-
-# Or use the image ID
-docker tag <old-image-id> hermes-agent:nostr
-
-# Recreate containers
-for tenant in sitarani chiefmonkey bekka; do
-  cd /opt/tollgate/hermes/$tenant
-  docker compose up -d
-done
-```
-
----
-
-## 7. Backup and Restore
-
-### What to back up
-
-| Data | Location | Priority |
-|------|----------|----------|
-| Per-friend Hermes data | Docker volume `hermes-<tenant>-data` | High |
-| obelisk-relay data (chat history) | Docker volume `obelisk-data` | High |
-| Cashu mint state | Docker volume `cdk-mintd-data` | Critical |
-| FIPS config | `/etc/fips/fips.yaml` | Medium |
-| .env file (all secrets) | Repo root or `/opt/tollgate/hermes/.env` | Critical |
-| Ansible configs | Git repo (version-controlled) | Medium |
-| Mint registry | `/opt/tollgate/mints/registry.json` | High |
-
-### Backup script
-
-```bash
-#!/bin/bash
-# scripts/backup-hermes-volumes.sh
-BACKUP_DIR="/backup/hermes-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-
-# Hermes tenant volumes
-for vol in $(docker volume ls --format '{{.Name}}' | grep hermes-); do
-  echo "Backing up $vol..."
-  docker run --rm -v "$vol:/data:ro" -v "$BACKUP_DIR:/backup" alpine \
-    tar czf "/backup/${vol}.tar.gz" -C /data .
-done
-
-# obelisk-relay data
-docker run --rm -v obelisk-data:/data:ro -v "$BACKUP_DIR:/backup" alpine \
-  tar czf /backup/obelisk-data.tar.gz -C /data .
-
-# Cashu mint data
-docker run --rm -v cdk-mintd-data:/data:ro -v "$BACKUP_DIR:/backup" alpine \
-  tar czf /backup/cdk-mintd-data.tar.gz -C /data .
-
-# Config files
-tar czf "$BACKUP_DIR/configs.tar.gz" \
-  /etc/fips/fips.yaml \
-  /opt/tollgate/mints/registry.json \
-  /opt/tollgate/hermes/.env 2>/dev/null
-
-echo "Backup complete: $BACKUP_DIR"
-du -sh "$BACKUP_DIR"
-```
-
-### Rotation
-
-Keep 7 daily, 4 weekly, 3 monthly backups:
-
-```bash
-# Daily (keep 7)
-find /backup -maxdepth 1 -name "hermes-*" -type d -mtime +7 -exec rm -rf {} \;
-
-# Weekly (keep 4 weeks = 28 days)
-find /backup -maxdepth 1 -name "hermes-*" -type d -mtime +28 -exec rm -rf {} \;
-```
-
-Or use a systemd timer:
-
-```ini
-# /etc/systemd/system/hermes-backup.timer
-[Unit]
-Description=Daily Hermes volume backup
-
-[Timer]
-OnCalendar=03:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-### Restore
-
-```bash
-# Stop the container
-docker compose -f /opt/tollgate/hermes/<tenant>/docker-compose.yml down
-
-# Restore the volume
-docker run --rm -v hermes-<tenant>-data:/data -v /backup/hermes-YYYYMMDD:/backup alpine \
-  sh -c "rm -rf /data/* && tar xzf /backup/hermes-<tenant>-data.tar.gz -C /data"
-
-# Start the container
-docker compose -f /opt/tollgate/hermes/<tenant>/docker-compose.yml up -d
-
-# Verify
+ssh debian@vps2.fips
+cd /opt/tollgate/hermes/<tenant>
+$EDITOR docker-compose.yml       # tenant name, ports, gateway, LLM proxy URL
+docker compose up -d
 docker ps --filter name=hermes-<tenant>
-docker exec hermes-<tenant> pgrep -f "hermes gateway run"
+docker logs hermes-<tenant> --tail 50
 ```
 
-### Offsite backup
+Conventions: container `hermes-<tenant>`, network `hermes-net-<tenant>`,
+gateway port 9000 (sitarani) / 9001 (chiefmonkey) / 9002 (bekka). Volumes must
+be **copied**, never recreated, when migrating (see `PLAN-hermes-for-friends-v2.md`).
 
-Sync backups to another machine via rsync:
+The tenant's LLM access goes through the proxy:
+
+```yaml
+# inside the tenant compose / env
+LLM_PROXY_URL: "https://ai.orangesync.tech"
+```
+
+### Step 5 — Create their LLM proxy key
+
+routstr-proxy holds one API key per friend with isolated quota. Its config is
+managed in `/home/debian/routstr/` (compose + env):
 
 ```bash
-rsync -avz /backup/ c03rad0r@t470.fips:/backup/
+cd /home/debian/routstr
+$EDITOR .env            # add the friend's key / quota entry
+docker compose up -d
+curl -s http://localhost:8009/v1/info | head    # confirm the node answers
 ```
 
-Or use Syncthing for continuous sync.
+Then reference that key in the tenant's environment (Step 4).
+
+### Step 6 — Point the friend at the right relay
+
+Send the friend:
+
+- relay URL: `wss://relay.orangesync.tech`
+- their group name (they join via the invite you created in Step 2)
+- the onboarding guide: `docs/onboarding-friend-guide.md`
+
+### Step 7 — Smoke test
+
+```bash
+# relay healthy?
+curl -s https://relay.orangesync.tech/ | head -c 200
+# tenant healthy?
+docker ps --filter name=hermes-<tenant> --format '{{.Names}} {{.Status}}'
+# have the friend send "@<botname> ping" in the group and watch it arrive:
+docker logs -f hermes-<tenant>
+```
 
 ---
 
-## 8. Relay and Group Management
-
-### obelisk-relay (chat relay)
-
-The chat relay runs as a Docker container (`tollgate-obelisk`) behind Caddy at `chat.<domain>`.
+## 3. Removing a friend
 
 ```bash
-# Check relay status
-docker ps | grep obelisk
-curl -sf http://localhost:8080/health
+# 1. Remove from the NIP-29 group (kind 9001, remove-user)
+nak event --sec <admin-nsec> --kind 9001 \
+  --tag h=<tenant-name> --tag p=<friend-pubkey-hex> \
+  --relay wss://relay.orangesync.tech
 
-# View relay config
-docker exec tollgate-obelisk cat /app/data/config.json
+# 2. Stop their Hermes tenant
+cd /opt/tollgate/hermes/<tenant> && docker compose down
 
-# Restart relay
-docker restart tollgate-obelisk
+# 3. Revoke their LLM proxy key (edit + recreate routstr-proxy)
+cd /home/debian/routstr && $EDITOR .env && docker compose up -d
 
-# View relay logs
-docker logs tollgate-obelisk --tail 50
+# 4. Optional: delete the group entirely (kind 9008)
+nak event --sec <admin-nsec> --kind 9008 \
+  --tag h=<tenant-name> --relay wss://relay.orangesync.tech
 ```
 
-### Creating a NIP-29 group
+Keep the tenant's data volume until you are sure they will not return
+(backup first — Section 7).
 
-Use `nak` or any Nostr client with the deployment admin nsec:
+---
+
+## 4. Issuing AI credits (Cashu)
+
+The credits pipeline:
+
+```text
+you publish kind:38010 #mint-approval on the relay
+        → mint-orchestrator sees it (watches the relay)
+        → cdk-mintd mints Cashu tokens (mint.orangesync.tech)
+        → tokens land in the friend's Hermes wallet
+        → Hermes spends them at the LLM proxy (routstr)
+```
+
+Approvals are published with the kit's CLI (`mint-approve/src/tollgate_mint_approve/cli.py`):
 
 ```bash
-# Create a group (kind 9007)
-nak event --kind 9007 \
-  --content '{"name":"friend-ai","about":"AI assistant group"}' \
-  --tag d:friend-ai \
-  wss://chat.orangesync.tech
-
-# Add a user to the group (kind 9000)
-nak event --kind 9000 \
-  --tag d:friend-ai \
-  --tag p:<friend-npub> \
-  wss://chat.orangesync.tech
+cd ~/tollgate-infrastructure-kit/mint-approve/src
+python -m tollgate_mint_approve.cli \
+  --nsec  <operator-nsec> \
+  --mint  https://mint.orangesync.tech \
+  --quote <quote-or-reference> \
+  --amount <sats> \
+  --unit  sat
+  # --relay defaults to wss://relay.orangesync.tech
 ```
 
-### Whitelisting npubs
+> Never paste a real nsec into shell history — prefer a bunker or prompt.
 
-The obelisk-relay uses NIP-42 authentication. Only whitelisted npubs can connect. To add/remove:
+Verify the pipeline end-to-end:
 
 ```bash
-# Check current whitelist
-docker exec tollgate-obelisk cat /app/data/config.json | jq '.allowed_pubkeys'
-
-# Add an npub (edit config and restart)
-docker exec tollgate-obelisk sh -c "
-  cat /app/data/config.json | jq '.allowed_pubkeys += [\"npub1...\"]' > /tmp/config.json
-  cp /tmp/config.json /app/data/config.json
-"
-docker restart tollgate-obelisk
+docker logs mint-orchestrator --tail 30   # should log the approval + mint
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8085/   # mint answers (200)
+# then ask the friend to check their balance in the group ("balance")
 ```
 
-### strfry (general relay)
+---
 
-The general relay runs as `tollgate-strfry` behind Caddy at `relay.<domain>`. Friends do not need this relay for Hermes, but it can be used for profile metadata and public Nostr posts.
+## 5. Monitoring and health checks
+
+Quick daily check (safe to run any time):
 
 ```bash
-docker ps | grep strfry
-curl -sf http://localhost:7777/
+ssh debian@vps2.fips '
+  docker ps --format "{{.Names}}\t{{.Status}}" | sort
+  echo ---
+  curl -s -o /dev/null -w "relay:%{http_code}\n"  https://relay.orangesync.tech/
+  curl -s -o /dev/null -w "ai:%{http_code}\n"     https://ai.orangesync.tech/
+  curl -s -o /dev/null -w "mint:%{http_code}\n"   http://localhost:8085/
+'
 ```
+
+What "healthy" looks like:
+
+- `docker ps`: all containers `Up ... (healthy)` — especially the three
+  `hermes-*` tenants, `buzz-relay`, `routstr-proxy`, `cdk-mintd`,
+  `mint-orchestrator`
+- `relay:` → `200` (Buzz Relay status JSON)
+- `ai:` → `200`
+- `mint:` → `200`
+
+Logs by component:
+
+| Component | Command |
+|---|---|
+| Hermes tenant | `docker logs -f hermes-<tenant>` |
+| Relay | `docker logs -f buzz-relay` |
+| Relay DB | `docker logs buzz-relay-postgres --tail 50` |
+| LLM proxy | `docker logs -f routstr-proxy` |
+| Mint | `docker logs -f cdk-mintd` |
+| Credit approvals | `docker logs -f mint-orchestrator` |
+| Caddy (TLS/routing) | `journalctl -u caddy -f` |
+| Host | `journalctl -xe --no-pager | tail -50` |
+
+A `tollgate-watchdog` unit exists for auto-restarts but is currently
+**inactive** — do not rely on it until it is enabled deliberately.
+
+---
+
+## 6. Updating Hermes images
+
+The tenants run `hermes-agent:nostr` (s6-overlay, Python 3.13). To roll a new
+image:
+
+```bash
+ssh debian@vps2.fips
+docker pull hermes-agent:nostr          # or build/tag your updated image
+for t in sitarani chiefmonkey bekka; do
+  (cd /opt/tollgate/hermes/$t && docker compose up -d)
+done
+docker ps --format '{{.Names}}\t{{.Status}}' | grep hermes-
+```
+
+Roll one tenant first, smoke test (`@bot ping` in its group), then the rest.
+Volumes are preserved across `up -d` recreations — never delete them.
+
+---
+
+## 7. Backup and restore
+
+What matters, in order:
+
+1. **Relay state** — group definitions and membership live in postgres:
+
+```bash
+ssh debian@vps2.fips
+docker exec buzz-relay-postgres pg_dump -U <pg-user> buzz > \
+  ~/backups/buzz-relay-$(date +%F).sql    # adjust db/user from /opt/buzz-relay compose
+```
+
+2. **Hermes tenant volumes** (agent data, kanban DBs, memories):
+
+```bash
+docker run --rm -v <volume>:/src -v ~/backups:/dst alpine \
+  tar czf /dst/<tenant>-$(date +%F).tgz -C /src .
+```
+
+3. **Config trees**: `/opt/buzz-relay/`, `/opt/tollgate/hermes/`,
+   `/home/debian/routstr/`, `/etc/caddy/Caddyfile`, and this kit (git remote).
+
+Restore = recreate the compose project, then restore the volume tarball /
+`psql < dump`. Test the restore path at least once before you need it.
+
+---
+
+## 8. Relay and group management
+
+```bash
+# relay status JSON (also proves Caddy + WebSocket routing)
+curl -s https://relay.orangesync.tech/ | head -c 300
+
+# restart the relay stack
+cd /opt/buzz-relay && docker compose restart
+
+# edit relay config (NIP-42 requirements, admin, membership policy)
+cd /opt/buzz-relay && $EDITOR docker-compose.yml && docker compose up -d
+
+# relay logs (auth failures show up here with the client pubkey)
+docker logs buzz-relay --tail 100
+
+# Caddy: routing for relay./ai./mint. lives in /etc/caddy/Caddyfile
+#   relay.orangesync.tech  → reverse_proxy localhost:3007
+#   ai.orangesync.tech     → reverse_proxy localhost:8009
+#   mint.orangesync.tech   → reverse_proxy localhost:8085
+sudo $EDITOR /etc/caddy/Caddyfile && sudo systemctl reload caddy
+journalctl -u caddy --since today | tail -30
+```
+
+Group operations (as admin, all via `nak … --relay wss://relay.orangesync.tech`):
+create `9007`, add member `9000`, remove member `9001`, edit metadata `9002`,
+delete group `9008`. See the NIP-29 table in Section 2.
 
 ---
 
 ## 9. Troubleshooting
 
-### Friend can't connect to relay
+**Friend cannot connect / sees no groups**
 
-1. Check obelisk-relay is running: `docker ps | grep obelisk`
-2. Check relay URL is correct: friend must use `wss://chat.<domain>`, not `wss://relay.<domain>`
-3. Check friend's npub is whitelisted: `docker exec tollgate-obelisk cat /app/data/config.json | jq '.allowed_pubkeys'`
-4. Check Caddy WebSocket upgrade: `docker logs tollgate-caddy | grep chat`
-5. Check friend's Buzz relay settings (Read + Write enabled)
+1. `curl -s https://relay.orangesync.tech/` → 200? If not: Caddy
+   (`systemctl status caddy`, `journalctl -u caddy`) then the container
+   (`docker ps | grep buzz-relay`, `docker logs buzz-relay`).
+2. NIP-42 failure: their key is not authorised — check Step 3 of Section 2
+   (`/opt/buzz-relay/docker-compose.yml`), then
+   `docker logs buzz-relay | grep -i auth`.
+3. Not in any group: re-send the `9000` put-user event for their pubkey
+   (hex, not npub).
 
-### Hermes not responding to messages
-
-1. Check container is running: `docker ps | grep hermes-<tenant>`
-2. Check healthcheck: `docker inspect hermes-<tenant> | jq '.[0].State.Health'`
-3. Check Nostr adapter logs: `docker logs hermes-<tenant> 2>&1 | grep nostr`
-4. Check relay connection: `docker logs hermes-<tenant> 2>&1 | grep relay`
-5. Check LLM routing: `docker logs routstr --tail 50`
-6. Check z.ai API key: `curl -sf -H "Authorization: Bearer $ZAI_API_KEY" https://api.z.ai/v1/models`
-
-### Credits not working
-
-1. Check Cashu mint is running: `docker ps | grep cdk-mint`
-2. Check mint-orchestrator is running: `docker ps | grep mint-orchestrator`
-3. Check recent approvals: `tail -10 /var/log/tollgate/mint-approvals.jsonl`
-4. Check Routstr: `curl -sf http://localhost:8000/v1/info`
-5. Check mint-orchestrator logs: `docker logs mint-orchestrator --tail 50`
-
-### FIPS mesh issues
-
-See [FIPS Mesh Operations](FIPS-MESH-OPERATIONS.md) for detailed FIPS troubleshooting.
-
-Quick check:
-```bash
-sudo systemctl is-active fips fips-dns fips-firewall
-sudo fipsctl show status
-sudo fipsctl show peers
-sudo dig @::1 -p 5354 vps2.fips AAAA +short
-```
-
-### Container won't start
+**Hermes tenant not answering**
 
 ```bash
-# Check container logs
-docker logs hermes-<tenant>
-
-# Check port conflicts
-ss -tlnp | grep 8080
-
-# Check Docker disk space
-df -h
-docker system df
-
-# Check memory
-free -h
-docker stats --no-stream
+docker ps -a | grep hermes-          # exited? restarting?
+docker logs hermes-<tenant> --tail 100
+cd /opt/tollgate/hermes/<tenant> && docker compose up -d
 ```
 
-### Gateway port not binding
+**AI requests failing (credits spent but no reply)**
 
-The Hermes gateway process may run but not bind port 8080 inside the container. This is often caused by the `command: ["sleep", "infinity"]` override in the compose template, which prevents s6-overlay from managing the gateway service.
-
-Check:
 ```bash
-# Is the gateway process running?
-docker exec hermes-<tenant> pgrep -f "hermes gateway run"
-
-# Is port 8080 bound?
-docker exec hermes-<tenant> ss -tlnp | grep 8080
-
-# Check the compose command
-grep command /opt/tollgate/hermes/<tenant>/docker-compose.yml
+docker logs routstr-proxy --tail 50          # key valid? quota exhausted?
+curl -s http://localhost:8009/v1/info        # proxy alive?
+docker logs cdk-mintd --tail 50              # mint errors?
+docker logs mint-orchestrator --tail 50      # approvals stuck?
 ```
 
-If `command: ["sleep", "infinity"]` is present, remove it and let s6-overlay manage the process (see Task 4 in the v2 plan).
+**LLM proxy unreachable from a tenant**
+
+Check the tenant env points at `https://ai.orangesync.tech` and that
+`curl -s https://ai.orangesync.tech/` answers from the host. Remember the
+proxy only listens on host port **8009** — port 8000 is container-internal
+and will not answer from the host.
+
+**Wrong relay URL handed out**
+
+If a friend was told `wss://chat.…` or anything other than
+`wss://relay.orangesync.tech`, correct them — there is no `chat.` subdomain.
+`https://relay.orangesync.tech/` returning the "Buzz Relay" JSON is the
+proof you gave them the right one.
 
 ---
 
-## Quick Reference
+## Quick reference
 
-| Task | Command |
-|------|---------|
-| Add a friend | Edit `.env` + playbook → `ansible-playbook 45-multi-tenant-hermes.yml` |
-| Remove a friend | `docker compose down` → `docker volume rm` → edit playbook |
-| Issue credits | `mint-approve --nsec ... --mint ... --quote ... --amount ...` |
-| Check containers | `docker ps --filter name=hermes-` |
-| Check relay | `curl http://localhost:8080/health` |
-| Check LLM | `curl http://localhost:8000/v1/info` |
-| Update image | `docker pull hermes-agent:nostr` → `docker compose up -d` |
-| Backup | `scripts/backup-hermes-volumes.sh` |
-| Restore | `docker run --rm -v <vol>:/data -v /backup:/backup alpine tar xzf ...` |
-| Relay logs | `docker logs tollgate-obelisk` |
-| Mint approvals | `tail /var/log/tollgate/mint-approvals.jsonl` |
+```bash
+# relay
+curl -s https://relay.orangesync.tech/ | head -c 200     # health/status
+docker logs buzz-relay --tail 50                          # relay logs
+cd /opt/buzz-relay && docker compose up -d                # apply config
 
----
+# group admin (NIP-29) — all need --relay wss://relay.orangesync.tech
+nak event --sec <nsec> --kind 9007 --tag h=<group> ...    # create
+nak event --sec <nsec> --kind 9000 --tag h=<group> --tag p=<pubkey-hex> ...  # add
+nak event --sec <nsec> --kind 9001 --tag h=<group> --tag p=<pubkey-hex> ...  # remove
 
-## References
+# tenants
+docker ps --format '{{.Names}}\t{{.Status}}' | grep hermes-
+docker logs -f hermes-<tenant>
+cd /opt/tollgate/hermes/<tenant> && docker compose up -d
 
-- [Integrated Operations Guide](INTEGRATED-OPERATIONS.md) — full infrastructure operations manual
-- [Friend Onboarding Guide](onboarding-friend-guide.md) — user-facing guide for friends
-- [Services Overview](services.md) — full service inventory
-- [Troubleshooting](troubleshooting.md) — general troubleshooting
-- [FIPS Mesh Operations](FIPS-MESH-OPERATIONS.md) — FIPS mesh config and peer management
-- [Hermes for Friends v2 Plan](../PLAN-hermes-for-friends-v2.md) — implementation plan
+# credits
+docker logs -f mint-orchestrator
+cd ~/tollgate-infrastructure-kit/mint-approve/src && \
+  python -m tollgate_mint_approve.cli --nsec <nsec> \
+    --mint https://mint.orangesync.tech --quote <id> --amount 500 --unit sat
+
+# LLM proxy
+curl -s http://localhost:8009/v1/info
+docker logs routstr-proxy --tail 50
+
+# caddy (host service, not a container)
+systemctl status caddy && journalctl -u caddy --since today | tail
+```
