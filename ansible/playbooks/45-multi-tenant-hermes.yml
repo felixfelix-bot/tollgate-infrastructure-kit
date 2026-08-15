@@ -108,7 +108,7 @@
         nsec: "{{ lookup('env', 'BEKKA_NSEC') }}"
         zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_BEKKA') }}"
     hermes_tenants_deployment_admin_nsec: "{{ lookup('env', 'DEPLOYMENT_ADMIN_NSEC') }}"
-    hermes_tenants_image: "hermes-agent:nostr"
+    hermes_tenants_image: "hermes-agent:nostr-slim"
     hermes_tenants_base_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/hermes"
 
 - name: Verify multi-tenant deployment

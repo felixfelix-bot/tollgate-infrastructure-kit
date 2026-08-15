@@ -116,6 +116,36 @@ assert len(sig) > 0
 
 To verify the gate works, temporarily remove the `uv pip install coincurve` line and the build will fail.
 
+## Nostr Platform Bootstrap (cont-init.d/03)
+
+The image ships `/etc/cont-init.d/03-nostr-bootstrap` (source:
+`hermes-docker/cont-init.d/03-nostr-bootstrap` in this repo, embedded
+base64-encoded in `Dockerfile.slim` because the build context is the
+hermes-agent source tree). It runs as root during container init, before
+s6 stage 2 drops privileges to uid 10000, and makes every deployment
+(VPS2, SSD, compose, plain `docker run`) self-bootstrapping:
+
+- Renders the nostr platform into `$HERMES_HOME/config.yaml`
+  (`/opt/data/config.yaml`) from `NOSTR_RELAYS`, `NOSTR_GROUPS`,
+  `NOSTR_NSEC_PATH` environment variables.
+- **Write-only-if-absent**: an existing top-level `nostr:` block is never
+  touched; re-runs are no-ops (idempotent).
+- If `/config/config.yaml` exists (the Ansible role mounts the per-tenant
+  `config/` dir at `/config`), a missing home config is seeded from it.
+- Enables `platforms.nostr` and `platforms.api_server` (the api_server
+  platform serves the `/health` endpoint the compose healthcheck uses).
+- Ensures `$HERMES_HOME` and `$HERMES_HOME/.hermes` exist and are owned by
+  uid/gid 10000, so a container booted from an EMPTY volume can persist
+  state.
+- Set `NOSTR_BOOTSTRAP=0` to disable.
+
+Verify locally without building the full image:
+
+```bash
+python3 tests/test-nostr-bootstrap-unit.py    # merge logic, 8 cases
+bash tests/test-nostr-bootstrap.sh            # asserts embed matches + container test
+```
+
 ## Notes
 
 - First container startup may download Node.js and Chrome if browser tools are used
