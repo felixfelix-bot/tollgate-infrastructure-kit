@@ -1,0 +1,4 @@
+# Hermes health check delivery channel (T4.2)
+# Managed by Ansible — the ntfy topic URL is the access credential: keep 0600.
+# Without NTFY_URL alerts only land in /var/log/hermes-health-check.alert.
+NTFY_URL="{{ hermes_health_ntfy_url }}"

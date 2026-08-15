@@ -226,6 +226,10 @@
   loop_control:
     label: "{{ item.name }}"
 
+- name: Include monitoring tasks
+  ansible.builtin.include_tasks: monitoring.yml
+  when: hermes_tenants_enable_monitoring | bool
+
 - name: Display Hermes tenant deployment info
   ansible.builtin.debug:
     msg: |
@@ -241,3 +245,4 @@
       Hermes resource limits: memory={{ hermes_tenants_resource_limits.memory }}, cpus={{ hermes_tenants_resource_limits.cpus }}, reservation={{ hermes_tenants_resource_reservations.memory }}, stop_grace={{ hermes_tenants_stop_grace_period }}
       Routstrd resource limits: memory={{ hermes_tenants_routstrd_resource_limits.memory }}, cpus={{ hermes_tenants_routstrd_resource_limits.cpus }}, reservation={{ hermes_tenants_routstrd_resource_reservations.memory }}
       Docker socket mount: {{ 'DISABLED (security)' if hermes_tenants_no_docker_socket else 'ENABLED' }}
+      Monitoring: {{ 'ENABLED' if hermes_tenants_enable_monitoring else 'DISABLED' }}
