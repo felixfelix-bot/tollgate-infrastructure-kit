@@ -121,9 +121,11 @@ You should get back an IPv6 address in the FIPS mesh range.
 
 Your Nostr key is your identity on the network. It is a cryptographic keypair: a private key (`nsec1...`) that you keep secret, and a public key (`npub1...`) that you share with others. Your operator needs your npub to whitelist you on the relay and assign you a Hermes bot.
 
-### Option A — Let Buzz generate one (easiest)
+### Option A — Let Buzz desktop create one (recommended)
 
-When you install Buzz (next section), it creates a fresh keypair automatically on first launch. You do not need to do anything — just copy the `npub1...` from Buzz settings and send it to your operator. This is the recommended path for most friends.
+Buzz creates your identity on the **desktop** app. Install the Buzz desktop app first (Section 4 below) and launch it — it generates a fresh keypair for you automatically as part of first-run setup. Then open Settings → Profile, copy your `npub1...`, and send it to your operator. This is the recommended path for most friends.
+
+> **Important:** only the desktop app can create an identity. The Buzz mobile app is a companion — it cannot generate keys on its own; it connects by pairing with your desktop (Section 4, "Pairing your phone (optional)"). If you want a key before installing anything, use Option B below.
 
 ### Option B — Generate one yourself
 
@@ -148,31 +150,22 @@ Save the `nsec1...` somewhere safe (a password manager is ideal). You will impor
 
 ### Option C — Use an existing key
 
-If you already have a Nostr key from another client (Damus, Amethyst, Iris, etc.), you can reuse it. Just send your existing `npub1...` to your operator, then import the `nsec1...` into Buzz after install (Section 4, "Importing an existing key").
+If you already have a Nostr key from another client (Damus, Amethyst, Iris, etc.), you can reuse it. Just send your existing `npub1...` to your operator, then import the `nsec1...` into the Buzz desktop app after install (Section 4, "Importing an existing key").
 
 ### Security notes
 
 - Your `nsec` is your identity. Anyone who has it can impersonate you. Never share it, never paste it into a website you do not trust, and never commit it to git.
 - Your operator needs your `npub` only — never send your `nsec`.
 - If you lose your `nsec`, you lose access to your identity. There is no password reset. Back it up.
-- Buzz can encrypt your key with a password (see "Locking your identity" in the next section). This is recommended on shared computers.
+- Buzz stores your key in your operating system's keychain and shows you the `nsec` once during setup so you can back it up (see "Locking your identity" in the next section).
 
 ---
 
 ## 4. Installing Buzz
 
-Buzz is a desktop and mobile Nostr client that supports NIP-29 group chat. It is the front-end you use to interact with your Hermes agent — think of it as your chat window into the system.
+Buzz is a Nostr client that supports NIP-29 group chat. It is the front-end you use to interact with your Hermes agent — think of it as your chat window into the system. Buzz is desktop-first: your identity is created and stored on the desktop app. The mobile app is an optional companion that pairs with your desktop and shares that identity — it cannot stand alone.
 
-### Mobile (recommended for most friends)
-
-1. **Android** — Search for "Buzz" on the Google Play Store, or download the APK directly from the releases page: https://github.com/block/buzz/releases
-2. **iOS** — Search for "Buzz" on the Apple App Store, or use the TestFlight link from the releases page if available
-3. Install and launch Buzz.
-4. On first launch Buzz will create a new Nostr identity for you automatically. You will see your npub (a long string starting with `npub1...`) displayed in the settings or profile section.
-
-> **Note:** If the mobile app is not available in your region's store, use the desktop app instead. The releases page always has the latest builds.
-
-### Desktop
+### Desktop (required — your identity lives here)
 
 1. Go to the Buzz releases page: https://github.com/block/buzz/releases
 2. Download the build for your operating system:
@@ -180,11 +173,25 @@ Buzz is a desktop and mobile Nostr client that supports NIP-29 group chat. It is
    - **Windows**: `.exe` installer
    - **Linux**: `.AppImage` or `.deb` package
 3. Install and launch Buzz.
-4. On first launch Buzz will create a new Nostr identity for you automatically. You will see your npub (a long string starting with `npub1...`) displayed in the settings or profile section.
+4. On first launch, Buzz walks you through a short setup and creates a new Nostr identity for you automatically — you do not need to generate or paste any keys.
+5. Open **Settings → Profile** and copy your npub (the long string starting with `npub1...`). This is what you send to your operator (see "Sharing your npub" below).
+
+### Pairing your phone (optional)
+
+The Buzz mobile app (Android/iOS builds are on the same releases page) does not create its own identity. Its welcome screen offers exactly two choices: **Scan a QR code** or **paste a pairing code** — both come from your desktop. The phone is a mirror of your desktop identity, not a separate account.
+
+To connect your phone once the desktop app is set up:
+
+1. On the **desktop** app, open **Settings → Mobile → "Pair Mobile Device"** and click **Pair**. A QR code appears — it encodes a `nostrpair://` pairing code (NIP-AB device pairing).
+2. On your **phone**, launch Buzz, choose **Scan QR Code**, and point it at the QR code on your desktop screen. No camera? Desktop shows a copy button next to the QR — copy the `nostrpair://` code and paste it into the phone's "paste pairing code" field instead.
+3. Both devices display a short security code (SAS). Check that the two codes match, then confirm on both. This proves nobody intercepted the transfer.
+4. Done. Pairing securely transfers your identity and relay configuration to the phone over an encrypted channel — you do **not** add the relay again on the phone.
+
+If your phone is lost, reset, or replaced, just pair again from the desktop. Your identity lives on the desktop, so nothing is lost.
 
 ### No hosted web client
 
-There is currently no hosted web client for the private relay — Buzz runs as a desktop or mobile app. If you cannot install apps on your machine, install the desktop app on another computer, or ask your operator for guidance.
+There is currently no hosted web client for the private relay — Buzz runs as a desktop app, with an optional paired phone. If you cannot install apps on your machine, install the desktop app on another computer, or ask your operator for guidance.
 
 ### CLI install via cargo (advanced)
 
@@ -220,26 +227,28 @@ Replace `wss://relay.<your-domain>` with your operator's relay URL and `nsec1...
 - You plan to write scripts or cron jobs that post to your Hermes group.
 - You are comfortable compiling Rust software from source.
 
-For most friends, the desktop or mobile app is the easier starting point. Use the CLI only if you need the terminal workflow.
+For most friends, the desktop app is the starting point (phone optional via pairing). Use the CLI only if you need the terminal workflow.
 
 ### Importing an existing key (optional)
 
-If you already have a Nostr key (for example from Damus, Amethyst, or another client):
+If you already have a Nostr key (for example from Damus, Amethyst, or another client), import it into the **desktop** app:
 
-1. Open Buzz settings.
+1. Open Buzz desktop settings.
 2. Find the **Private Key** or **Import Key** section.
 3. Paste your `nsec1...` secret key.
 4. Buzz will switch to your existing identity.
 
-If you do not have a key, skip this step — Buzz creates one for you.
+If you do not have a key, skip this step — Buzz desktop creates one for you.
 
 ### Locking your identity
 
-Buzz lets you encrypt your private key with a password. This is strongly recommended on shared computers. If you set a password, you will need it every time you launch Buzz. Lose it and you lose access to your identity — there is no password reset. Write it down somewhere safe.
+Buzz stores your private key in your operating system's secure keychain (macOS Keychain, Windows Credential Manager, or your Linux desktop's keyring) — you do not configure a password inside Buzz itself. Keep your computer account protected instead.
+
+During first-run setup, on the fresh-key path, Buzz shows you your `nsec1...` once and asks you to save it somewhere safe ("This key is stored in your system keychain, but save it some place safe in case you ever need to restore your account"). Do exactly that — a password manager is ideal. This backup is the only way to restore your identity if the keychain is ever lost or cleared; there is no reset.
 
 ### Sharing your npub
 
-Once Buzz is set up, copy your npub (`npub1...`) and send it to your operator (the person who invited you). They need it to whitelist you on the relay and assign you a Hermes bot. Until they do, you will not be able to connect or see any groups.
+Once Buzz desktop is set up, copy your npub (`npub1...`) from Settings → Profile and send it to your operator (the person who invited you). They need it to whitelist you on the relay and assign you a Hermes bot. Until they do, you will not be able to connect or see any groups.
 
 ---
 
@@ -257,14 +266,16 @@ This relay hosts the NIP-29 group chats where your Hermes bot lives, and it enfo
 
 If your machine is on the operator's FIPS mesh (Section 2), the same relay is also reachable over the mesh at `ws://buzz-relay.fips` — useful if public DNS or TLS is blocked on your network.
 
-### Adding the relay in Buzz
+### Adding the relay in Buzz desktop
 
-1. Open Buzz settings.
+1. Open Buzz desktop settings.
 2. Navigate to the **Relays** section.
 3. Click **Add Relay** (or the `+` button).
 4. Paste the relay URL: `wss://relay.<your-domain>`
 5. Enable both **Read** and **Write** for this relay.
 6. Save.
+
+You only do this on the desktop. If you pair a phone later (Section 4, "Pairing your phone (optional)"), it inherits the relay automatically — do not add relays by hand on the phone.
 
 Buzz will attempt to connect immediately. You should see a green or connected indicator next to the relay. If it stays red or says "disconnected":
 
@@ -790,8 +801,8 @@ If all four commands return good results, the mesh layer is healthy and the prob
 | Mesh software | FIPS daemon | `sudo apt install ./fips_0.4.1_amd64.deb` |
 | Peer config | `/etc/fips/fips.yaml` | Add Andre's npub + UDP endpoint |
 | Host aliases | `/etc/fips/hosts` | `andre <npub>` |
-| Nostr key | Buzz (auto) or terminal | `nak key generate` or let Buzz create one |
-| Chat client | Buzz mobile or desktop app | Install, connect to relay |
+| Nostr key | Buzz desktop (auto) or terminal | `nak key generate` or let Buzz desktop create one on first launch |
+| Chat client | Buzz desktop app (phone optional) | Install desktop, connect to relay; pair phone from Settings → Mobile |
 | Relay URL | `wss://relay.<domain>` | Add in Buzz relay settings |
 | Authentication | NIP-42 (automatic) | Whitelist your npub with operator |
 | Group chat | NIP-29 group in Buzz | Operator adds your npub to group |

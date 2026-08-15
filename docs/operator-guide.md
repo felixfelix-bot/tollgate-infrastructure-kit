@@ -97,10 +97,12 @@ Prerequisites: ssh access (`ssh debian@vps2.fips` from a mesh machine, or
 
 ### Step 1 — Get the friend set up on the mesh (optional but recommended)
 
-Have the friend complete Sections 1–3 of `docs/onboarding-friend-guide.md`:
-install FIPS, add your mesh peer config, generate their Nostr key, and send
-you the npub. If they are not on the mesh, they can still use the relay over
-the public internet — the mesh is a convenience, not a requirement.
+Have the friend complete Sections 1–4 of `docs/onboarding-friend-guide.md`:
+install FIPS, add your mesh peer config, install the Buzz desktop app (their
+identity is created there — the mobile app is only a paired companion and
+cannot create one), and send you the npub from desktop Settings → Profile.
+If they are not on the mesh, they can still use the relay over the public
+internet — the mesh is a convenience, not a requirement.
 
 ### Step 2 — Create their NIP-29 group on the relay
 
