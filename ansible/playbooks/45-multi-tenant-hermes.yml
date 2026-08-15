@@ -95,20 +95,20 @@
       when: hermes_tenants_enabled | default(true)
   vars:
     hermes_tenants_tenants:
-      - name: "ours"
-        npub: "{{ lookup('env', 'FRIEND1_NPUB') }}"
-        nsec: "{{ lookup('env', 'FRIEND1_NSEC') }}"
-        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_OURS') }}"
-      - name: "friend1"
-        npub: "{{ lookup('env', 'FRIEND2_NPUB') }}"
-        nsec: "{{ lookup('env', 'FRIEND2_NSEC') }}"
-        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_FRIEND') }}"
-      - name: "friend2"
-        npub: "{{ lookup('env', 'FRIEND3_NPUB') }}"
-        nsec: "{{ lookup('env', 'FRIEND3_NSEC') }}"
-        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_FRIEND') }}"
+      - name: "sitarani"
+        npub: "{{ lookup('env', 'SITARANI_NPUB') }}"
+        nsec: "{{ lookup('env', 'SITARANI_NSEC') }}"
+        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_SITARANI') }}"
+      - name: "chiefmonkey"
+        npub: "{{ lookup('env', 'CHIEFMONKEY_NPUB') }}"
+        nsec: "{{ lookup('env', 'CHIEFMONKEY_NSEC') }}"
+        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_CHIEFMONKEY') }}"
+      - name: "bekka"
+        npub: "{{ lookup('env', 'BEKKA_NPUB') }}"
+        nsec: "{{ lookup('env', 'BEKKA_NSEC') }}"
+        zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_BEKKA') }}"
     hermes_tenants_deployment_admin_nsec: "{{ lookup('env', 'DEPLOYMENT_ADMIN_NSEC') }}"
-    hermes_tenants_image: "hermes-agent:nostr"
+    hermes_tenants_image: "hermes-agent:nostr-slim"
     hermes_tenants_base_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/hermes"
 
 - name: Verify multi-tenant deployment
