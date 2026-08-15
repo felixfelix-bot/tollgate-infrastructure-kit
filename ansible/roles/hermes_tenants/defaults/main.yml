@@ -41,3 +41,5 @@ hermes_tenants_health_port_base: 9100
 hermes_tenants_no_docker_socket: true
 
 hermes_tenants_enable_monitoring: true
+
+hermes_health_ntfy_url: ""

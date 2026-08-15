@@ -1,46 +1,100 @@
 ---
+# T4.2: health-check alert ladder + 5-min sar/atop sample persistence.
+# Ladder: warn load>8 / disk>85% / ram-avail<10%, page load>15 / disk>95% /
+# ram<5%, meltdown load>30. Delivery: ntfy push (hermes_health_ntfy_url)
+# + local logs. Samples: sysstat (sar) + atop at 5-min, 28-day retention.
+
+- name: Install sampling packages (sysstat, atop)
+  ansible.builtin.apt:
+    name:
+      - sysstat
+      - atop
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Enable sysstat collection with 28-day history
+  ansible.builtin.lineinfile:
+    path: /etc/default/sysstat
+    regexp: '^{{ item.key }}='
+    line: '{{ item.key }}="{{ item.value }}"'
+    mode: "0644"
+  loop:
+    - { key: ENABLED, value: "true" }
+    - { key: HISTORY, value: "28" }
+  notify: Restart sysstat collection
+
+- name: Drop-in sysstat timer override for 5-minute sampling
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/sysstat-collect.timer.d/5min.conf
+    mode: "0644"
+    content: |
+      [Timer]
+      OnUnitActiveSec=5min
+  notify: Restart sysstat collection
+
+- name: Configure atop for 5-minute samples, 28-day retention
+  ansible.builtin.lineinfile:
+    path: /etc/default/atop
+    regexp: '^{{ item.key }}='
+    line: '{{ item.key }}={{ item.value }}'
+    mode: "0644"
+  loop:
+    - { key: LOGINTERVAL, value: "5" }
+    - { key: LOGGENERATIONS, value: "28" }
+  notify: Restart atop
+
+- name: Ensure deploy and state directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /opt/tollgate/scripts
+    - /var/lib/hermes-health-check
+
 - name: Deploy Hermes health check script
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../../scripts/hermes-health-check.sh"
     dest: /opt/tollgate/scripts/hermes-health-check.sh
     mode: "0755"
-    owner: root
-    group: root
 
-- name: Ensure log directory exists
-  ansible.builtin.file:
-    path: /var/log
-    state: directory
-    mode: "0755"
+- name: Deploy health-check config (ntfy delivery channel)
+  ansible.builtin.template:
+    src: hermes-health-check.defaults.j2
+    dest: /etc/default/hermes-health-check
+    mode: "0600"
 
 - name: Ensure log files exist with proper permissions
   ansible.builtin.file:
     path: "{{ item }}"
     state: touch
     mode: "0644"
-    owner: root
-    group: root
   loop:
     - /var/log/hermes-health-check.log
     - /var/log/hermes-health-check.alert
 
-- name: Install Hermes health check cron job
+- name: Install Hermes health check cron job (every 5 minutes)
   ansible.builtin.cron:
-    name: "Hermes container health check"
-    minute: "*/15"
-    hour: "*"
-    day: "*"
-    month: "*"
-    weekday: "*"
+    name: "Hermes health check + load alert ladder"
+    minute: "*/5"
     job: "/opt/tollgate/scripts/hermes-health-check.sh"
     user: root
     state: present
+
+- name: Remove legacy pre-rename monitor cron (watches nonexistent containers)
+  ansible.builtin.cron:
+    name: null
+    job: "/opt/tollgate/hermes/monitor.sh >> /var/log/hermes-monitor-cron.log 2>&1"
+    user: root
+    state: absent
 
 - name: Display health check deployment info
   ansible.builtin.debug:
     msg: |
       Hermes health check deployed!
-      Script: /opt/tollgate/scripts/hermes-health-check.sh
-      Schedule: Every 15 minutes
-      Log: /var/log/hermes-health-check.log
-      Alerts: /var/log/hermes-health-check.alert
+      Script: /opt/tollgate/scripts/hermes-health-check.sh (cron */5)
+      Ladder: warn load>8/disk>85%/ram<10%, page load>15/disk>95%/ram<5%, meltdown load>30
+      Delivery: {{ 'ntfy (' + hermes_health_ntfy_url + ')' if hermes_health_ntfy_url else 'LOCAL LOGS ONLY — set hermes_health_ntfy_url!' }}
+      Logs: /var/log/hermes-health-check.{log,alert}
+      Samples: sar 5-min (/var/log/sysstat, 28d) + atop 5-min (/var/log/atop, 28d)
