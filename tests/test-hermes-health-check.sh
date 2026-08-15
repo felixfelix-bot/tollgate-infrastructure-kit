@@ -192,6 +192,11 @@ else
 fi
 
 echo ""
+echo "Unit: SKIP_SERVICE_CHECKS mode skips docker requirement"
+SKIP_SERVICE_CHECKS_OUTPUT="$(SKIP_SERVICE_CHECKS=1 DISK_WARN_PCT=100 DISK_PAGE_PCT=100 HERMES_HEALTH_CONFIG=/dev/null HERMES_HEALTH_LOG=/dev/null HERMES_HEALTH_STATE="$(mktemp -d)" bash "$HEALTH_SCRIPT" 2>/dev/null; echo "rc=$?")"
+assert_equals "rc=0" "$SKIP_SERVICE_CHECKS_OUTPUT" "host-only mode exits 0 on this machine"
+
+echo ""
 echo "Unit: tenant + gateway regression (V2-10 checks retained)"
 assert_equals "sitarani chiefmonkey bekka" "${TENANTS[*]}" "TENANTS list"
 assert_equals "9100 9101 9102" "${HEALTH_PORTS[*]}" "HEALTH_PORTS list (role health_port_base 9100)"

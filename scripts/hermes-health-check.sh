@@ -38,6 +38,7 @@ MEMINFO_FILE="${MEMINFO_FILE:-/proc/meminfo}"
 : "${REPEAT_WARN:=21600}"
 : "${REPEAT_PAGE:=1800}"
 : "${REPEAT_MELTDOWN:=600}"
+: "${SKIP_SERVICE_CHECKS:=0}"
 
 TENANTS=("sitarani" "chiefmonkey" "bekka")
 HEALTH_PORTS=(9100 9101 9102)
@@ -379,18 +380,20 @@ main() {
 
     local level="ok"
 
-    if ! command -v docker &>/dev/null; then
-        notify "page" "docker" "docker not found in PATH — container checks impossible"
-        exit 1
+    if [[ "$SKIP_SERVICE_CHECKS" != "1" ]]; then
+        if ! command -v docker &>/dev/null; then
+            notify "page" "docker" "docker not found in PATH — container checks impossible (set SKIP_SERVICE_CHECKS=1 for host-only resource monitoring)"
+            exit 1
+        fi
+
+        for i in "${!TENANTS[@]}"; do
+            check_container_health "${TENANTS[$i]}" || true
+            check_gateway "${TENANTS[$i]}" "${HEALTH_PORTS[$i]}" || true
+        done
+
+        check_buzz_relay || true
+        check_routstr || true
     fi
-
-    for i in "${!TENANTS[@]}"; do
-        check_container_health "${TENANTS[$i]}" || true
-        check_gateway "${TENANTS[$i]}" "${HEALTH_PORTS[$i]}" || true
-    done
-
-    check_buzz_relay || true
-    check_routstr || true
 
     if [[ ${#FAILURES[@]} -gt 0 ]]; then
         local f
