@@ -71,15 +71,23 @@
     dest: /etc/default/hermes-health-check
     mode: "0600"
 
-- name: Ensure log files exist with proper permissions
-  ansible.builtin.file:
+- name: Check Hermes health check log files
+  ansible.builtin.stat:
     path: "{{ item }}"
-    state: touch
-    mode: "0644"
-    modification_time: preserve
   loop:
     - /var/log/hermes-health-check.log
     - /var/log/hermes-health-check.alert
+  register: hermes_health_logs
+
+- name: Ensure log files exist with proper permissions
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    state: touch
+    mode: "0644"
+  loop: "{{ hermes_health_logs.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not item.stat.exists
 
 - name: Install Hermes health check cron job (every 5 minutes)
   ansible.builtin.cron:
