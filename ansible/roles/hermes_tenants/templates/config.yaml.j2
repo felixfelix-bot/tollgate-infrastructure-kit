@@ -1,0 +1,14 @@
+# Hermes per-tenant config (role layer of the two-layer bootstrap).
+# Deployed write-only-if-absent (force=false); the in-image
+# cont-init.d/03-nostr-bootstrap seeds $HERMES_HOME/config.yaml from this
+# file (mounted at /config) on first boot and never clobbers existing
+# config. Hermes rewrites its own config.yaml afterwards.
+nostr:
+  relays: [{{ hermes_tenants_nostr_relays.split(',') | map('trim') | select | join(', ') }}]
+  groups: [{{ hermes_tenants_nostr_groups.split(',') | map('trim') | select | join(', ') }}]
+  nsec_path: {{ hermes_tenants_nostr_nsec_path }}
+platforms:
+  nostr:
+    enabled: true
+  api_server:
+    enabled: true

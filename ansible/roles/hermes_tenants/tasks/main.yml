@@ -32,7 +32,29 @@
   loop_control:
     label: "{{ item.0.name }}/{{ item.1 }}"
 
-- name: Check if nsec file already exists for tenants without keys
+- name: Ensure nsec directories are owned by container uid 10000
+  ansible.builtin.file:
+    path: "{{ hermes_tenants_base_dir }}/{{ item.name }}/nsec"
+    state: directory
+    owner: "10000"
+    group: "10000"
+    mode: "0700"
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Ensure config directories are owned by container uid 10000
+  ansible.builtin.file:
+    path: "{{ hermes_tenants_base_dir }}/{{ item.name }}/config"
+    state: directory
+    owner: "10000"
+    group: "10000"
+    mode: "0700"
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Check if nsec file already exists
   ansible.builtin.stat:
     path: "{{ hermes_tenants_base_dir }}/{{ item.name }}/nsec/nsec.txt"
   register: hermes_tenants_nsec_check
@@ -40,7 +62,6 @@
   loop_control:
     label: "{{ item.name }}"
     index_var: nsec_idx
-  when: item.nsec is not defined or item.nsec | length == 0
 
 - name: Generate nsec/npub keypair for tenants without keys
   ansible.builtin.shell: |
@@ -64,13 +85,41 @@
   ansible.builtin.copy:
     content: "{{ item.stdout_lines[0] }}"
     dest: "{{ hermes_tenants_base_dir }}/{{ item.item.name }}/nsec/nsec.txt"
-    mode: "0600"
+    owner: "10000"
+    group: "10000"
+    mode: "0400"
   no_log: true
   loop: "{{ hermes_tenants_keypair_output.results }}"
   loop_control:
     label: "{{ item.item.name }}"
   when: item.stdout_lines is defined and item.stdout_lines | length > 0
   register: hermes_tenants_nsec_write
+
+- name: Write inventory-provided nsec files (write-only-if-absent)
+  ansible.builtin.copy:
+    content: "{{ item.nsec }}"
+    dest: "{{ hermes_tenants_base_dir }}/{{ item.name }}/nsec/nsec.txt"
+    owner: "10000"
+    group: "10000"
+    mode: "0400"
+    force: false
+  no_log: true
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.nsec is defined and item.nsec | length > 0
+
+- name: Reconcile nsec file ownership on pre-existing deployments
+  ansible.builtin.file:
+    path: "{{ hermes_tenants_base_dir }}/{{ item.item.name }}/nsec/nsec.txt"
+    state: file
+    owner: "10000"
+    group: "10000"
+    mode: "0400"
+  loop: "{{ hermes_tenants_nsec_check.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.stat is defined and item.stat.exists
 
 - name: Create per-tenant Docker network (isolate friends)
   community.docker.docker_network:
@@ -86,6 +135,26 @@
   community.docker.docker_volume:
     name: "hermes-{{ item.name }}-data"
     state: present
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create per-tenant routstrd volume for wallet persistence
+  community.docker.docker_volume:
+    name: "routstrd-{{ item.name }}-data"
+    state: present
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Deploy per-tenant Hermes config (write-only-if-absent)
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ hermes_tenants_base_dir }}/{{ item.name }}/config/config.yaml"
+    owner: "10000"
+    group: "10000"
+    mode: "0640"
+    force: false
   loop: "{{ hermes_tenants_tenants }}"
   loop_control:
     label: "{{ item.name }}"
@@ -115,11 +184,8 @@
       ZAI_API_KEY={{ item.zai_api_key }}
       NOSTR_RELAYS={{ hermes_tenants_nostr_relays }}
       NOSTR_GROUPS={{ hermes_tenants_nostr_groups }}
-      NOSTR_NSEC_PATH=/nsec/nsec.txt
-      LLM_PROXY_URL={{ hermes_tenants_llm_proxy_url }}
+      NOSTR_NSEC_PATH={{ hermes_tenants_nostr_nsec_path }}
       DEPLOYMENT_ADMIN_NSEC={{ hermes_tenants_deployment_admin_nsec }}
-      ROUTSTRD_PORT={{ hermes_tenants_routstrd_config.port }}
-      ROUTSTRD_HEALTH_ENDPOINT={{ hermes_tenants_routstrd_config.health_endpoint }}
     dest: "{{ hermes_tenants_base_dir }}/{{ item.name }}/.env"
     mode: "0600"
   no_log: true
@@ -136,11 +202,23 @@
     label: "{{ item.name }}"
   register: hermes_tenants_deploy
 
+- name: Wait for routstrd sidecar containers to be healthy
+  ansible.builtin.command: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} routstrd-{{ item.name }}"
+  register: routstrd_health_check
+  until: routstrd_health_check.stdout == "healthy"
+  retries: 40
+  delay: 5
+  changed_when: false
+  failed_when: false
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Wait for Hermes tenant containers to be healthy
   ansible.builtin.command: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} hermes-{{ item.name }}"
   register: hermes_tenants_health_check
   until: hermes_tenants_health_check.stdout == "healthy"
-  retries: 30
+  retries: 40
   delay: 5
   changed_when: false
   failed_when: false
@@ -156,7 +234,10 @@
       Base dir: {{ hermes_tenants_base_dir }}
       Networks: {{ hermes_tenants_tenants | map(attribute='name') | map('regex_replace', '^', 'hermes-net-') | join(', ') }}
       Relay: {{ hermes_tenants_relay_url }}
-      Image: {{ hermes_tenants_image }}
+      Hermes image: {{ hermes_tenants_image }}
+      Routstrd image: {{ hermes_tenants_routstrd_image }}
+      LLM proxy: {{ hermes_tenants_llm_proxy_url }}
       Log config: {{ hermes_tenants_log_driver }}, max-size={{ hermes_tenants_log_max_size }}, max-file={{ hermes_tenants_log_max_file }}
-      Resource limits: memory={{ hermes_tenants_resource_limits.memory }}, cpus={{ hermes_tenants_resource_limits.cpus }}
+      Hermes resource limits: memory={{ hermes_tenants_resource_limits.memory }}, cpus={{ hermes_tenants_resource_limits.cpus }}, reservation={{ hermes_tenants_resource_reservations.memory }}, stop_grace={{ hermes_tenants_stop_grace_period }}
+      Routstrd resource limits: memory={{ hermes_tenants_routstrd_resource_limits.memory }}, cpus={{ hermes_tenants_routstrd_resource_limits.cpus }}, reservation={{ hermes_tenants_routstrd_resource_reservations.memory }}
       Docker socket mount: {{ 'DISABLED (security)' if hermes_tenants_no_docker_socket else 'ENABLED' }}
