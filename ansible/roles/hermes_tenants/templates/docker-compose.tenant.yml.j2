@@ -2,10 +2,9 @@ services:
   hermes-{{ tenant_name }}:
     image: {{ hermes_tenants_image }}
     container_name: hermes-{{ tenant_name }}
-    # The hermes-agent image defaults to an interactive hermes CLI that exits
-    # when there is no TTY. For a daemonised tenant deployment we keep the
-    # container alive with a long-running no-op process.
-    command: ["sleep", "infinity"]
+    # Use the image's default entrypoint (/init) which runs s6-overlay.
+    # This allows s6 to properly supervise the gateway service.
+    # Do NOT override with 'sleep infinity' - that prevents gateway from starting.
     restart: {{ hermes_tenants_container_restart }}
     env_file:
       - .env
@@ -20,9 +19,8 @@ services:
       - "{{ tenant_gateway_port }}:8080"
       - "{{ tenant_health_port }}:{{ hermes_tenants_routstrd_config.port }}"
     healthcheck:
-      # V1: routstrd sidecar is not deployed yet. Check that the Hermes
-      # gateway process is running instead of HTTP endpoints.
-      test: ["CMD-SHELL", "pgrep -f 'hermes gateway run' || exit 1"]
+      # Check that the Hermes gateway HTTP endpoint is responding
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: {{ hermes_tenants_healthcheck_interval }}
       timeout: {{ hermes_tenants_healthcheck_timeout }}
       retries: {{ hermes_tenants_healthcheck_retries }}

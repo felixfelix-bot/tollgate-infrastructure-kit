@@ -1,0 +1,167 @@
+# Hermes Agent Slim Dockerfile
+# Multi-stage build targeting <2GB image size for friend containers
+# Removes: Playwright, Node.js, ffmpeg, build tools, web/UI TUI
+# Keeps: coincurve, s6-overlay, Python runtime, gateway functionality
+#
+# Build from hermes-agent source directory:
+#   docker build -f /path/to/Dockerfile.slim -t hermes-agent:nostr-slim .
+# Size target: <2GB (down from 7.89GB)
+
+# ---------- Stage 1: Builder ----------
+# Install build dependencies and build Python wheels
+FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie@sha256:b3c543b6c4f23a5f2df22866bd7857e5d304b67a564f4feab6ac22044dde719b AS builder
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Install build dependencies only (not in final image)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates curl python3 python3-dev python3-venv \
+    gcc g++ make cmake libffi-dev libolm-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/hermes
+
+# Copy Python dependency manifests
+COPY pyproject.toml uv.lock ./
+RUN touch ./README.md
+
+# Install Python dependencies into a standalone directory
+# Use --extra messaging for nostr adapter, --extra anthropic for z.ai
+RUN uv sync --frozen --no-install-project --extra messaging --extra anthropic
+
+# Explicitly install coincurve for Nostr signing (lazy import, not in extras)
+# Pinned to known-good version with cp313 wheels
+RUN uv pip install --no-cache-dir "coincurve==21.0.0"
+
+# Copy source and install hermes itself
+COPY . .
+RUN uv pip install --no-cache-dir --no-deps -e "."
+
+# ---------- Stage 2: Runtime ----------
+FROM debian:13.4-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Install ONLY runtime dependencies (no build tools)
+# coincurve needs libffi at runtime
+# libolm needed for Matrix encryption (if used)
+# python3-venv needed for uv to work properly
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates curl iputils-ping python3 python-is-python3 \
+    python3-venv libffi8 libolm3 procps git openssh-client \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------- s6-overlay install ----------
+ARG TARGETARCH
+ARG S6_OVERLAY_VERSION=3.2.3.0
+ARG S6_OVERLAY_NOARCH_SHA256=b720f9d9340efc8bb07528b9743813c836e4b02f8693d90241f047998b4c53cf
+ARG S6_OVERLAY_X86_64_SHA256=a93f02882c6ed46b21e7adb5c0add86154f01236c93cd82c7d682722e8840563
+ARG S6_OVERLAY_AARCH64_SHA256=0952056ff913482163cc30e35b2e944b507ba1025d78f5becbb89367bf344581
+ARG S6_OVERLAY_SYMLINKS_SHA256=a60dc5235de3ecbcf874b9c1f18d73263ab99b289b9329aa950e8729c4789f0e
+
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-symlinks-noarch.tar.xz /tmp/
+
+RUN set -eu; \
+    case "${TARGETARCH:-amd64}" in \
+        amd64) s6_arch="x86_64"; s6_arch_sha="${S6_OVERLAY_X86_64_SHA256}" ;; \
+        arm64) s6_arch="aarch64"; s6_arch_sha="${S6_OVERLAY_AARCH64_SHA256}" ;; \
+        *) echo "Unsupported TARGETARCH=${TARGETARCH} for s6-overlay" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL --retry 3 -o /tmp/s6-overlay-arch.tar.xz \
+        "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${s6_arch}.tar.xz"; \
+    { \
+        printf '%s  %s\n' "${S6_OVERLAY_NOARCH_SHA256}" /tmp/s6-overlay-noarch.tar.xz; \
+        printf '%s  %s\n' "${s6_arch_sha}" /tmp/s6-overlay-arch.tar.xz; \
+        printf '%s  %s\n' "${S6_OVERLAY_SYMLINKS_SHA256}" /tmp/s6-overlay-symlinks-noarch.tar.xz; \
+    } > /tmp/s6-overlay.sha256; \
+    sha256sum -c /tmp/s6-overlay.sha256; \
+    tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz; \
+    tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz; \
+    tar -C / -Jxpf /tmp/s6-overlay-symlinks-noarch.tar.xz; \
+    rm /tmp/s6-overlay-*.tar.xz /tmp/s6-overlay.sha256; \
+    ln -sf /init /usr/bin/tini
+
+# Create hermes user
+RUN useradd -u 10000 -m -d /opt/data hermes
+
+# Copy uv from builder (needed for venv activation)
+COPY --from=builder /usr/local/bin/uv /usr/local/bin/uvx /usr/local/bin/
+
+WORKDIR /opt/hermes
+
+# Copy Python packages from builder's venv site-packages to system location
+COPY --from=builder /opt/hermes/.venv/lib/python3.13/site-packages /usr/local/lib/python3.13/dist-packages
+
+# Copy hermes source tree (needed for imports)
+# We copy the entire source to /opt/hermes to maintain the expected structure
+COPY --from=builder /opt/hermes /opt/hermes
+
+# Create a minimal venv structure that points to system Python
+# This satisfies scripts that expect /opt/hermes/.venv to exist
+RUN mkdir -p /opt/hermes/.venv/bin && \
+    ln -sf /usr/bin/python3 /opt/hermes/.venv/bin/python && \
+    ln -sf /usr/bin/python3 /opt/hermes/.venv/bin/python3 && \
+    printf '#!/bin/sh\n# Fake venv activate script for slim image\nexport PATH="/opt/hermes/.venv/bin:$PATH"\nexport VIRTUAL_ENV="/opt/hermes/.venv"\n' > /opt/hermes/.venv/bin/activate && \
+    chmod +x /opt/hermes/.venv/bin/activate && \
+    ln -sf /opt/hermes/bin/hermes /opt/hermes/.venv/bin/hermes
+
+# Create hermes executable wrapper pointing to system Python
+RUN mkdir -p /opt/hermes/bin && \
+    printf '#!/usr/bin/env python3\nimport sys\nsys.path.insert(0, "/usr/local/lib/python3.13/dist-packages")\nfrom hermes_cli.main import main\nif __name__ == "__main__":\n    main()\n' > /opt/hermes/bin/hermes && \
+    chmod 0755 /opt/hermes/bin/hermes && \
+    printf 'docker\n' > /opt/hermes/.install_method && \
+    chown -R root:root /opt/hermes && \
+    chmod -R a+rX /opt/hermes && \
+    chmod -R a-w /opt/hermes
+
+# Copy s6 service definitions from builder
+COPY --from=builder /opt/hermes/docker/s6-rc.d/ /etc/s6-overlay/s6-rc.d/
+
+# Set up s6 cont-init.d scripts
+RUN mkdir -p /etc/cont-init.d && \
+    printf '#!/command/with-contenv sh\nexec /opt/hermes/docker/stage2-hook.sh\n' \
+        > /etc/cont-init.d/01-hermes-setup && \
+    chmod +x /etc/cont-init.d/01-hermes-setup
+
+COPY --from=builder /opt/hermes/docker/cont-init.d/015-supervise-perms /etc/cont-init.d/015-supervise-perms
+COPY --from=builder /opt/hermes/docker/cont-init.d/02-reconcile-profiles /etc/cont-init.d/02-reconcile-profiles
+
+# ---------- Runtime Environment ----------
+# Note: No web dist or TUI - this is gateway-only
+ENV HERMES_HOME=/opt/data
+ENV HERMES_WRITE_SAFE_ROOT=/opt/data
+ENV HERMES_DISABLE_LAZY_INSTALLS=1
+ENV PATH="/opt/hermes/bin:/opt/hermes/.venv/bin:/opt/data/.local/bin:${PATH}"
+
+RUN mkdir -p /opt/data
+VOLUME [ "/opt/data" ]
+
+# Bake build-time git revision if provided
+ARG HERMES_GIT_SHA=
+RUN if [ -n "${HERMES_GIT_SHA}" ]; then \
+        chmod u+w /opt/hermes && \
+        printf '%s\n' "${HERMES_GIT_SHA}" > /opt/hermes/.hermes_build_sha && \
+        chmod a-w /opt/hermes /opt/hermes/.hermes_build_sha; \
+    fi
+
+# ---------- BUILD-TIME HARD GATE ----------
+# Verify coincurve is importable and can sign (non-lazy verification)
+# This ensures the image fails to build if coincurve is missing or broken
+RUN /opt/hermes/.venv/bin/python -c "
+import coincurve
+from coincurve import PrivateKey
+# Test actual signing - this would fail if ABI is broken
+pk = PrivateKey(bytes(range(32)))
+sig = pk.sign(b'x')
+assert len(sig) > 0, 'Signing failed'
+print('coincurve gate: OK - import and sign working')
+"
+
+ENTRYPOINT [ "/init", "/opt/hermes/docker/main-wrapper.sh" ]
+CMD [ ]

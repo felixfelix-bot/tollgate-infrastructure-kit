@@ -42,6 +42,22 @@
 - **Fix**: Check logs: `docker logs tollgate-strfry`
 - **Fix**: Test locally: `curl http://localhost:7777`
 
+### Hermes gateway not listening on port 8080
+- **Cause**: The `command: ["sleep", "infinity"]` in docker-compose.yml overrides the image's s6 entrypoint, preventing the gateway service from starting
+- **Fix**: Remove the `command` line from docker-compose.yml and restart the container:
+  ```bash
+  # Edit the compose file
+  sed -i '/command: \["sleep", "infinity"\]/d' /opt/tollgate/hermes/<tenant>/docker-compose.yml
+  
+  # Restart the container
+  cd /opt/tollgate/hermes/<tenant> && docker compose down && docker compose up -d
+  ```
+- **Fix**: For running containers without restart, remove the s6 'down' file:
+  ```bash
+  docker exec hermes-<tenant> rm -f /run/service/gateway-default/down
+  ```
+- **Verify**: Check gateway responds: `curl http://localhost:<port>/health`
+
 ### Locale warnings on Debian
 - **Fix**: Run the system playbook to configure locale
 - **Fix**: `dpkg-reconfigure locales` and select `en_US.UTF-8`
