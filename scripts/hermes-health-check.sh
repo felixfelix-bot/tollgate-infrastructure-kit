@@ -303,13 +303,14 @@ threshold_label_for_load() {
 }
 
 check_disk() {
-    local df_line used_pct avail level
+    local df_line used_pct avail avail_bytes level
     df_line=$(df -P "$DISK_MOUNT" | tail -1)
     used_pct=$(parse_df_used_pct "$df_line")
     avail=$(awk '{print $4}' <<< "$df_line")
+    avail_bytes=$((avail * 1024))
     level=$(classify_disk "$used_pct")
     if [[ "$level" != "ok" ]]; then
-        notify "$level" "disk" "disk ${DISK_MOUNT} ${used_pct}% used, $(numfmt --to=iec "$avail" 2>/dev/null || echo "${avail}K") free (ladder warn>${DISK_WARN_PCT}% page>${DISK_PAGE_PCT}%)"
+        notify "$level" "disk" "disk ${DISK_MOUNT} ${used_pct}% used, $(numfmt --to=iec "$avail_bytes" 2>/dev/null || echo "${avail}K") free (ladder warn>${DISK_WARN_PCT}% page>${DISK_PAGE_PCT}%)"
     fi
     log "disk_used_pct=$used_pct level=$level"
     echo "$level"
