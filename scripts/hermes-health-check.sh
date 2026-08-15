@@ -397,9 +397,10 @@ main() {
     fi
 
     if [[ ${#FAILURES[@]} -gt 0 ]]; then
-        local f
+        local f k
         for f in "${FAILURES[@]}"; do
-            notify "page" "svc" "$f"
+            k="svc:$(awk '{print $1}' <<< "$f")"
+            notify "page" "$k" "$f"
         done
         level=$(max_level "$level" "page")
     fi
