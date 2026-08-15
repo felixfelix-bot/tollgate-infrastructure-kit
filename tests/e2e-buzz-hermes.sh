@@ -115,7 +115,7 @@ TEST_NSEC=$(remote "nak key generate" 2>/dev/null | tail -1 || true)
 if [[ "$TEST_NSEC" =~ ^[0-9a-f]{64}$ ]]; then ok "ephemeral test keypair generated"; else bad "nak key generate failed"; exit 1; fi
 TEST_PUB=$(remote "nak key public '$TEST_NSEC'" 2>/dev/null | tail -1 || true)
 [[ "$TEST_PUB" =~ ^[0-9a-f]{64}$ ]] || { bad "nak key public failed"; exit 1; }
-TEST_GROUP="e2e$(remote "cat /proc/sys/kernel/random/uuid" 2>/dev/null | tr -d '-\n')"
+TEST_GROUP="e2e$(remote "cat /proc/sys/kernel/random/uuid" 2>/dev/null | tr -d -- '-\n')"
 [ ${#TEST_GROUP} -ge 20 ] || { bad "uuid generation failed"; exit 1; }
 ok "test group id: $TEST_GROUP"
 CLEANUP_OWNER=1   # from here on we own state that must be restored
