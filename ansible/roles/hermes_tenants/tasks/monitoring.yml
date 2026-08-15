@@ -76,6 +76,7 @@
     path: "{{ item }}"
     state: touch
     mode: "0644"
+    modification_time: preserve
   loop:
     - /var/log/hermes-health-check.log
     - /var/log/hermes-health-check.alert
