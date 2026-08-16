@@ -21,6 +21,15 @@
 - **Tech**: Rust (Tokio + Axum), prebuilt Docker image
 - **Features**: Group management, roles, invite codes, admin UI
 
+## buzz-relay (Buzz relay, patched)
+- **Subdomain**: `relay.<domain>` (wss://relay.orangesync.tech)
+- **Port**: 127.0.0.1:3007 → container 3000
+- **Purpose**: Buzz relay with membership auth (NIP-42), media/file storage, group chat backend
+- **Tech**: Rust (Tokio + Axum), Docker; fork image `tollgate/buzz:audio` (= ghcr.io/felixfelix-bot/buzz:tollgate-audio)
+- **Stack**: `/opt/buzz-relay/docker-compose.yml` (postgres 17-alpine, redis 7-alpine, minio + one-shot mc init, buzz-relay)
+- **Local deviation**: audio upload support (tollgate:audio-validate) — magic-byte sniffed audio allowlist on the generic file path, `BUZZ_MAX_AUDIO_BYTES` cap (25 MiB), M4A carved out of the ISO-BMFF video pipeline. See `PATCHES.md`.
+- **Media storage**: internal MinIO `buzz-relay-minio` (no host ports; NOT Sitarani on :9000), bucket `buzz-media` (private), served auth-gated at `https://relay.<domain>/media/<sha256>.<ext>`
+
 ## blossom-server (Blob Storage)
 - **Subdomain**: `blossom.<domain>`
 - **Port**: 3001
