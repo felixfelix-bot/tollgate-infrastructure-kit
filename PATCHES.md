@@ -88,3 +88,17 @@ spec: `/home/c03rad0r/plans/audio-bridge-p1-design.md` (local).
 - Rollback everything: restore `docker-compose.yml.bak-audio-bridge`,
   `docker compose up -d`, `docker compose rm -sf minio minio-init` (volume
   `buzz-relay-minio` can be dropped afterwards if desired).
+
+
+## Live deployment verification — 2026-08-16 (t_c40afae4)
+
+- Image in production: `tollgate/buzz:audio` (= `ghcr.io/felixfelix-bot/buzz:tollgate-audio`,
+  GH run 31916136562 `success`, digest `sha256:d55870fd13a2…`), compose `/opt/buzz-relay/docker-compose.yml`.
+- P0-a signed PNG upload (kind 24242, member key `/opt/data/e2e/member-nsec`): HTTP 200 + descriptor;
+  auth'd GET byte-identical (sha256 `c414cd0e…`); blob + thumb visible in bucket `buzz-media`.
+- P0-b signed 10s m4a upload (83170 B, sniffed `audio/mp4`): HTTP 200 + descriptor
+  `{"url":"https://relay.orangesync.tech/media/0f24d724….m4a","type":"audio/mp4","size":83170}`;
+  auth'd GET byte-identical (83170/83170); `content-disposition: attachment`, `content-type: audio/mp4`.
+- Guards verified: unauth `PUT /upload` -> 401; hermes-sitarani (127.0.0.1:9000) untouched;
+  minio internal-only (no host ports); postgres/redis never recreated.
+- Rollback: restore `/opt/buzz-relay/docker-compose.yml.bak-audio-bridge` + `docker compose up -d`.
