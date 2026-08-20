@@ -1,0 +1,50 @@
+---
+# routstrd_funding_guard — keep the local routstrd wallet's real ecash
+# (minibits + cubabitcoin) above a 5k-sat floor; surface a 10k-sat top-up
+# Lightning invoice when breached. Local-user setup only (no root).
+- name: Verify routstrd CLI is available
+  ansible.builtin.command: which routstrd
+  register: routstrd_cli
+  changed_when: false
+  failed_when: routstrd_cli.rc != 0
+
+- name: Verify cocod daemon socket
+  ansible.builtin.stat:
+    path: "{{ routstrd_funding_guard_cocod_socket }}"
+  register: cocod_sock
+  failed_when: not cocod_sock.stat.exists
+
+- name: List wallet mints
+  ansible.builtin.command: routstrd wallet mints list
+  register: mints_list
+  changed_when: false
+
+- name: Add cubabitcoin mint (idempotent)
+  ansible.builtin.command: routstrd wallet mints add https://mint.cubabitcoin.org
+  when: "'mint.cubabitcoin.org' not in mints_list.stdout"
+  register: mint_added
+  failed_when: >
+    mint_added is failed and 'already' not in (mint_added.stderr | default('')) ~ (mint_added.stdout | default(''))
+
+- name: Ensure bot state dir exists
+  ansible.builtin.file:
+    path: "{{ routstrd_funding_guard_bot_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Deploy funding guard script
+  ansible.builtin.copy:
+    src: routstrd_funding_guard.py
+    dest: "{{ routstrd_funding_guard_script_path }}"
+    mode: "0755"
+
+- name: Syntax-check guard script
+  ansible.builtin.command: python3 -m py_compile {{ routstrd_funding_guard_script_path }}
+  changed_when: false
+
+- name: Funding guard cron (every 5 min)
+  ansible.builtin.cron:
+    name: routstrd-funding-guard
+    minute: "*/5"
+    job: "{{ routstrd_funding_guard_script_path }} >> {{ routstrd_funding_guard_log }} 2>&1 # routstrd-funding-guard"
+    state: present

@@ -1,0 +1,5 @@
+---
+routstrd_funding_guard_cocod_socket: "{{ ansible_env.HOME }}/.cocod/cocod.sock"
+routstrd_funding_guard_bot_dir: "{{ ansible_env.HOME }}/.hermes/bot"
+routstrd_funding_guard_script_path: "{{ ansible_env.HOME }}/merchant-routing-engine/scripts/routstrd_funding_guard.py"
+routstrd_funding_guard_log: "{{ ansible_env.HOME }}/merchant-routing-engine/logs/routstrd_funding_guard.log"

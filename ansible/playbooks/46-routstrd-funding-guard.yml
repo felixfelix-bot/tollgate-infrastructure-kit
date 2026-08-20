@@ -1,0 +1,8 @@
+---
+- name: Deploy routstrd real-ecash funding guard (local machine)
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: yes
+  roles:
+    - routstrd_funding_guard

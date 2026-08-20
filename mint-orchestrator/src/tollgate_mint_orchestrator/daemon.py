@@ -67,9 +67,25 @@ async def _handle_event(
     from tollgate_mint_orchestrator.mint_registry import MintEntry
     mint_entry = MintEntry(**mint_data)
 
+    # Forward to the auth payment processor FIRST (settlement authority when
+    # the mint runs ln_backend=grpc_processor). Processor maps quote_id ->
+    # request_lookup_id via the mint DB and emits the payment event itself.
+    processor_ok = False
+    try:
+        import urllib.request as _ur
+        _proc = _env("ORCHESTRATOR_PROCESSOR_APPROVE_URL",
+                     "http://127.0.0.1:50057/approve")
+        _req = _ur.Request(
+            f"{_proc}?quote={result.quote_id}&amount={result.amount}", method="POST")
+        with _ur.urlopen(_req, timeout=10) as _resp:
+            processor_ok = 200 <= _resp.status < 300
+        logger.info(f"Processor approve forwarded: quote={result.quote_id} ok={processor_ok}")
+    except Exception as e:
+        logger.warning(f"Processor approve forward failed: {e}")
+
     client = await _get_grpc_client(mint_entry)
 
-    success = await client.update_nut04_quote(result.quote_id, "PAID")
+    success = await client.update_nut04_quote(result.quote_id, "PAID") or processor_ok
     audit.log_approval(
         event_id=event.get("id", ""),
         npub=event.get("pubkey", ""),
