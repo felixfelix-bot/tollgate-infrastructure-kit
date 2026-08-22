@@ -1,0 +1,13 @@
+---
+# hermes_cost_probe — deploys the measured-rate probe + sanitizer.
+#
+# routstr_probe.py runs daily at 03:00 (before cost-escalation cron at
+# 15-min intervals). It sends a fixed prompt through each Cashu provider,
+# records the wallet balance delta, computes sats/M → USD/M, and stores
+# it in zai_usage.db `measured_rates`. The zai_proxy failover sort reads
+# measured_rates FIRST for routstr/routstrd (ground truth > catalog).
+#
+# sanitize_db.py is deployed but not cron'd — run manually before
+# publishing a new dataset dump.
+hermes_cost_probe_scripts_dir: "{{ ansible_facts['env']['HOME'] }}/.hermes/profiles/manager/scripts"
+hermes_cost_probe_db_path: "{{ ansible_facts['env']['HOME'] }}/.hermes/bot/zai_usage.db"
