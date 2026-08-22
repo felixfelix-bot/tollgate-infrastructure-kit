@@ -25,7 +25,11 @@ services:
       CASHU_MINTS: "{{ routstr_mint_url }}"
       RELAYS: "{{ routstr_relays }}"
       NSEC: "{{ routstr_nsec }}"
-      RECEIVE_LN_ADDRESS: "{{ routstr_ln_address }}"
+      # RECEIVE_LN_ADDRESS intentionally NOT set here (2026-08-22): the
+      # admin-API/DB is the single source of truth for the payout address.
+      # Setting it via env would let a container recreate race the DB value
+      # (and an empty env would clobber it). Ansible PATCHes it via the
+      # admin API after first boot, guarded to never send an empty value.
       LOG_LEVEL: "info"
       CORS_ORIGINS: "*"
       TOR_PROXY_URL: "socks5://127.0.0.1:9050"
