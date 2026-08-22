@@ -29,7 +29,7 @@ hermes_tenants_routstrd_resource_limits:
 hermes_tenants_resource_reservations:
   memory: 256m
 
-hermes_tenants_nostr_relays: "ws://nip29-relay:7780,wss://relay.damus.io,wss://nos.lol"
+hermes_tenants_nostr_relays: "wss://relay.orangesync.tech"
 hermes_tenants_nostr_groups: ""
 hermes_tenants_llm_proxy_url: "http://routstrd:8008/v1"
 hermes_tenants_routstrd_config:
@@ -44,3 +44,4 @@ hermes_tenants_gateway_port_base: 9000
 hermes_tenants_health_port_base: 9100
 
 hermes_tenants_no_docker_socket: true
+hermes_tenants_gateway_allow_all_users: true

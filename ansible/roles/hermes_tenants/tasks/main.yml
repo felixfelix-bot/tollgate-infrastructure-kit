@@ -98,6 +98,15 @@
   loop_control:
     label: "{{ item.name }}"
 
+- name: Generate tenant config.yaml
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ hermes_tenants_base_dir }}/{{ item.name }}/config/config.yaml"
+    mode: "0640"
+  loop: "{{ hermes_tenants_tenants }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Deploy per-tenant Docker Compose files
   ansible.builtin.template:
     src: docker-compose.tenant.yml.j2
@@ -124,6 +133,7 @@
       NOSTR_RELAYS={{ hermes_tenants_nostr_relays }}
       NOSTR_GROUPS={{ hermes_tenants_nostr_groups }}
       NOSTR_NSEC_PATH=/nsec/nsec.txt
+      GATEWAY_ALLOW_ALL_USERS={{ hermes_tenants_gateway_allow_all_users | lower }}
       DEPLOYMENT_ADMIN_NSEC={{ hermes_tenants_deployment_admin_nsec }}
     dest: "{{ hermes_tenants_base_dir }}/{{ item.name }}/.env"
     mode: "0600"

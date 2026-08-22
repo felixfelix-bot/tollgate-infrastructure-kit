@@ -9,17 +9,20 @@ services:
     env_file:
       - .env
     environment:
-      # Route LLM calls through routstrd sidecar for Cashu payment handling
       LLM_PROXY_URL: http://routstrd-{{ tenant_name }}:8008/v1
+      GATEWAY_ALLOW_ALL_USERS: "{{ hermes_tenants_gateway_allow_all_users | lower }}"
+      NOSTR_RELAYS: "{{ hermes_tenants_nostr_relays }}"
+      NOSTR_GROUPS: "{{ hermes_tenants_nostr_groups }}"
+      NOSTR_NSEC_PATH: "/nsec/nsec.txt"
     volumes:
       - hermes-{{ tenant_name }}-data:/data
-      - ./config:/config
+      - ./config/config.yaml:/opt/data/config.yaml
       - ./nsec:/nsec:ro
     networks:
       - routstr_default
       - hermes-net-{{ tenant_name }}
     ports:
-      - "{{ tenant_gateway_port }}:8080"
+      - "127.0.0.1:{{ tenant_gateway_port }}:8080"
     depends_on:
       routstrd-{{ tenant_name }}:
         condition: service_healthy

@@ -1,0 +1,16 @@
+nostr:
+  relays:
+    - "{{ hermes_tenants_nostr_relays }}"
+  groups:
+    - "{{ hermes_tenants_nostr_groups }}"
+  nsec_path: "/nsec/nsec.txt"
+
+platforms:
+  nostr:
+    enabled: true
+    extra:
+      relays:
+        - "{{ hermes_tenants_nostr_relays }}"
+      groups:
+        - "{{ hermes_tenants_nostr_groups }}"
+      nsec_path: "/nsec/nsec.txt"
