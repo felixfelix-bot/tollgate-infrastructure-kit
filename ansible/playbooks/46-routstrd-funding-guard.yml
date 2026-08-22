@@ -4,5 +4,7 @@
   connection: local
   become: false
   gather_facts: yes
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ lookup('pipe', 'id -u') }}"
   roles:
     - routstrd_funding_guard

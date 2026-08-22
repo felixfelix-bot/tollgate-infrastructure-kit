@@ -50,11 +50,11 @@ cubabitcoin) in its cocod wallet, and keep it funded automatically:
 - [x] B1: Cheapest network model: gpt-5.6-luna @ blazelight (1 sat/request max cost)
 - [x] B2: Fired completion request — daemon correctly created a **minibits** token (not orangesync)
   and sent it to blazelight. Token preview decodes to `https://mint.minibits.cash/Bitcoin`. ✓
-- [ ] B3: **Settlement not completed** — blazelight rejected the token: "Keyset 01fc0ec0e59cd6fa
-      not known, can not verify DLEQ" (a short keyset ID v2 compatibility issue on blazelight's side;
-      the keyset IS active at minibits). All other providers require 100–237 sats per request
-      (our 21-sat budget is insufficient). **With 15k sats (planned initial funding), any provider
-      works.** The guard's 10k invoice (triggered by 21 < 5000 floor) will provide adequate funds.
+- [x] B3: **Settlement COMPLETED 2026-08-22** — see PLAN-cashu-ts-v4-token-fix.md. Root causes
+      fixed: (1) cashu-ts v3.6.2 CBOR decoder rejected proofs with amounts > 23 (fixed by
+      ansible-managed symlink to global cashu-ts 4.8.0); (2) funding: 512-sat minibits token
+      received after fix. gpt-5.6-luna call returned OK, 512 -> 505 sats paid through a network
+      node. routstrd is now a WORKING quota-exhaustion fallback with real ecash.
 
 ### C. Ansible role `routstrd_funding_guard` (this kit)
 - [x] C1: Role `roles/routstrd_funding_guard` — files: guard script; tasks: routstrd CLI
@@ -76,9 +76,10 @@ cubabitcoin) in its cocod wallet, and keep it funded automatically:
 - [x] D3: Next monitor run shows the new check: `[WARN] routstrd network ecash low`
 
 ### E. Version control
-- [ ] E1: Commit + push kit (plan, role, playbook)
-- [ ] E2: Commit identical guard script to merchant-routing-engine (tracking copy;
-      note: kit role files/ is the deployment source of truth)
+- [x] E1: Commit + push kit (plan, role, playbook, daemon.py, issue_to_friend.py)
+      → pushed to felixfelix remote (commit e7cf77a)
+- [x] E2: mint-auth-processor git init + commit (payment_processor_server.py + proto + pb2 stubs)
+- [ ] E3: Create remote repo for mint-auth-processor + push (needs user to create GitHub repo)
 
 ### F. Follow-ups (out of scope here)
 - [ ] F1: User pays 10k invoice when convenient (floor maintained thereafter)

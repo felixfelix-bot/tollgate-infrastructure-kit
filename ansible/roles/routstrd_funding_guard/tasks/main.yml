@@ -14,6 +14,48 @@
   register: cocod_sock
   failed_when: not cocod_sock.stat.exists
 
+# --- cashu-ts v4 compatibility fix ---------------------------------------
+# coco-cashu-core bundles @cashu/cashu-ts ^3.5.0 whose CBOR decoder rejects
+# token proofs with amounts > 23 sats (extended CBOR uint encodings) →
+# "Invalid token" / "Unsupported length" on receive. No published
+# coco-cashu-core release bundles v4 yet, so we symlink the global v4
+# install over the bundled copy. Re-runs repair after routstrd updates
+# that reinstall the old dependency.
+- name: Read cashu-ts versions (global, bundled in coco-cashu-core)
+  ansible.builtin.shell: |
+    set -o pipefail
+    g=$(python3 -c "import json;print(json.load(open('{{ routstrd_funding_guard_bun_global }}/node_modules/@cashu/cashu-ts/package.json'))['version'])" 2>/dev/null || echo 0)
+    b=$(python3 -c "import json;print(json.load(open('{{ routstrd_funding_guard_bun_global }}/node_modules/coco-cashu-core/node_modules/@cashu/cashu-ts/package.json'))['version'])" 2>/dev/null || echo 0)
+    echo "$g $b"
+  register: cashu_versions
+  changed_when: false
+
+- name: Set cashu-ts version facts
+  ansible.builtin.set_fact:
+    cashu_global_ver: "{{ cashu_versions.stdout.split(' ')[0] }}"
+    cashu_bundled_ver: "{{ cashu_versions.stdout.split(' ')[1] }}"
+
+- name: Ensure global cashu-ts >= 4 is installed
+  ansible.builtin.command: bun add -g @cashu/cashu-ts@^4
+  when: cashu_global_ver is version('4', '<')
+  notify: restart routstrd wallet stack
+
+- name: Remove bundled cashu-ts < 4 from coco-cashu-core
+  ansible.builtin.file:
+    path: "{{ routstrd_funding_guard_bun_global }}/node_modules/coco-cashu-core/node_modules/@cashu/cashu-ts"
+    state: absent
+  when: cashu_bundled_ver is version('4', '<')
+  notify: restart routstrd wallet stack
+
+- name: Symlink global cashu-ts v4 into coco-cashu-core
+  ansible.builtin.file:
+    src: "{{ routstrd_funding_guard_bun_global }}/node_modules/@cashu/cashu-ts"
+    dest: "{{ routstrd_funding_guard_bun_global }}/node_modules/coco-cashu-core/node_modules/@cashu/cashu-ts"
+    state: link
+    force: true
+  when: cashu_bundled_ver is version('4', '<')
+  notify: restart routstrd wallet stack
+
 - name: List wallet mints
   ansible.builtin.command: routstrd wallet mints list
   register: mints_list
