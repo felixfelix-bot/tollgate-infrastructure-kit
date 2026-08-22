@@ -1,0 +1,13 @@
+---
+- name: Configure routstr node upstreams + payout LNURL (VPS2)
+  hosts: vps2
+  become: false
+  gather_facts: no
+  vars:
+    routstr_node_config_zai_key: "{{ lookup('env', 'ROUTSTR_UPSTREAM_API_KEY') }}"
+    routstr_node_config_openrouter_key: "{{ lookup('env', 'ROUTSTR_OPENROUTER_UPSTREAM_KEY') }}"
+    routstr_node_config_friends_pw: "{{ lookup('env', 'ROUTSTR_ADMIN_PASSWORD_FRIENDS') }}"
+    routstr_node_config_public_pw: "{{ lookup('env', 'ROUTSTR_ADMIN_PASSWORD_PUBLIC') }}"
+    routstr_node_config_lnurl: "{{ lookup('env', 'ROUTSTR_RECEIVE_LN_ADDRESS') }}"
+  roles:
+    - routstr_node_config

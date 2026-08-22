@@ -31,6 +31,64 @@
     state: directory
     mode: "0755"
 
+# --- manager gateway nostr config normalization (prerequisite) ------------
+# The bridge design requires: (a) the manager nostr adapter healthy — its
+# nsec_path in config.yaml used a tilde which nostr.py never expanduser's
+# (adapter error-looped "nsec file not found"); (b) the bridged channels
+# REMOVED from the adapter's groups so the gateway doesn't double-answer
+# alongside the bridge.
+- name: Stash one-time backup of manager config.yaml
+  ansible.builtin.copy:
+    src: "{{ buzz_signal_bridge_gateway_config }}"
+    dest: "{{ buzz_signal_bridge_gateway_config }}.bak-buzzbridge"
+    remote_src: true
+    mode: preserve
+  when: not (buzz_signal_bridge_gateway_config ~ '.bak-buzzbridge') is exists
+
+- name: Normalize nostr config (absolute nsec path, no bridged channels)
+  ansible.builtin.shell: |
+    set -o pipefail
+    {{ buzz_signal_bridge_python }} - <<'PYEOF'
+    import sys, yaml
+    p = "{{ buzz_signal_bridge_gateway_config }}"
+    ABS = "{{ buzz_signal_bridge_gateway_nsec_path }}"
+    DROP = set("{{ buzz_signal_bridge_pairs | map(attribute='buzz_channel') | join(',') }}".split(","))
+    cfg = yaml.safe_load(open(p))
+    changed = False
+    def fix(block):
+        global changed
+        if not isinstance(block, dict):
+            return
+        if block.get("nsec_path") != ABS:
+            block["nsec_path"] = ABS; changed = True
+        g = block.get("groups")
+        if isinstance(g, list):
+            keep = [x for x in g if x not in DROP]
+            if len(keep) != len(g):
+                block["groups"] = keep; changed = True
+    fix(cfg.get("nostr"))
+    fix(((cfg.get("platforms") or {}).get("nostr") or {}).get("extra"))
+    if changed:
+        with open(p, "w") as f:
+            yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True)
+        print("CHANGED")
+    else:
+        print("OK")
+    PYEOF
+  register: nostr_cfg
+  changed_when: nostr_cfg.stdout.strip() == "CHANGED"
+  notify: restart hermes gateway
+
+- name: Remove bridged channels from NOSTR_GROUPS env (manager profile)
+  ansible.builtin.shell: |
+    set -o pipefail
+    f="{{ buzz_signal_bridge_manager_env }}"
+    drop() { for g in "$@"; do sed -i "s/,$g//g; s/$g,//g; s/^NOSTR_GROUPS=$g$/NOSTR_GROUPS=/" "$f"; done; }
+    grep -q '^NOSTR_GROUPS=' "$f" && drop {{ buzz_signal_bridge_pairs | map(attribute='buzz_channel') | join(' ') }}
+    grep '^NOSTR_GROUPS=' "$f" | grep -qE 'e6616f1a|b5f8f21d' && echo CHANGED || echo OK
+  register: nostr_env
+  changed_when: nostr_env.stdout.strip() == "CHANGED"
+
 - name: Ensure keys dir exists
   ansible.builtin.file:
     path: "{{ buzz_signal_bridge_keys_dir }}"
@@ -86,7 +144,7 @@
 - name: Render systemd user unit
   ansible.builtin.template:
     src: buzz-signal-bridge.service.j2
-    dest: "{{ ansible_env.HOME }}/.config/systemd/user/{{ buzz_signal_bridge_unit_name }}"
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ buzz_signal_bridge_unit_name }}"
     mode: "0644"
   notify: restart buzz signal bridge
 

@@ -4,13 +4,13 @@
 # (the laptop). Deploys the bridge daemon as a systemd USER unit.
 buzz_signal_bridge_description: "Protein-RNA groups for Sitarani"
 
-buzz_signal_bridge_install_dir: "{{ ansible_env.HOME }}/.hermes/bot"
-buzz_signal_bridge_keys_dir: "{{ ansible_env.HOME }}/.hermes/profiles/manager/keys"
+buzz_signal_bridge_install_dir: "{{ ansible_facts['env']['HOME'] }}/.hermes/bot"
+buzz_signal_bridge_keys_dir: "{{ ansible_facts['env']['HOME'] }}/.hermes/profiles/manager/keys"
 buzz_signal_bridge_nsec_name: "buzz_bridge_nsec.txt"
 buzz_signal_bridge_npub_name: "buzz_bridge_npub.txt"
 buzz_signal_bridge_config_name: "buzz_signal_bridge.json"
 buzz_signal_bridge_unit_name: "buzz-signal-bridge.service"
-buzz_signal_bridge_nak_path: "{{ ansible_env.HOME }}/.local/bin/nak"
+buzz_signal_bridge_nak_path: "{{ ansible_facts['env']['HOME'] }}/.local/bin/nak"
 
 # The signal-cli JSON-RPC daemon + account (same one the hermes gateway
 # uses — bridge sends are processed by hermes under the EXISTING group
@@ -34,3 +34,10 @@ buzz_signal_bridge_pairs:
   - name: go
     signal_group: "+HBokV06uG2WMZZLqdSrow7OLhTJAJv+IB51hUMg9SU="
     buzz_channel: "b5f8f21d-07cb-58a8-a33c-7c9c1d4f08f7"
+
+# manager gateway prerequisites (nostr adapter must be healthy + must NOT
+# subscribe to the bridged channels — the bridge owns them)
+buzz_signal_bridge_python: /usr/bin/python3
+buzz_signal_bridge_gateway_config: "{{ ansible_facts['env']['HOME'] }}/.hermes/profiles/manager/config.yaml"
+buzz_signal_bridge_gateway_nsec_path: "{{ ansible_facts['env']['HOME'] }}/.hermes/profiles/manager/keys/nostr_nsec.txt"
+buzz_signal_bridge_manager_env: "{{ ansible_facts['env']['HOME'] }}/.hermes/profiles/manager/.env"

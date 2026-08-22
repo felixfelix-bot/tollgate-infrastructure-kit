@@ -127,8 +127,15 @@ Buzz→Signal `[buzz] Sitarani: …` (her npub) / `[buzz] <npub8>: …` (others)
 - [x] E2: Ansible role `buzz_signal_bridge` + playbook
       `47-buzz-signal-bridge.yml` (local-machine, same pattern as 46-);
       script in role files/, unit + pair-config templates, nsec generated
-      ONCE and kept (npub = channel membership identity). Syntax-check
-      passes. Committed + pushed.
+      ONCE and kept (npub = channel membership identity). ALSO automates
+      the gateway nostr config normalization (absolute nsec path,
+      bridged channels excluded from the adapter's groups, one-time
+      backup, gateway-restart handler only on change). Syntax-check +
+      live run + idempotent rerun (changed=0) verified.
+      Related automation: `48-routstr-node-access.yml` (SSH tunnel to the
+      VPS2 node + ROUTSTR_BASE env + fixed balance_collectors.py deploy)
+      and `49-routstr-node-config.yml` (node providers + payout LNURL via
+      admin API, secrets from kit .env, idempotent — changed=0 verified).
 
 ## Known limitations (v1)
 

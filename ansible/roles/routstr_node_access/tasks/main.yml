@@ -1,0 +1,94 @@
+---
+# routstr_node_access — deploy the SSH tunnel to the VPS2 routstr node,
+# point ROUTSTR_BASE at it, and deploy the fixed balance collector.
+#
+# Prereq: key-based SSH to the VPS2 root account works non-interactively
+# (verified by a task below — fails fast with a clear message otherwise).
+- name: Verify key-based SSH to VPS2 works
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ssh
+      - -o
+      - ConnectTimeout=10
+      - -o
+      - BatchMode=yes
+      - "{{ routstr_node_access_ssh_user }}@{{ routstr_node_access_vps2_ip }}"
+      - echo
+      - ssh-key-auth OK
+  register: ssh_check
+  changed_when: false
+  failed_when: "'OK' not in ssh_check.stdout"
+
+- name: Ensure systemd user dir exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user"
+    state: directory
+    mode: "0755"
+
+- name: Render routstr-tunnel systemd user unit
+  ansible.builtin.template:
+    src: routstr-tunnel.service.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ routstr_node_access_unit_name }}"
+    mode: "0644"
+  register: tunnel_unit
+
+- name: Enable + start routstr tunnel
+  ansible.builtin.systemd:
+    name: "{{ routstr_node_access_unit_name }}"
+    scope: user
+    enabled: true
+    state: restarted
+    daemon_reload: true
+  when: tunnel_unit.changed
+
+- name: Ensure routstr tunnel is active
+  ansible.builtin.systemd:
+    name: "{{ routstr_node_access_unit_name }}"
+    scope: user
+  register: tunnel_state
+  failed_when: tunnel_state.status.ActiveState != "active"
+  changed_when: false
+
+- name: Wait for the node to answer through the tunnel
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ routstr_node_access_local_port }}"
+    timeout: 30
+  changed_when: false
+
+- name: Point ROUTSTR_BASE at the tunnel in env files
+  ansible.builtin.shell: |
+    set -o pipefail
+    rc=0
+    for f in {{ routstr_node_access_env_files | join(' ') }}; do
+      [ -f "$f" ] || continue
+      if grep -q '^ROUTSTR_BASE=' "$f"; then
+        grep -q '^ROUTSTR_BASE=http://localhost:{{ routstr_node_access_local_port }}' "$f" || {
+          sed -i "s|^ROUTSTR_BASE=.*|ROUTSTR_BASE=http://localhost:{{ routstr_node_access_local_port }}|" "$f"; rc=1; }
+      else
+        echo "ROUTSTR_BASE=http://localhost:{{ routstr_node_access_local_port }}" >> "$f"; rc=1
+      fi
+    done
+    [ $rc -eq 0 ] && echo OK || echo CHANGED
+  register: env_base
+  changed_when: env_base.stdout.strip() == "CHANGED"
+
+- name: Ensure bot src dir exists
+  ansible.builtin.file:
+    path: "{{ routstr_node_access_bot_src_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Deploy fixed balance_collectors.py (B1 gate source)
+  ansible.builtin.copy:
+    src: balance_collectors.py
+    dest: "{{ routstr_node_access_bot_src_dir }}/balance_collectors.py"
+    mode: "0644"
+  register: collector
+  notify: restart zai proxy
+
+- name: Access deployment summary
+  ansible.builtin.debug:
+    msg:
+      - "tunnel: {{ routstr_node_access_unit_name }} (localhost:{{ routstr_node_access_local_port }} -> {{ routstr_node_access_vps2_ip }}:{{ routstr_node_access_remote_port }})"
+      - "collector deployed: {{ collector.dest }}"
