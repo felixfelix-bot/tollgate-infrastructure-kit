@@ -1,3 +1,8 @@
+model:
+  default: "glm-5.2"
+  provider: "zai"
+  base_url: "http://routstrd-{{ tenant_name }}:8008/v1"
+
 nostr:
   relays:
     - "{{ hermes_tenants_nostr_relays }}"
