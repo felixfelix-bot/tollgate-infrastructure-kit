@@ -30,6 +30,7 @@ A single Ansible-based repository that deploys all Tollgate-related infrastructu
 | 13 | nsyte CLI | N/A | N/A | Deno binary in PATH |
 | 14 | GRASP server (ngit-grasp) | `git.` | 7334 | Systemd (built from source) |
 | 15 | Routstr AI inference node | `routstr.` | 8000 | Docker (ghcr.io/routstr/proxy) |
+| 15a | Operator eCash issuance | N/A | N/A | Python script (`scripts/issue_ecash.py`) |
 | 16 | Routstr Tor hidden service | `.onion` | 80 | Docker (tor-hidden-service) |
 | 17 | Auditable Voting (static) | `vote.` | — | Static build (React+Vite+WASM), Caddy file_server |
 | 18 | Auditable Voting (nsite) | `<npub>.nsite./` | — | Nostr static site via blossom + nsyte |

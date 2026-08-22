@@ -78,6 +78,13 @@
 - [x] **Pricing configured** — 10% upstream fee, 0.5% exchange fee via admin API
 - [x] **Admin API Ansible integration** — Routstr role configures all settings via `PATCH /admin/api/settings`
 - [x] **ENV vars updated** — `ROUTSTR_RECEIVE_LN_ADDRESS` added to `.env` and `.env.example`
+- [x] **Ansible tenant config** — model section added to `config.yaml.j2` (glm-5.2 / zai / `http://routstrd-{{tenant_name}}:8008/v1`)
+
+### Operator eCash Issuance Tooling
+- [x] **issue_ecash.py** — pure-Python Cashu minting client (`scripts/issue_ecash.py`), 165 lines, no C crypto deps
+- [x] **hash_to_curve** — matches official Cashu SDK (`cashu/core/crypto/b_dhke.py`) byte-for-byte
+- [x] **Flow**: quote → gRPC PAID → mint (blinded) → swap-verify → token (`cashuA...`)
+- [x] **Runbook** — `docs/scripts/issue-ecash.md` with full step-by-step operator guide
 
 ### ngit Relay (`ngit.orangesync.tech`)
 - [x] **Ansible role** — `ansible/roles/ngit_relay/` (defaults, tasks, templates)
