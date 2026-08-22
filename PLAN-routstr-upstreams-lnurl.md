@@ -84,18 +84,43 @@
       idempotency proof deferred to the multi-instance role refactor plan
 
 ### Phase 3 — Proxy savings unlock (routstr-preference plan resumes)
-- [ ] 3.1: Post-reset live check: `[failover] trying routstr model=glm-5.2`
-      sorts FIRST (testnut prices ≈ $0.0039/M vs OR $0.97/M) → 200
-- [ ] 3.2: Confirm model-ID mapping resolves (node serves `glm-5.2` natively)
-- [ ] 3.3: Update `merchant-routing-engine/docs/PLAN-routstr-preference-cost-optimization.md`
-      (Phase 4/5 unblocked)
+- [x] 3.1: z.ai 5h window reset verified (12% used, 10,558 remaining);
+      glm-5.2 through the node now serves via the **z.ai provider**
+      (`provider: generic`, content OK) on free coding-plan quota, paid in
+      testnut sats. Published glm-5.2 price after fix: 0.381 sat/M ≈
+      $0.0003/M — 3,300× cheaper than OpenRouter → proxy cost-sort puts the
+      node FIRST for glm-class. **Bonus bug fixed**: the z.ai model rows'
+      pricing JSON had `max_*_cost: null` → Pricing validation failed →
+      router silently skipped the z.ai candidates (glm-class always fell to
+      OR). Fixed nulls → 0.0; routing now resolves to z.ai first.
+- [x] 3.2: Model-ID mapping resolves natively (node serves `glm-5.2`,
+      no namespacing)
+- [x] 3.3: MRE plan updated (`PLAN-routstr-preference-cost-optimization.md`
+      Phase 4 complete, a6b773e)
 
 ### Phase 4 — Docs + reproducibility
-- [ ] 4.1: Kit `.env`: new z.ai key as `ROUTSTR_UPSTREAM_API_KEY` (replaces
-      dead `038e51…`), add `ROUTSTR_OPENROUTER_UPSTREAM_KEY`, admin passwords
-- [ ] 4.2: Gap doc `docs/GAP-ROUTSTR-STACK.md` (kit): machine/container map,
+- [x] 4.1: Kit `.env`: new z.ai key as `ROUTSTR_UPSTREAM_API_KEY` (replaces
+      dead `038e51…`), `ROUTSTR_OPENROUTER_UPSTREAM_KEY` added, both admin
+      passwords stored
+- [x] 4.2: Gap doc `docs/GAP-ROUTSTR-STACK.md` (kit): machine/container map,
       provider state, LN-address invariant
-- [ ] 4.3: Commit + push kit + MRE docs
+- [x] 4.3: Kit committed + pushed (af5c663); MRE docs committed + pushed
+      (a6b773e)
+
+## Follow-ups (not blocking)
+
+- Watch the friends-node `sk-hermes` testnut wallet (24.7k sats; ~40-100
+  sats/request at current pricing). No auto-topup exists for the NODE key
+  (the routstrd funding guard watches the daemon's real-sats wallet).
+  If drained: B1 gate fail-closes → proxy falls back to direct OpenRouter
+  (graceful). Top-up = D3 approval flow re-issue, or lower the z.ai rows'
+  USD pricing to stretch the wallet.
+- Proxy-level blacklist nuance: a single node 402 (e.g. large request the
+  wallet can't cover) marks routstr unfunded for 5 min for ALL models —
+  existing coarse behavior, self-heals.
+- Savings verification after 24h: OpenRouter glm-class spend should trend
+  to ~$0 while z.ai 5h windows absorb bursts (big window ~8.9k remaining,
+  resets ~Aug 27).
 
 ## Safety notes
 
