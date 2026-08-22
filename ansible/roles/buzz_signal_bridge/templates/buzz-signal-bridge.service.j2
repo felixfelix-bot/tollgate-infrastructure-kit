@@ -1,0 +1,14 @@
+[Unit]
+Description=Buzz <-> Signal group bridge ({{ buzz_signal_bridge_description }})
+After=network-online.target signal-cli.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.hermes/bot/buzz_signal_bridge.py
+Restart=always
+RestartSec=10
+Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=default.target

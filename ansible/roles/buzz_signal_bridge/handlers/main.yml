@@ -1,0 +1,7 @@
+---
+- name: Verify bridge service is active
+  ansible.builtin.systemd:
+    name: "{{ buzz_signal_bridge_unit_name }}"
+    scope: user
+    state: restarted
+    daemon_reload: true

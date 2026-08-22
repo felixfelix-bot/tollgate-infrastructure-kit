@@ -1,0 +1,36 @@
+---
+# buzz_signal_bridge — bidirectional Signal <-> Buzz (NIP-29) group bridge.
+# Runs on the machine where signal-cli + the manager hermes gateway live
+# (the laptop). Deploys the bridge daemon as a systemd USER unit.
+buzz_signal_bridge_description: "Protein-RNA groups for Sitarani"
+
+buzz_signal_bridge_install_dir: "{{ ansible_env.HOME }}/.hermes/bot"
+buzz_signal_bridge_keys_dir: "{{ ansible_env.HOME }}/.hermes/profiles/manager/keys"
+buzz_signal_bridge_nsec_name: "buzz_bridge_nsec.txt"
+buzz_signal_bridge_npub_name: "buzz_bridge_npub.txt"
+buzz_signal_bridge_config_name: "buzz_signal_bridge.json"
+buzz_signal_bridge_unit_name: "buzz-signal-bridge.service"
+buzz_signal_bridge_nak_path: "{{ ansible_env.HOME }}/.local/bin/nak"
+
+# The signal-cli JSON-RPC daemon + account (same one the hermes gateway
+# uses — bridge sends are processed by hermes under the EXISTING group
+# sessions; verified live 2026-08-22).
+buzz_signal_bridge_signal_http: "http://127.0.0.1:8080"
+buzz_signal_bridge_signal_account: "+18102940908"
+
+buzz_signal_bridge_relay: "wss://relay.orangesync.tech"
+
+# DETERMINISTIC channel UUIDs (uuid5 of the channel name under the
+# orangesync community namespace a3312780-4cfe-48eb-af8a-f405f369a4f8):
+#   e6616f1a-e0f5-5e3a-bd5d-76a2d8921922  -> Protein-RNA interactome analysis
+#   b5f8f21d-07cb-58a8-a33c-7c9c1d4f08f7  -> Protein-RNA go analysis
+# Channel membership (bridge npub + Sitarani's npub) is managed OUT of band
+# with the relay OWNER key (BUZZ_RELAY_PRIVATE_KEY of the buzz-relay
+# container) — see PLAN-buzz-signal-bridge.md Phase A.
+buzz_signal_bridge_pairs:
+  - name: interactome
+    signal_group: "BZ3dOhXodEKJ1xKm/l0qlM/hzgVHAv9CSNf06nswq8Q="
+    buzz_channel: "e6616f1a-e0f5-5e3a-bd5d-76a2d8921922"
+  - name: go
+    signal_group: "+HBokV06uG2WMZZLqdSrow7OLhTJAJv+IB51hUMg9SU="
+    buzz_channel: "b5f8f21d-07cb-58a8-a33c-7c9c1d4f08f7"

@@ -1,0 +1,11 @@
+{
+  "pairs": [
+{% for pair in buzz_signal_bridge_pairs %}
+    {
+      "name": "{{ pair.name }}",
+      "signal_group": "{{ pair.signal_group }}",
+      "buzz_channel": "{{ pair.buzz_channel }}"
+    }{{ "," if not loop.last else "" }}
+{% endfor %}
+  ]
+}

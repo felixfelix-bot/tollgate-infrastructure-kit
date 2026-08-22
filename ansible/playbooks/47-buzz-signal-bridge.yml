@@ -1,0 +1,10 @@
+---
+- name: Deploy Buzz <-> Signal group bridge (local machine)
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: yes
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ lookup('pipe', 'id -u') }}"
+  roles:
+    - buzz_signal_bridge

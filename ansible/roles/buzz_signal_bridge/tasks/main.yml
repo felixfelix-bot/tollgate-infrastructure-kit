@@ -1,0 +1,115 @@
+---
+# buzz_signal_bridge — install + run the Signal <-> Buzz group bridge as a
+# systemd USER unit on the local machine (where signal-cli + manager
+# hermes gateway live).
+#
+# Prereqs (verified by tasks):
+#   - nak CLI at ~/.local/bin/nak (relay auth + event send/req)
+#   - signal-cli JSON-RPC daemon on 127.0.0.1:8080
+#
+# Out-of-band (see PLAN-buzz-signal-bridge.md):
+#   - buzz channels exist on the relay (owner key creates them)
+#   - bridge npub + friend npubs are channel members (owner put-user)
+#   - the bridge nsec is generated ONCE and kept — its npub is the channel
+#     membership identity; regeneration would orphan the membership.
+- name: Verify nak CLI is available
+  ansible.builtin.stat:
+    path: "{{ buzz_signal_bridge_nak_path }}"
+  register: nak_bin
+  failed_when: not nak_bin.stat.exists
+
+- name: Verify signal-cli JSON-RPC daemon port
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ buzz_signal_bridge_signal_http.split(':')[2] | int }}"
+    timeout: 10
+  changed_when: false
+
+- name: Ensure install dir exists
+  ansible.builtin.file:
+    path: "{{ buzz_signal_bridge_install_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Ensure keys dir exists
+  ansible.builtin.file:
+    path: "{{ buzz_signal_bridge_keys_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Install bridge daemon script
+  ansible.builtin.copy:
+    src: buzz_signal_bridge.py
+    dest: "{{ buzz_signal_bridge_install_dir }}/buzz_signal_bridge.py"
+    mode: "0755"
+  notify: restart buzz signal bridge
+
+- name: Generate bridge nsec (ONCE — npub is the channel identity)
+  ansible.builtin.command:
+    argv:
+      - "{{ buzz_signal_bridge_nak_path }}"
+      - key
+      - generate
+  register: bridge_nsec_gen
+  changed_when: false
+  no_log: true
+
+- name: Persist bridge nsec if missing
+  ansible.builtin.copy:
+    content: "{{ bridge_nsec_gen.stdout | trim }}"
+    dest: "{{ buzz_signal_bridge_keys_dir }}/{{ buzz_signal_bridge_nsec_name }}"
+    mode: "0600"
+  when: not (buzz_signal_bridge_keys_dir ~ '/' ~ buzz_signal_bridge_nsec_name) is exists
+  no_log: true
+
+- name: Record bridge npub (public, safe to keep)
+  ansible.builtin.shell: |
+    set -o pipefail
+    {{ buzz_signal_bridge_nak_path }} key public "$(cat '{{ buzz_signal_bridge_keys_dir }}/{{ buzz_signal_bridge_nsec_name }}')"
+  register: bridge_npub
+  changed_when: false
+
+- name: Persist bridge npub
+  ansible.builtin.copy:
+    content: "{{ bridge_npub.stdout | trim }}\n"
+    dest: "{{ buzz_signal_bridge_keys_dir }}/{{ buzz_signal_bridge_npub_name }}"
+    mode: "0644"
+  changed_when: false
+
+- name: Render bridge pair config
+  ansible.builtin.template:
+    src: buzz_signal_bridge.json.j2
+    dest: "{{ buzz_signal_bridge_install_dir }}/{{ buzz_signal_bridge_config_name }}"
+    mode: "0600"
+  notify: restart buzz signal bridge
+
+- name: Render systemd user unit
+  ansible.builtin.template:
+    src: buzz-signal-bridge.service.j2
+    dest: "{{ ansible_env.HOME }}/.config/systemd/user/{{ buzz_signal_bridge_unit_name }}"
+    mode: "0644"
+  notify: restart buzz signal bridge
+
+- name: Enable + start bridge service
+  ansible.builtin.systemd:
+    name: "{{ buzz_signal_bridge_unit_name }}"
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Verify bridge is active
+  ansible.builtin.systemd:
+    name: "{{ buzz_signal_bridge_unit_name }}"
+    scope: user
+  register: bridge_state
+  failed_when: bridge_state.status.ActiveState != "active"
+  changed_when: false
+
+- name: Bridge deployment summary
+  ansible.builtin.debug:
+    msg:
+      - "bridge npub: {{ bridge_npub.stdout | trim }}"
+      - "pairs: {{ buzz_signal_bridge_pairs | map(attribute='name') | join(', ') }}"
+      - "relay: {{ buzz_signal_bridge_relay }}"
+      - "unit: {{ buzz_signal_bridge_unit_name }} (user)"
