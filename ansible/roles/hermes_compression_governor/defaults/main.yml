@@ -1,0 +1,18 @@
+---
+# hermes_compression_governor — deploys the compression cost governor + model
+# router into ~/.hermes/bot/, plus a systemd user timer (every 15 min).
+#
+# The governor:
+#   - Reads api_calls WHERE task_type='compression' from zai_usage.db
+#   - Kalman-filters the compression/total cost ratio
+#   - PI-controls both a threshold hint AND a compression_budget ($/M)
+#   - Writes compression_threshold_override.json (read by compression_model_router)
+#
+# The model router:
+#   - Selects cheapest capable summarizer (DeepSeek V4 Flash default,
+#     Gemma 4 31B for repeat compressions with cached rate)
+#   - Reads the governor's budget output
+#   - Imported by zai_proxy.py as a hook
+
+hermes_compression_governor_bot_dir: "{{ ansible_facts['env']['HOME'] }}/.hermes/bot"
+hermes_compression_governor_timer_interval: "15min"

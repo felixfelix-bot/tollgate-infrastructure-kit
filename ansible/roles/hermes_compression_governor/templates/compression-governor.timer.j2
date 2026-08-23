@@ -1,0 +1,10 @@
+[Unit]
+Description=Compression Cost Governor timer (every {{ hermes_compression_governor_timer_interval }})
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ hermes_compression_governor_timer_interval }}
+Unit=compression-governor.service
+
+[Install]
+WantedBy=timers.target

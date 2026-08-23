@@ -1,0 +1,60 @@
+---
+- name: Ensure bot dir exists
+  ansible.builtin.file:
+    path: "{{ hermes_compression_governor_bot_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Deploy compression cost governor
+  ansible.builtin.copy:
+    src: compression_cost_governor.py
+    dest: "{{ hermes_compression_governor_bot_dir }}/compression_cost_governor.py"
+    mode: "0755"
+
+- name: Deploy compression model router
+  ansible.builtin.copy:
+    src: compression_model_router.py
+    dest: "{{ hermes_compression_governor_bot_dir }}/compression_model_router.py"
+    mode: "0755"
+
+- name: Ensure systemd user dir exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user"
+    state: directory
+    mode: "0755"
+
+- name: Deploy systemd service unit
+  ansible.builtin.template:
+    src: compression-governor.service.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/compression-governor.service"
+    mode: "0644"
+
+- name: Deploy systemd timer unit
+  ansible.builtin.template:
+    src: compression-governor.timer.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/compression-governor.timer"
+    mode: "0644"
+
+- name: Reload systemd user daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user
+
+- name: Enable and start compression-governor timer
+  ansible.builtin.systemd:
+    name: compression-governor.timer
+    enabled: true
+    state: started
+    scope: user
+
+- name: Run governor once to initialize state
+  ansible.builtin.command:
+    argv:
+      - python3
+      - "{{ hermes_compression_governor_bot_dir }}/compression_cost_governor.py"
+  register: governor_init
+  changed_when: false
+
+- name: Show governor initialization output
+  ansible.builtin.debug:
+    var: governor_init.stdout
