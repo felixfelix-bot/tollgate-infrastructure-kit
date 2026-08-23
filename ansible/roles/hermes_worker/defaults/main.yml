@@ -7,6 +7,7 @@ hermes_worker_logs_dir: "{{ hermes_worker_install_dir }}/logs"
 hermes_worker_profiles_dir: "{{ hermes_worker_install_dir }}/profiles"
 
 hermes_worker_python: python3
+hermes_worker_venv_python: "{{ hermes_worker_install_dir }}/hermes-agent/venv/bin/python"
 hermes_worker_pip_extra_args: "--break-system-packages"
 hermes_worker_pip_packages:
   - numpy

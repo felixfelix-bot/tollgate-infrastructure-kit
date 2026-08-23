@@ -5,10 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart={{ hermes_worker_python }} -m hermes worker --profile {{ hermes_worker_profiles[0] }}
+ExecStart={{ hermes_worker_install_dir }}/hermes-agent/venv/bin/hermes kanban daemon --force --verbose
 WorkingDirectory={{ hermes_worker_install_dir }}
 Environment=PYTHONUNBUFFERED=1
 Environment=HERMES_HOME={{ hermes_worker_install_dir }}
+Environment="PATH={{ hermes_worker_install_dir }}/hermes-agent/venv/bin:{{ ansible_facts['env']['PATH'] }}"
+Environment="VIRTUAL_ENV={{ hermes_worker_install_dir }}/hermes-agent/venv"
 Restart=on-failure
 RestartSec=30
 StandardOutput=append:{{ hermes_worker_logs_dir }}/hermes-worker.log
