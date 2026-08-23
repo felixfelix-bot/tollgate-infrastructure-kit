@@ -44,3 +44,14 @@ filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::ResourceWarning",
 ]
+
+[tool.coverage.run]
+omit = [
+    "*/cdk_mint_rpc_pb2*.py",
+    "*/cdk_mint_rpc_pb2_grpc.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+]
