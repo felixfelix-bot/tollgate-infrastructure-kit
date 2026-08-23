@@ -23,3 +23,5 @@
   roles:
     - role: hermes_worker
       when: hermes_worker_enabled | default(true)
+      vars:
+        hermes_worker_enabled: true

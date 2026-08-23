@@ -68,6 +68,12 @@
     mode: "0600"
   no_log: true
 
+- name: Ensure systemd user directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user"
+    state: directory
+    mode: "0755"
+
 - name: Create systemd service for Hermes workers
   ansible.builtin.template:
     src: hermes-worker.service.j2
@@ -81,7 +87,7 @@
   changed_when: true
 
 - name: Enable and start Hermes worker service
-  ansible.systemd:
+  ansible.builtin.systemd:
     name: "{{ hermes_worker_systemd_service_name }}"
     scope: user
     enabled: true

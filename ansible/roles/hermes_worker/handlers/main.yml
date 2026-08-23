@@ -1,6 +1,6 @@
 ---
 - name: Restart Hermes worker service
-  ansible.systemd:
+  ansible.builtin.systemd:
     name: "{{ hermes_worker_systemd_service_name }}"
     scope: user
     state: restarted
