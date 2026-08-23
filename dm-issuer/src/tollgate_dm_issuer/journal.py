@@ -136,6 +136,7 @@ class Journal(Protocol):
     def set_kv(self, key: str, value: str) -> None: ...
     def mark_delivered(self, request_id: str, *, ts: Optional[datetime] = None) -> bool: ...
     def backlog(self) -> Sequence[RequestRow]: ...
+    def list_recent(self, limit: int = 20) -> Sequence[RequestRow]: ...
 
 
 def request_id_for(event_id: str) -> str:
@@ -286,6 +287,15 @@ class InMemoryJournal:
     def backlog(self) -> Sequence[RequestRow]:
         with self._lock:
             return [r for r in self._requests.values() if r.state == DELIVERED and not r.delivered]
+
+    def list_recent(self, limit: int = 20) -> Sequence[RequestRow]:
+        with self._lock:
+            sorted_rows = sorted(
+                self._requests.values(),
+                key=lambda r: r.created_at,
+                reverse=True,
+            )
+            return sorted_rows[:limit]
 
     def mark_delivered(self, request_id: str, *, ts: Optional[datetime] = None) -> bool:
         with self._lock:
@@ -494,6 +504,12 @@ class SQLiteJournal(InMemoryJournal):
     def backlog(self) -> Sequence[RequestRow]:
         cur = self._conn.execute(
             "SELECT * FROM requests WHERE state = 'DELIVERED' AND delivered = 0",
+        )
+        return [_row_to_RequestRow(r) for r in cur.fetchall()]
+
+    def list_recent(self, limit: int = 20) -> Sequence[RequestRow]:
+        cur = self._conn.execute(
+            "SELECT * FROM requests ORDER BY created_at DESC LIMIT ?", (limit,),
         )
         return [_row_to_RequestRow(r) for r in cur.fetchall()]
 
