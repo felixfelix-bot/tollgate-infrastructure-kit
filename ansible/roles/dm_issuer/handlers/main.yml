@@ -1,0 +1,6 @@
+---
+- name: Restart dm-issuer
+  community.docker.docker_compose_v2:
+    project_src: "{{ dm_issuer_config_dir }}"
+    state: restarted
+  when: not ansible_check_mode

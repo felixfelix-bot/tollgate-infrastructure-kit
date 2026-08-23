@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  {{ dm_issuer_container_name }}:
+    build: {{ playbook_dir }}/../dm-issuer
+    env_file: {{ dm_issuer_config_dir }}/.env
+    ports:
+      - "{{ dm_issuer_ops_port }}:{{ dm_issuer_ops_port }}"
+    volumes:
+      - {{ dm_issuer_data_dir }}:/var/lib/dm-issuer
+      - {{ dm_issuer_config_path }}:{{ dm_issuer_config_path }}:ro
+    restart: {{ dm_issuer_restart_policy }}
+    network_mode: "{{ dm_issuer_docker_network }}"

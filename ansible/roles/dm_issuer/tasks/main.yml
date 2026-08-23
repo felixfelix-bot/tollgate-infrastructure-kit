@@ -1,0 +1,44 @@
+---
+- name: Create data directory
+  file:
+    path: "{{ dm_issuer_data_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Create config directory
+  file:
+    path: "{{ dm_issuer_config_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Render config.json from template
+  template:
+    src: config.json.j2
+    dest: "{{ dm_issuer_config_path }}"
+    mode: '0644'
+  notify: restart dm-issuer
+
+- name: Write .env file
+  copy:
+    dest: "{{ dm_issuer_config_dir }}/.env"
+    content: |
+      ISSUER_NSEC={{ dm_issuer_issuer_nsec }}
+      ISSUER_NPUB={{ dm_issuer_issuer_npub }}
+      DM_ISSUER_CONFIG_PATH={{ dm_issuer_config_path }}
+      DM_ISSUER_DB_PATH={{ dm_issuer_db_path }}
+    mode: '0600'
+  no_log: true
+  notify: restart dm-issuer
+
+- name: Copy docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ dm_issuer_config_dir }}/docker-compose.yml"
+    mode: '0644'
+  notify: restart dm-issuer
+
+- name: Build and start dm-issuer container
+  community.docker.docker_compose_v2:
+    project_src: "{{ dm_issuer_config_dir }}"
+    state: present
+  when: not ansible_check_mode
