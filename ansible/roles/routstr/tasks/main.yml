@@ -50,8 +50,15 @@
     routstr_upstream_api_key: "{{ lookup('env', 'ROUTSTR_UPSTREAM_API_KEY') | default('', true) }}"
     routstr_node_name: "{{ lookup('env', 'ROUTSTR_NODE_NAME') | default('Tollgate AI Node', true) }}"
     routstr_node_description: "{{ lookup('env', 'ROUTSTR_NODE_DESCRIPTION') | default('AI inference via Cashu micropayments', true) }}"
-    routstr_ln_address: "{{ lookup('env', 'ROUTSTR_LN_ADDRESS') | default('', true) }}"
-    routstr_receive_ln_address: "{{ lookup('env', 'ROUTSTR_RECEIVE_LN_ADDRESS') | default('', true) }}"
+    # routstr_ln_address intentionally removed (2026-08-22): RECEIVE_LN_ADDRESS
+    # is no longer set in the compose template — the admin-API/DB owns the
+    # payout address (see the Configure Routstr settings task).
+    # Anti-wipe invariant (2026-08-22): the node's receive_ln_address must
+    # NEVER be overwritten with an empty value by a deployment. Repo default
+    # = tollgate@coinos.io (what others running the public workflows get);
+    # private deployments override via ROUTSTR_RECEIVE_LN_ADDRESS in their
+    # gitignored .env. Empty-but-set also falls back to the default.
+    routstr_receive_ln_address: "{{ lookup('env', 'ROUTSTR_RECEIVE_LN_ADDRESS') | default('tollgate@coinos.io', true) }}"
     routstr_relays: "ws://localhost:7777,wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net"
 
 - name: Create Routstr directories
@@ -131,15 +138,20 @@
     method: PATCH
     headers:
       Authorization: "Bearer {{ routstr_login.json.token }}"
-    body:
-      receive_ln_address: "{{ routstr_receive_ln_address }}"
-      cashu_mints:
-        - "{{ routstr_mint_url }}"
-      upstream_provider_fee: "{{ routstr_upstream_fee | default(1.10) }}"
-      exchange_fee: "{{ routstr_exchange_fee | default(1.005) }}"
-      min_payout_sat: "{{ routstr_min_payout_sat | default(210) }}"
-      payout_interval_seconds: "{{ routstr_payout_interval | default(900) }}"
-      enable_analytics_sharing: true
+    # Anti-wipe invariant (2026-08-22): receive_ln_address is included ONLY
+    # when non-empty, so a deployment can never clear the node's existing
+    # payout address. The admin-API/DB is the single source of truth for it
+    # (the compose template no longer sets RECEIVE_LN_ADDRESS).
+    body: >-
+      {{ {'cashu_mints': [routstr_mint_url],
+          'upstream_provider_fee': routstr_upstream_fee | default(1.10),
+          'exchange_fee': routstr_exchange_fee | default(1.005),
+          'min_payout_sat': routstr_min_payout_sat | default(210),
+          'payout_interval_seconds': routstr_payout_interval | default(900),
+          'enable_analytics_sharing': true}
+         | combine({'receive_ln_address': routstr_receive_ln_address}
+                   if routstr_receive_ln_address | string | trim | length > 0
+                   else {}) }}
     body_format: json
     return_content: yes
   register: routstr_settings_result

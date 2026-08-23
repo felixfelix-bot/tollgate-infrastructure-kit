@@ -37,3 +37,6 @@ build/
 
 # auto-generated opencode session handover (do not commit)
 HANDOVER.md
+graphify-out/
+auditable-voting/
+kanbanstr/

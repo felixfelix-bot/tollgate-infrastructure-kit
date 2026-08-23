@@ -1,0 +1,13 @@
+---
+- name: restart routstrd wallet stack
+  ansible.builtin.shell: |
+    for p in $(pgrep -f "bin/coc[o]d"); do kill "$p" 2>/dev/null || true; done
+    sleep 2
+    systemctl --user restart routstrd 2>/dev/null || systemctl --user start routstrd
+    for _ in $(seq 1 30); do
+      [ -S {{ routstrd_funding_guard_cocod_socket }} ] && exit 0
+      sleep 1
+    done
+    echo "cocod socket did not come back within 30s" >&2
+    exit 1
+  changed_when: false

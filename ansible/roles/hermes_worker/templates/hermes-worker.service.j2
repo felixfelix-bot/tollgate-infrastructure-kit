@@ -1,0 +1,18 @@
+[Unit]
+Description=Hermes Worker Agent ({{ inventory_hostname }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart={{ hermes_worker_python }} -m hermes worker --profile {{ hermes_worker_profiles[0] }}
+WorkingDirectory={{ hermes_worker_install_dir }}
+Environment=PYTHONUNBUFFERED=1
+Environment=HERMES_HOME={{ hermes_worker_install_dir }}
+Restart=on-failure
+RestartSec=30
+StandardOutput=append:{{ hermes_worker_logs_dir }}/hermes-worker.log
+StandardError=append:{{ hermes_worker_logs_dir }}/hermes-worker.err
+
+[Install]
+WantedBy=default.target

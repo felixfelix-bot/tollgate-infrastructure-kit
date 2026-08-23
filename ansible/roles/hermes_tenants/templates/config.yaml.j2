@@ -3,6 +3,11 @@
 # cont-init.d/03-nostr-bootstrap seeds $HERMES_HOME/config.yaml from this
 # file (mounted at /config) on first boot and never clobbers existing
 # config. Hermes rewrites its own config.yaml afterwards.
+model:
+  default: "glm-5.2"
+  provider: "zai"
+  base_url: "http://routstrd-{{ tenant_name }}:8008/v1"
+
 nostr:
   relays: [{{ hermes_tenants_nostr_relays.split(',') | map('trim') | select | join(', ') }}]
   groups: [{{ hermes_tenants_nostr_groups.split(',') | map('trim') | select | join(', ') }}]
@@ -10,5 +15,11 @@ nostr:
 platforms:
   nostr:
     enabled: true
+    extra:
+      relays:
+        - "{{ hermes_tenants_nostr_relays }}"
+      groups:
+        - "{{ hermes_tenants_nostr_groups }}"
+      nsec_path: "/nsec/nsec.txt"
   api_server:
     enabled: true

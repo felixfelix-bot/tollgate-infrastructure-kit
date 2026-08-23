@@ -1,0 +1,27 @@
+---
+hermes_worker_install_dir: "{{ ansible_facts['env']['HOME'] }}/.hermes"
+hermes_worker_bot_dir: "{{ hermes_worker_install_dir }}/bot"
+hermes_worker_scripts_dir: "{{ hermes_worker_install_dir }}/profiles/manager/scripts"
+hermes_worker_state_dir: "{{ hermes_worker_install_dir }}/state"
+hermes_worker_logs_dir: "{{ hermes_worker_install_dir }}/logs"
+hermes_worker_profiles_dir: "{{ hermes_worker_install_dir }}/profiles"
+
+hermes_worker_python: python3
+hermes_worker_pip_extra_args: "--break-system-packages"
+hermes_worker_pip_packages:
+  - numpy
+
+hermes_worker_profiles:
+  - worker-base
+  - worker-dq05
+
+hermes_worker_systemd_service_name: hermes-worker
+hermes_worker_contextvm_port: 9100
+
+hermes_worker_resource_monitor_script: resource_monitor.py
+hermes_worker_kalman_script: multi_resource_kalman.py
+
+hermes_worker_cron_minute: "*/5"
+hermes_worker_cron_job: "{{ hermes_worker_python }} {{ hermes_worker_bot_dir }}/resource_monitor.py >> {{ hermes_worker_logs_dir }}/resource_monitor.log 2>&1"
+
+hermes_worker_zai_proxy_url: "http://100.90.22.201:8082"

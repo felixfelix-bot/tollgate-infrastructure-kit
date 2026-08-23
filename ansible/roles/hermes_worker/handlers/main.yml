@@ -1,0 +1,12 @@
+---
+- name: Restart Hermes worker service
+  ansible.systemd:
+    name: "{{ hermes_worker_systemd_service_name }}"
+    scope: user
+    state: restarted
+    daemon_reload: true
+  failed_when: false
+
+- name: Reload systemd
+  ansible.builtin.command: systemctl --user daemon-reload
+  changed_when: true

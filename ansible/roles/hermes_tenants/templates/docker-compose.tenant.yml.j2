@@ -12,6 +12,7 @@ services:
     environment:
       # Route LLM calls through routstrd sidecar for Cashu payment handling
       LLM_PROXY_URL: http://routstrd-{{ tenant_name }}:{{ hermes_tenants_routstrd_config.port }}/v1
+      GATEWAY_ALLOW_ALL_USERS: "{{ hermes_tenants_gateway_allow_all_users | lower }}"
     volumes:
       # Must match HERMES_HOME in the image (/opt/data in Dockerfile.slim),
       # otherwise the gateway reads/writes the wrong home.
@@ -22,7 +23,7 @@ services:
       - routstr_default
       - hermes-net-{{ tenant_name }}
     ports:
-      - "{{ tenant_gateway_port }}:8080"
+      - "127.0.0.1:{{ tenant_gateway_port }}:8080"
     depends_on:
       routstrd-{{ tenant_name }}:
         condition: service_healthy

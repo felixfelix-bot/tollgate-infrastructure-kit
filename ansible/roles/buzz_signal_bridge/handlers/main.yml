@@ -1,0 +1,16 @@
+---
+- name: restart buzz signal bridge
+  ansible.builtin.systemd:
+    name: "{{ buzz_signal_bridge_unit_name }}"
+    scope: user
+    state: restarted
+    daemon_reload: true
+
+- name: restart hermes gateway
+  ansible.builtin.systemd:
+    name: hermes-gateway.service
+    scope: user
+    state: restarted
+  # NOTE: gateway stop can take up to ~4 min (TimeoutStopSec=210, drains
+  # in-flight agent turns). Only fires when the nostr config normalization
+  # actually changed something.

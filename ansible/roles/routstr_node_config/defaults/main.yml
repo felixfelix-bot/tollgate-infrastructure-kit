@@ -1,0 +1,32 @@
+---
+# routstr_node_config — configure the two routstr nodes on VPS2 via their
+# admin APIs: upstream providers (z.ai coding key on BOTH nodes, OpenRouter
+# reserve on the friends node) and the operator LNURL payout address on the
+# public node.
+#
+# Secrets come from the kit .env (loaded by deploy.sh's `set -a`):
+#   ROUTSTR_UPSTREAM_API_KEY        z.ai coding-plan key (both nodes)
+#   ROUTSTR_OPENROUTER_UPSTREAM_KEY OpenRouter key (friends node, reserve)
+#   ROUTSTR_ADMIN_PASSWORD_FRIENDS  friends node admin password
+#   ROUTSTR_ADMIN_PASSWORD_PUBLIC   public node admin password
+#   ROUTSTR_RECEIVE_LN_ADDRESS      operator payout LNURL (public node)
+#
+# Anti-wipe invariant: receive_ln_address is only set when the variable is
+# non-empty — a deployment can never clear the node's payout address.
+#
+# Channel membership (bridge npub, friends' npubs) and channel creation
+# remain owner-key operations documented in PLAN-buzz-signal-bridge.md /
+# the buzz-cli skill reference (nak event -k 9000 --auth as the relay
+# owner key) — not part of this role.
+routstr_node_config_friends_port: 8009
+routstr_node_config_public_port: 8010
+
+routstr_node_config_zai_slug: "zai-coding"
+routstr_node_config_zai_base_url: "https://api.z.ai/api/coding/paas/v4"
+routstr_node_config_openrouter_slug: "openrouter"
+routstr_node_config_openrouter_base_url: "https://openrouter.ai/api/v1"
+routstr_node_config_provider_fee: 1.27
+
+# Rotate the upstream api_key on every run even when the provider exists?
+# Default false (idempotent runs); set true after key rotation.
+routstr_node_config_force_key_update: false

@@ -1,0 +1,10 @@
+---
+- name: Deploy routstr node access (SSH tunnel + env + balance collector)
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: yes
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ lookup('pipe', 'id -u') }}"
+  roles:
+    - routstr_node_access

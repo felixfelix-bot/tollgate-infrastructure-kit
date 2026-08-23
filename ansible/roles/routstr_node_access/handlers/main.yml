@@ -1,0 +1,6 @@
+---
+- name: restart zai proxy
+  ansible.builtin.systemd:
+    name: zai-proxy.service
+    scope: user
+    state: restarted

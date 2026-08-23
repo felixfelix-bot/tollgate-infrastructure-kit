@@ -1,0 +1,34 @@
+---
+- name: Ensure scripts dir exists
+  ansible.builtin.file:
+    path: "{{ hermes_cost_probe_scripts_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Deploy routstr_probe.py
+  ansible.builtin.copy:
+    src: routstr_probe.py
+    dest: "{{ hermes_cost_probe_scripts_dir }}/routstr_probe.py"
+    mode: "0755"
+
+- name: Deploy sanitize_db.py
+  ansible.builtin.copy:
+    src: sanitize_db.py
+    dest: "{{ hermes_cost_probe_scripts_dir }}/sanitize_db.py"
+    mode: "0755"
+
+- name: Ensure daily 03:00 crontab for routstr_probe
+  ansible.builtin.cron:
+    name: routstr-cost-probe daily
+    minute: "0"
+    hour: "3"
+    job: "/usr/bin/python3 {{ hermes_cost_probe_scripts_dir }}/routstr_probe.py >> {{ ansible_facts['env']['HOME'] }}/.hermes/logs/routstr_probe.log 2>&1"
+    state: present
+
+- name: Run probe once to seed/refresh measured_rates
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - "{{ hermes_cost_probe_scripts_dir }}/routstr_probe.py"
+  register: probe_run
+  changed_when: false

@@ -57,3 +57,5 @@ hermes_tenants_no_docker_socket: true
 hermes_tenants_enable_monitoring: true
 
 hermes_health_ntfy_url: ""
+
+hermes_tenants_gateway_allow_all_users: true

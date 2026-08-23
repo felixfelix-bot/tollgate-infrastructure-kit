@@ -1,0 +1,168 @@
+---
+# routstr_node_config — idempotent admin-API configuration of the VPS2
+# routstr nodes. Runs ON vps2 (both nodes bind host-loopback ports).
+- name: Fail fast when required secrets are missing
+  ansible.builtin.assert:
+    that:
+      - routstr_node_config_zai_key | default('') | length > 0
+      - routstr_node_config_friends_pw | default('') | length > 0
+      - routstr_node_config_public_pw | default('') | length > 0
+    fail_msg: >-
+      Missing secrets — source the kit .env before running
+      (ROUTSTR_UPSTREAM_API_KEY / ROUTSTR_ADMIN_PASSWORD_FRIENDS /
+      ROUTSTR_ADMIN_PASSWORD_PUBLIC).
+
+- name: Login to the friends node
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_friends_port }}/admin/api/login"
+    method: POST
+    body_format: json
+    body: {"password": "{{ routstr_node_config_friends_pw }}"}
+    status_code: 200
+  register: friends_login
+  no_log: true
+
+- name: Login to the public node
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_public_port }}/admin/api/login"
+    method: POST
+    body_format: json
+    body: {"password": "{{ routstr_node_config_public_pw }}"}
+    status_code: 200
+  register: public_login
+  no_log: true
+
+- name: Set auth token facts
+  ansible.builtin.set_fact:
+    friends_token: "{{ friends_login.json.token }}"
+    public_token: "{{ public_login.json.token }}"
+  no_log: true
+
+- name: Read friends node providers
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_friends_port }}/admin/api/upstream-providers"
+    method: GET
+    headers: {Authorization: "Bearer {{ friends_token }}"}
+    status_code: 200
+  register: friends_providers
+  no_log: true
+
+- name: Read public node providers
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_public_port }}/admin/api/upstream-providers"
+    method: GET
+    headers: {Authorization: "Bearer {{ public_token }}"}
+    status_code: 200
+  register: public_providers
+  no_log: true
+
+# --- z.ai coding provider on BOTH nodes -----------------------------------
+- name: Ensure zai-coding provider exists (friends node)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_friends_port }}/admin/api/upstream-providers"
+    method: POST
+    body_format: json
+    headers: {Authorization: "Bearer {{ friends_token }}"}
+    body:
+      provider_type: generic
+      base_url: "{{ routstr_node_config_zai_base_url }}"
+      api_key: "{{ routstr_node_config_zai_key }}"
+      provider_fee: "{{ routstr_node_config_provider_fee }}"
+      slug: "{{ routstr_node_config_zai_slug }}"
+      enabled: true
+    status_code: 200
+  when: routstr_node_config_zai_slug not in (friends_providers.json | map(attribute='slug'))
+  no_log: true
+
+- name: Ensure zai-coding provider exists (public node)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_public_port }}/admin/api/upstream-providers"
+    method: POST
+    body_format: json
+    headers: {Authorization: "Bearer {{ public_token }}"}
+    body:
+      provider_type: generic
+      base_url: "{{ routstr_node_config_zai_base_url }}"
+      api_key: "{{ routstr_node_config_zai_key }}"
+      provider_fee: "{{ routstr_node_config_provider_fee }}"
+      slug: "{{ routstr_node_config_zai_slug }}"
+      enabled: true
+    status_code: 200
+  when: routstr_node_config_zai_slug not in (public_providers.json | map(attribute='slug'))
+  no_log: true
+
+- name: Rotate z.ai key when forced (friends node)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_friends_port }}/admin/api/upstream-providers/{{ (friends_providers.json | selectattr('slug', 'equalto', routstr_node_config_zai_slug) | first).id }}"
+    method: PATCH
+    body_format: json
+    headers: {Authorization: "Bearer {{ friends_token }}"}
+    body: {"api_key": "{{ routstr_node_config_zai_key }}"}
+    status_code: 200
+  when:
+    - routstr_node_config_force_key_update | bool
+    - routstr_node_config_zai_slug in (friends_providers.json | map(attribute='slug'))
+  no_log: true
+
+- name: Rotate z.ai key when forced (public node)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_public_port }}/admin/api/upstream-providers/{{ (public_providers.json | selectattr('slug', 'equalto', routstr_node_config_zai_slug) | first).id }}"
+    method: PATCH
+    body_format: json
+    headers: {Authorization: "Bearer {{ public_token }}"}
+    body: {"api_key": "{{ routstr_node_config_zai_key }}"}
+    status_code: 200
+  when:
+    - routstr_node_config_force_key_update | bool
+    - routstr_node_config_zai_slug in (public_providers.json | map(attribute='slug'))
+  no_log: true
+
+# --- OpenRouter reserve provider (friends node only) ----------------------
+- name: Ensure openrouter provider exists (friends node)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_friends_port }}/admin/api/upstream-providers"
+    method: POST
+    body_format: json
+    headers: {Authorization: "Bearer {{ friends_token }}"}
+    body:
+      provider_type: generic
+      base_url: "{{ routstr_node_config_openrouter_base_url }}"
+      api_key: "{{ routstr_node_config_openrouter_key }}"
+      provider_fee: "{{ routstr_node_config_provider_fee }}"
+      slug: "{{ routstr_node_config_openrouter_slug }}"
+      enabled: true
+    status_code: 200
+  when:
+    - routstr_node_config_openrouter_key | default('') | length > 0
+    - routstr_node_config_openrouter_slug not in (friends_providers.json | map(attribute='slug'))
+  no_log: true
+
+# --- operator payout LNURL (public node; anti-wipe: never sent empty) -----
+- name: Read public node settings
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_public_port }}/admin/api/settings"
+    method: GET
+    headers: {Authorization: "Bearer {{ public_token }}"}
+    status_code: 200
+  register: public_settings
+  no_log: true
+
+- name: Set operator payout LNURL on the public node
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ routstr_node_config_public_port }}/admin/api/settings"
+    method: PATCH
+    body_format: json
+    headers: {Authorization: "Bearer {{ public_token }}"}
+    body: {"receive_ln_address": "{{ routstr_node_config_lnurl }}"}
+    status_code: 200
+  when:
+    - routstr_node_config_lnurl | default('') | length > 0
+    - public_settings.json.receive_ln_address != routstr_node_config_lnurl
+  no_log: true
+
+- name: Node configuration summary
+  ansible.builtin.debug:
+    msg:
+      - "friends node providers: {{ friends_providers.json | map(attribute='slug') | join(', ') }}"
+      - "public node providers: {{ public_providers.json | map(attribute='slug') | join(', ') }}"
+      - "payout LNURL (public): {{ routstr_node_config_lnurl | default('') if routstr_node_config_lnurl | default('') else '(unchanged)' }}"
