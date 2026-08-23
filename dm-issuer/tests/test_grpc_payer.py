@@ -168,3 +168,29 @@ class TestHealthCheck:
                           backoff_base_secs=0.0, timeout=1.0)
         ok = await payer.health()
         assert ok is False
+
+
+class TestClose:
+    @pytest.mark.asyncio
+    async def test_close_does_not_raise_with_injected_factory(self):
+        stub = _make_stub(happy=True)
+        payer = GrpcPayer(stub_factory=lambda: stub, retries=1,
+                          backoff_base_secs=0.0, timeout=1.0)
+        await payer.close()
+
+    @pytest.mark.asyncio
+    async def test_close_idempotent(self):
+        stub = _make_stub(happy=True)
+        payer = GrpcPayer(stub_factory=lambda: stub, retries=1,
+                          backoff_base_secs=0.0, timeout=1.0)
+        await payer.close()
+        await payer.close()
+
+    @pytest.mark.asyncio
+    async def test_close_after_mark_paid(self):
+        stub = _make_stub(happy=True)
+        payer = GrpcPayer(stub_factory=lambda: stub, retries=4,
+                          backoff_base_secs=0.0, timeout=1.0)
+        ok = await payer.mark_quote_paid("q1")
+        assert ok is True
+        await payer.close()

@@ -130,6 +130,10 @@ class GrpcPayer:
             log.warning("GetInfo error: %s", exc)
             return False
 
+    async def close(self) -> None:
+        """Close persistent gRPC resources. Called during shutdown."""
+        log.debug("GrpcPayer close()")
+
 
 def _build_default_stub(target: str) -> object:
     """Build a real CdkMintStub backed by a per-call gRPC channel."""
