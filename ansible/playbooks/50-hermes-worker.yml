@@ -1,0 +1,25 @@
+---
+# 50-hermes-worker — sets up Hermes worker profiles and Kalman resource monitoring
+# on DQ05 (and optionally T470).
+#
+# This role:
+#   - Installs Hermes if not present
+#   - Creates worker profiles (worker-base, worker-dq05)
+#   - Installs multi_resource_kalman.py + numpy
+#   - Deploys resource_monitor.py (ContextVM endpoint + cron collector)
+#   - Configures zai_proxy for the target machine
+#   - Creates a systemd user service for Hermes workers
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/50-hermes-worker.yml
+#   ansible-playbook ansible/playbooks/50-hermes-worker.yml --extra-vars "target_hosts=t470_local"
+#
+# Targets DQ05 by default. Override with --extra-vars "target_hosts=<group>"
+
+- name: Hermes worker setup — DQ05
+  hosts: "{{ target_hosts | default('dq05') }}"
+  gather_facts: true
+  ignore_unreachable: true
+  roles:
+    - role: hermes_worker
+      when: hermes_worker_enabled | default(true)

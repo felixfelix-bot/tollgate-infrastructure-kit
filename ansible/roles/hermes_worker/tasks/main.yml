@@ -1,0 +1,119 @@
+---
+- name: Ensure Hermes directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ hermes_worker_install_dir }}"
+    - "{{ hermes_worker_bot_dir }}"
+    - "{{ hermes_worker_scripts_dir }}"
+    - "{{ hermes_worker_state_dir }}"
+    - "{{ hermes_worker_logs_dir }}"
+    - "{{ hermes_worker_profiles_dir }}"
+
+- name: Install Python dependencies
+  ansible.builtin.pip:
+    name: "{{ hermes_worker_pip_packages }}"
+    state: present
+    extra_args: "{{ hermes_worker_pip_extra_args }}"
+  register: pip_result
+  changed_when: "'already satisfied' not in pip_result.stdout | default('')"
+
+- name: Check if Hermes is installed
+  ansible.builtin.command: which hermes
+  register: hermes_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Hermes if not present
+  ansible.builtin.shell: |
+    curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+  args:
+    executable: /bin/bash
+  when: hermes_check.rc != 0
+  register: hermes_install
+  changed_when: hermes_install.rc == 0
+
+- name: Create worker profiles
+  ansible.builtin.command: "hermes profile create {{ item }}"
+  register: profile_create
+  changed_when: "'created' in profile_create.stdout | default('')"
+  failed_when: false
+  loop: "{{ hermes_worker_profiles }}"
+
+- name: Deploy multi_resource_kalman.py
+  ansible.builtin.copy:
+    src: multi_resource_kalman.py
+    dest: "{{ hermes_worker_bot_dir }}/multi_resource_kalman.py"
+    mode: "0644"
+
+- name: Deploy resource_monitor.py
+  ansible.builtin.template:
+    src: resource_monitor.py.j2
+    dest: "{{ hermes_worker_bot_dir }}/resource_monitor.py"
+    mode: "0755"
+
+- name: Deploy kanban_auto_assigner.py
+  ansible.builtin.copy:
+    src: kanban_auto_assigner.py
+    dest: "{{ hermes_worker_scripts_dir }}/kanban_auto_assigner.py"
+    mode: "0755"
+  when: hermes_worker_deploy_assigner | default(true)
+
+- name: Configure zai_proxy for DQ05
+  ansible.builtin.template:
+    src: zai_proxy.env.j2
+    dest: "{{ hermes_worker_bot_dir }}/zai_proxy.env"
+    mode: "0600"
+  no_log: true
+
+- name: Create systemd service for Hermes workers
+  ansible.builtin.template:
+    src: hermes-worker.service.j2
+    dest: "{{ ansible_facts['env']['HOME'] }}/.config/systemd/user/{{ hermes_worker_systemd_service_name }}.service"
+    mode: "0644"
+  register: systemd_service
+
+- name: Reload systemd user daemon
+  ansible.builtin.command: systemctl --user daemon-reload
+  when: systemd_service.changed
+  changed_when: true
+
+- name: Enable and start Hermes worker service
+  ansible.systemd:
+    name: "{{ hermes_worker_systemd_service_name }}"
+    scope: user
+    enabled: true
+    state: started
+    daemon_reload: true
+  register: service_start
+  failed_when: false
+
+- name: Set up resource monitor cron
+  ansible.builtin.cron:
+    name: "hermes-resource-monitor"
+    minute: "{{ hermes_worker_cron_minute }}"
+    job: "{{ hermes_worker_cron_job }}"
+    state: present
+
+- name: Verify ContextVM resource monitor is responding
+  ansible.builtin.uri:
+    url: "http://localhost:{{ hermes_worker_contextvm_port }}"
+    return_content: no
+    timeout: 5
+  register: contextvm_check
+  failed_when: false
+  changed_when: false
+
+- name: Display Hermes worker setup status
+  ansible.builtin.debug:
+    msg:
+      - "=== Hermes Worker Setup ==="
+      - "Hermes installed: {{ 'yes' if hermes_check.rc == 0 or hermes_install is changed else 'check logs' }}"
+      - "Profiles: {{ hermes_worker_profiles | join(', ') }}"
+      - "Kalman script: {{ hermes_worker_bot_dir }}/multi_resource_kalman.py"
+      - "Resource monitor: {{ hermes_worker_bot_dir }}/resource_monitor.py"
+      - "Systemd service: {{ hermes_worker_systemd_service_name }} ({{ 'running' if service_start is not changed else 'started' }})"
+      - "ContextVM (port {{ hermes_worker_contextvm_port }}): {{ 'OK' if contextvm_check.status == 200 else 'not responding (expected if not started yet)' }}"
+      - "zai_proxy: {{ hermes_worker_zai_proxy_url }}"
