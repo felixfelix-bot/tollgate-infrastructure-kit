@@ -261,7 +261,6 @@ SERVICES_VPS2 = [
     {"name": "routstr",          "type": "http",  "url": "http://localhost:8000/v1/models"},
     {"name": "routstr-mint",     "type": "http",  "url": "http://localhost:8089/v1/info"},
     {"name": "jitsi-meet",       "type": "http",  "url": "http://localhost:8090"},
-    {"name": "bitcoin-knots",    "type": "systemd", "unit": "bitcoind-knots.service"},
     {"name": "syncthing",        "type": "systemd", "unit": "syncthing@syncthing.service"},
     {"name": "grasp",            "type": "systemd", "unit": "ngit-grasp.service"},
     {"name": "grasp-mirror",     "type": "systemd", "unit": "grasp-mirror.service"},
