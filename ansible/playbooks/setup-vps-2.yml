@@ -26,6 +26,7 @@
     - grasp_snapshot
     - act_runner
     - routstr
+    - kalman_sidecar
     - auditable_voting
     - ngit_relay
     - backup
