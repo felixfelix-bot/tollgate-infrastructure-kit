@@ -3,6 +3,7 @@ kalman_sidecar_venv: "{{ tollgate_base_dir }}/kalman-sidecar-venv"
 kalman_sidecar_scripts:
   - exhaustion-gate.py
   - routstr-revenue-digest.py
+  - catalog_drift_check.py
 kalman_sidecar_cron_interval: "*/5"
 kalman_sidecar_payout_address: ""
 kalman_sidecar_enabled: true
