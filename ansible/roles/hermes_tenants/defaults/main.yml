@@ -40,7 +40,15 @@ hermes_tenants_routstrd_resource_reservations:
 hermes_tenants_nostr_relays: "ws://nip29-relay:7780,wss://relay.damus.io,wss://nos.lol"
 hermes_tenants_nostr_groups: ""
 hermes_tenants_nostr_nsec_path: "/nsec/nsec.txt"
-hermes_tenants_llm_proxy_url: "http://routstrd:8008/v1"
+# IM-05: every tenant routes through the SHARED routstr-proxy on the
+# routstr_default docker net (service `routstr`, port 8000) with its OWN
+# per-tenant `sk-` child API key (minted under a distinct funded parent for
+# cost isolation). `provider` must be `custom` for a bare OpenAI-compatible
+# base_url; `zai`/`openai` cause "Unknown provider" and hard LLM failure.
+# The routstrd SIDECAR (port 8008) and the old `hermes_tenants_llm_proxy_url`
+# are NOT deployed on VPS2 — the live fleet uses the direct key path.
+hermes_tenants_routstr_api_key: ""
+hermes_tenants_llm_proxy_url: "http://routstr:8000/v1"
 hermes_tenants_routstrd_config:
   port: 8008
   health_endpoint: "/health"

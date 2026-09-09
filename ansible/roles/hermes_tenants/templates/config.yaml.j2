@@ -3,10 +3,20 @@
 # cont-init.d/03-nostr-bootstrap seeds $HERMES_HOME/config.yaml from this
 # file (mounted at /config) on first boot and never clobbers existing
 # config. Hermes rewrites its own config.yaml afterwards.
+#
+# LLM routing (IM-05): every tenant points at the shared routstr-proxy on the
+# routstr_default docker network (service name `routstr`, port 8000) using its
+# OWN per-tenant `sk-` child API key for cost isolation. One dedicated child key
+# is minted per friend under a DISTINCT funded parent key in routstr-proxy's
+# keys.db (4 unique parents = 4 isolated balance pools). `provider` MUST be
+# `custom` (NOT `openai`/`zai`) for a bare OpenAI-compatible base_url, or the
+# gateway logs "Unknown provider" and every call fails. The routstrd sidecar
+# pattern (port 8008) is NOT deployed on VPS2; keep using the direct key path.
 model:
   default: "glm-5.2"
-  provider: "zai"
-  base_url: "http://routstrd-{{ tenant_name }}:8008/v1"
+  provider: "custom"
+  base_url: "http://routstr:8000/v1"
+  api_key: "{{ hermes_tenants_routstr_api_key | default('') }}"
 
 nostr:
   relays: [{{ hermes_tenants_nostr_relays.split(',') | map('trim') | select | join(', ') }}]
