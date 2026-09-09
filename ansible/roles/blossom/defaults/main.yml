@@ -11,3 +11,6 @@ blossom_mirror_enabled: false
 # of blossom_whitelist_anchor_npub. When true, requirePubkeyInRule is set
 # and storage rules include the whitelist pubkeys.
 blossom_whitelist_enabled: true
+
+# Max accepted upload size in bytes. Default 10 MiB. (10485760)
+blossom_upload_max_size: 10485760

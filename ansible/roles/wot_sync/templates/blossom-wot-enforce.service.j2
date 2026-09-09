@@ -1,0 +1,14 @@
+[Unit]
+Description=Blossom WoT enforcement — purge blobs from non-followed npubs
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+Environment=WOT_ALLOWED_PATH={{ wot_sync_allowed_path }}
+Environment=WOT_BLOSSOM_DB={{ wot_sync_blossom_db }}
+Environment=WOT_BLOSSOM_BLOBS={{ wot_sync_blossom_blobs }}
+ExecStart=/usr/local/bin/blossom-wot-enforce
+# Exit 0 always; failures go to stderr/journal so the timer stays healthy.
+SuccessExitStatus=0
+User=root

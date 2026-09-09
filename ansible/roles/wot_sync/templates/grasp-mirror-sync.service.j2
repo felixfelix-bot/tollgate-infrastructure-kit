@@ -1,0 +1,15 @@
+[Unit]
+Description=grasp-mirror WoT sync — rewrite MIRROR_NPUBS from kind-3 / allowlist
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=WOT_ALLOWED_PATH={{ wot_sync_allowed_path }}
+Environment=ROOT_NPUB={{ wot_sync_root_npub }}
+Environment=WOT_RELAYS={{ wot_sync_relays | join(',') }}
+Environment=GRASP_ENV_FILE={{ wot_sync_grasp_env_file }}
+Environment=GRASP_SERVICE={{ wot_sync_grasp_service }}
+ExecStart=/usr/local/bin/grasp-mirror-sync
+SuccessExitStatus=0
+User=root
