@@ -1,0 +1,203 @@
+---
+# Reproduce the ngit-ci coordinator (the + dind sidecar) on the CI host.
+#
+# Debian/Ubuntu pitfall: never `become_user` for git/npm — clone as root and
+# chown after (skill pitfall #4). All container work goes through the docker
+# CLI on the host.
+
+- name: Check for the docker CLI and compose plugin
+  shell: "docker --version && docker compose version"
+  register: ngit_ci_docker_check
+  changed_when: false
+  failed_when: false
+
+- name: Fail when docker or the compose plugin is missing
+  fail:
+    msg: >-
+      docker and the docker compose plugin are required on
+      {{ inventory_hostname }} ({{ ngit_ci_docker_check.stderr | default('') }}).
+      Run the kit's docker role first.
+  when: ngit_ci_docker_check.rc != 0
+
+- name: Create the deploy and source directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ ngit_ci_owner }}"
+    group: "{{ ngit_ci_owner }}"
+  loop:
+    - "{{ ngit_ci_base_dir }}"
+    - "{{ ngit_ci_src_dir }}"
+
+- name: Register the staged source as a git safe.directory
+  shell: "git config --global --add safe.directory {{ ngit_ci_src_dir }}"
+  changed_when: false
+
+- name: Stage the ngit-ci source at the pinned revision
+  git:
+    repo: "{{ ngit_ci_repo_url }}"
+    dest: "{{ ngit_ci_src_dir }}"
+    version: "{{ ngit_ci_repo_version }}"
+    force: true
+
+- name: Hand the staged source to the deploy owner
+  file:
+    path: "{{ ngit_ci_src_dir }}"
+    owner: "{{ ngit_ci_owner }}"
+    group: "{{ ngit_ci_owner }}"
+    recurse: true
+
+- name: Confirm the staged revision is the one the image will be built from
+  command: "git -C {{ ngit_ci_src_dir }} rev-parse HEAD"
+  register: ngit_ci_src_head
+  changed_when: false
+
+- name: Assert the staged revision matches the requested pin
+  assert:
+    that:
+      - ngit_ci_src_head.stdout | trim == ngit_ci_repo_version
+    fail_msg: >-
+      {{ ngit_ci_src_dir }} is at {{ ngit_ci_src_head.stdout | trim }} but
+      {{ ngit_ci_repo_version }} was requested — refusing to build a different
+      revision than the role declares.
+
+- name: Write the coordinator environment file
+  template:
+    src: coordinator.env.j2
+    dest: "{{ ngit_ci_base_dir }}/.env"
+    owner: "{{ ngit_ci_owner }}"
+    group: "{{ ngit_ci_owner }}"
+    mode: '0600'
+
+- name: Preserve the per-repo secrets file if it exists (never overwrite)
+  stat:
+    path: "{{ ngit_ci_base_dir }}/ngit-ci-secrets.env"
+  register: ngit_ci_secrets_file
+
+- name: Create an empty per-repo secrets file when absent
+  copy:
+    dest: "{{ ngit_ci_base_dir }}/ngit-ci-secrets.env"
+    content: ""
+    force: false
+    owner: "{{ ngit_ci_owner }}"
+    group: "{{ ngit_ci_owner }}"
+    mode: '0600'
+  when: not ngit_ci_secrets_file.stat.exists
+
+- name: Write the compose file (builds from the staged source)
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ ngit_ci_base_dir }}/docker-compose.yml"
+    owner: "{{ ngit_ci_owner }}"
+    group: "{{ ngit_ci_owner }}"
+    mode: '0644'
+  register: ngit_ci_compose_file
+
+- name: Validate the rendered compose file
+  command: "docker compose -f {{ ngit_ci_base_dir }}/docker-compose.yml config --quiet"
+  args:
+    chdir: "{{ ngit_ci_base_dir }}"
+  changed_when: false
+
+- name: Start the coordinator and its docker-in-docker sidecar
+  community.docker.docker_compose_v2:
+    project_src: "{{ ngit_ci_base_dir }}"
+    project_name: "{{ ngit_ci_project_name }}"
+    state: present
+    # `--build` is what the hand deployment used, and it keeps the image in
+    # lockstep with the revision pinned above. The .dockerignore excludes
+    # .git/, so a re-run of an unchanged revision is a build-cache hit.
+    build: "{{ ngit_ci_build }}"
+    assume_yes: true
+  register: ngit_ci_deploy
+
+- name: Wait for the coordinator container to be running
+  community.docker.docker_container_info:
+    name: "{{ ngit_ci_container_name }}"
+  register: ngit_ci_coordinator_info
+  until: ngit_ci_coordinator_info.container.State.Running | default(false)
+  retries: 30
+  delay: 5
+
+- name: Wait for the dind sidecar to be running
+  community.docker.docker_container_info:
+    name: "{{ ngit_ci_project_name }}-dind-1"
+  register: ngit_ci_dind_info
+  until: ngit_ci_dind_info.container.State.Running | default(false)
+  retries: 30
+  delay: 5
+
+- name: Wait for the coordinator to open its subscriptions
+  shell: >-
+    docker compose logs --since 5m coordinator
+    | grep -c 'Watcher running'
+  args:
+    chdir: "{{ ngit_ci_base_dir }}"
+  register: ngit_ci_watcher_ready
+  until: ngit_ci_watcher_ready.stdout | trim | int > 0
+  retries: 30
+  delay: 5
+  changed_when: false
+
+- name: Confirm the coordinator publishes its advertisement
+  shell: >-
+    docker compose logs --since 5m coordinator
+    | grep -c 'Published coordinator advertisement'
+  args:
+    chdir: "{{ ngit_ci_base_dir }}"
+  register: ngit_ci_advertised
+  until: ngit_ci_advertised.stdout | trim | int > 0
+  retries: 24
+  delay: 5
+  changed_when: false
+  failed_when: false
+
+- name: Fail when the coordinator cannot publish (identity or relay problem)
+  fail:
+    msg: >-
+      The coordinator is running but has not published a coordinator
+      advertisement within 2 minutes. Check the inbox/index relay connectivity:
+      docker compose logs coordinator (in {{ ngit_ci_base_dir }}).
+  when: ngit_ci_advertised.stdout | trim | int == 0
+
+# The signing identity is generated by the coordinator on first start and lives
+# on the /data volume. It is never read, printed, copied or committed — only
+# its existence is asserted, so a re-run can never silently rotate it.
+- name: Assert the coordinator signing identity exists on the /data volume
+  shell: >-
+    docker run --rm --entrypoint sh -v {{ ngit_ci_data_volume }}:/data
+    {{ ngit_ci_dind_image }} -c 'test -f /data/.coordinator.nsec && echo present || echo missing'
+  register: ngit_ci_identity
+  changed_when: false
+  failed_when: false
+
+- name: Fail when the coordinator identity is missing
+  fail:
+    msg: >-
+      {{ ngit_ci_data_volume }}:/data/.coordinator.nsec not found — the
+      coordinator did not initialise its signing identity. Volume:
+      {{ ngit_ci_data_volume }} (must be reused, not recreated: it holds the
+      identity the dashboard renders events for).
+  when: ngit_ci_identity.stdout | trim != 'present'
+
+- name: Report the effective job-container ceiling
+  debug:
+    msg: >-
+      Concurrency: {{ ngit_ci_max_concurrent_jobs }} job(s) x
+      '{{ ngit_ci_act_container_options }}' — host ceiling
+      {{ ngit_ci_max_concurrent_jobs * 4 }} GB RAM against DQ05's ~10.9 GB
+      (caps are ceilings, not reservations).
+
+- name: Coordinator deployment summary
+  debug:
+    msg: |
+      ngit-ci coordinator deployed on {{ inventory_hostname }}
+        Project:    {{ ngit_ci_project_name }} ({{ ngit_ci_base_dir }})
+        Source:     {{ ngit_ci_src_dir }} @ {{ ngit_ci_src_head.stdout | trim }}
+        Containers: {{ ngit_ci_container_name }}, {{ ngit_ci_project_name }}-dind-1
+        Volumes:    {{ ngit_ci_data_volume }}, {{ ngit_ci_dind_volume }}
+        Repos:      {{ ngit_ci_repos | join(', ') }}
+        Policy:     {{ ngit_ci_execution_policy }}
+        Concurrency:{{ ngit_ci_max_concurrent_jobs }}
+        Identity:   /data/.coordinator.nsec present (never printed)

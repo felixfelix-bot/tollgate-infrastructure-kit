@@ -1,0 +1,22 @@
+---
+# 54-ngit-ci.yml — reproduce the ngit-ci coordinator on the CI host (dq05).
+#
+# Mirrors the previously hand-deployed stack into the kit: coordinator image
+# built from the git-staged source, docker-in-docker sidecar, /data persisted
+# volume, environment from a Jinja2 template, MAX_CONCURRENT_JOBS raised to 3.
+#
+#   ansible-playbook ansible/playbooks/54-ngit-ci.yml -l dq05
+#   ansible-playbook ansible/playbooks/54-ngit-ci.yml -l dq05 -e ngit_ci_build=never
+#
+# The compose project name is pinned (ngit_ci_project_name), so the existing
+# ngit-ci-deploy_coordinator-data volume — and the coordinator signing identity
+# it holds — is reused. The play FAILS if the coordinator cannot publish its
+# advertisement or if the identity is missing.
+
+- name: Deploy the ngit-ci coordinator
+  hosts: "{{ ngit_ci_target | default('dq05') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - ngit_ci

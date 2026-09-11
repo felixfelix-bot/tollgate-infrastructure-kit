@@ -1,0 +1,71 @@
+---
+# ngit-ci coordinator (NIP-C1 actions runner) + docker-in-docker sidecar.
+#
+# Mirrors the hand-deployed coordinator on DQ05 (~/ngit-ci-deploy) into the kit,
+# so the whole stack is reproducible from this repository alone:
+#   * the coordinator image is built from the ngit-ci source staged on the host
+#     at an exact commit (no hand-copied tree),
+#   * the docker-in-docker sidecar isolates untrusted job containers from the
+#     host daemon,
+#   * /data (coordinator identity + event cache + queue state) is a named
+#     volume, and the compose PROJECT NAME is pinned so the existing volume —
+#     and therefore the existing signing identity — is reused, never replaced.
+ngit_ci_enabled: true
+
+ngit_ci_owner: c03rad0r
+# Compose project name is pinned: it decides the volume names
+# (ngit-ci-deploy_coordinator-data) that hold the coordinator's nsec.
+ngit_ci_project_name: ngit-ci-deploy
+ngit_ci_base_dir: "/home/{{ ngit_ci_owner }}/ngit-ci-deploy"
+ngit_ci_src_dir: "/home/{{ ngit_ci_owner }}/ngit-ci-src"
+ngit_ci_container_name: "{{ ngit_ci_project_name }}-coordinator-1"
+ngit_ci_data_volume: "{{ ngit_ci_project_name }}_coordinator-data"
+ngit_ci_dind_volume: "{{ ngit_ci_project_name }}_dind-storage"
+
+# Upstream source. HEAD 0580b27 == v0.1.1 == the revision the live coordinator
+# was built from (Dockerfile/Cargo.toml/docker-compose.yml md5-identical).
+ngit_ci_repo_url: "https://gitnostr.com/npub15qydau2hjma6ngxkl2cyar74wzyjshvl65za5k5rl69264ar2exs5cyejr/ngit-ci.git"
+ngit_ci_repo_version: "0580b27382b4fc9b6b3937d549a1cb2d125954fb"
+
+# Repositories watched for kind-30617 announcements (npub/identifier).
+ngit_ci_repos:
+  - "npub1x677kgulh6lqaa8e658f9ts4s0x692wgrhcptw535877wfkuwnsqztaquc/tollgate-module-basic-go"
+
+ngit_ci_index_relays: "wss://index.ngit.dev"
+ngit_ci_nostr_secret_relays: ""
+ngit_ci_execution_policy: "request-required"
+ngit_ci_additional_requesters: ""
+
+# Concurrency. DQ05 has 4 cores / 10.9 GB RAM / 180 GB free.
+# Raised 1 -> 3 (operator instruction, 2026-09-11): the machine idles at load
+# ~1.0, and the per-job caps below are ceilings, not reservations. NOTE: three
+# jobs at the 4g cap is a 12 GB theoretical ceiling on a 10.9 GB host — the
+# kernels OOM/CPU throttling protects the host, but 3x3g is the safer cap if
+# sustained oversubscription is ever observed. Do not raise past 3 without
+# operator sign-off.
+ngit_ci_max_concurrent_jobs: 3
+ngit_ci_act_container_options: "--memory=4g --memory-swap=4g --cpus=2 --pids-limit=2048"
+ngit_ci_act_cache_enabled: true
+ngit_ci_act_cache_max_bytes: 10737418240
+ngit_ci_act_bind_workspace: false
+
+ngit_ci_blossom_servers: ""
+ngit_ci_blossom_max_log_bytes: 4194304
+ngit_ci_blossom_max_artifact_bytes: 67108864
+ngit_ci_blossom_max_artifacts_per_job: 16
+ngit_ci_blossom_upload_timeout_secs: 60
+ngit_ci_blossom_upload_budget_secs: 120
+ngit_ci_blossom_artifact_server_addr: ""
+ngit_ci_blossom_public_url: ""
+
+ngit_ci_queue_recovery_window_secs: 600
+ngit_ci_log_level: info
+# 30m default job timeout + 2m Blossom budget + shutdown overhead.
+ngit_ci_stop_grace_period: "33m"
+
+# `docker compose up --build` on every role run. The .dockerignore excludes
+# .git/, so an unchanged revision is a build-cache hit.
+ngit_ci_build: always
+
+# Existing images are reused; only the coordinator is rebuilt from source.
+ngit_ci_dind_image: "docker:dind"

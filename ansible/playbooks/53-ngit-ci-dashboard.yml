@@ -1,0 +1,21 @@
+---
+# 53-ngit-ci-dashboard.yml — publish the ngit-ci dashboard at ci.<base_domain>.
+#
+# Static Vite/vanilla-TS SPA (NIP-C1 run viewer) built from the ngit-published
+# source, served by VPS2's SYSTEMD Caddy, fronted by a DNS-only Cloudflare A
+# record. Run from the kit root with the Cloudflare credentials exported:
+#
+#   set -a; source .env; set +a
+#   ansible-playbook ansible/playbooks/53-ngit-ci-dashboard.yml -l vps2
+#
+# The play FAILS if the domain does not answer 200 with a valid certificate.
+# Optionally enforce the run-row gate with -e ngit_ci_dashboard_require_run_rows=true
+# once the coordinator has CI history to show.
+
+- name: Publish the ngit-ci dashboard
+  hosts: "{{ ngit_ci_dashboard_target | default('vps2') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - ngit_ci_dashboard

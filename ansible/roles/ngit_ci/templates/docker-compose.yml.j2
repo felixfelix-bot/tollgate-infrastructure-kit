@@ -1,0 +1,82 @@
+# ngit-ci coordinator + docker-in-docker sidecar.
+#
+# Derived from upstream docker-compose.yml @ {{ ngit_ci_repo_version }}
+# (byte-identical to the file the live DQ05 deployment used, md5
+# 06bc9ee786ab79415533870e090631e8) with two deliberate changes:
+#
+#   * `name:` pins the compose project so the existing volumes
+#     ({{ ngit_ci_data_volume }}, {{ ngit_ci_dind_volume }}) — and the
+#     coordinator signing identity inside /data — are reused rather than
+#     recreated under a new project name.
+#   * the build context points at the git-staged source tree
+#     ({{ ngit_ci_src_dir }}), so the image is always built from the pinned
+#     revision instead of a hand-copied directory.
+#
+# The coordinator never runs workflow steps itself: act creates every job
+# container through a Docker-compatible daemon. This compose file gives the
+# coordinator its own dedicated dind daemon, so untrusted job containers never
+# touch the host's Docker daemon (mounting the host socket instead would hand
+# CI jobs a root-equivalent socket).
+name: {{ ngit_ci_project_name }}
+
+services:
+  coordinator:
+    build:
+      context: {{ ngit_ci_src_dir }}
+      dockerfile: Dockerfile
+    image: {{ ngit_ci_project_name }}-coordinator
+    container_name: {{ ngit_ci_container_name }}
+    restart: unless-stopped
+    depends_on:
+      - dind
+    environment:
+      NGIT_CI_REPOS: "${NGIT_CI_REPOS:?set NGIT_CI_REPOS to the repos to watch}"
+      NGIT_CI_INDEX_RELAYS: "${NGIT_CI_INDEX_RELAYS:-wss://index.ngit.dev}"
+      NGIT_CI_NOSTR_SECRET_RELAYS: "${NGIT_CI_NOSTR_SECRET_RELAYS:-}"
+      NGIT_CI_EXECUTION_POLICY: "${NGIT_CI_EXECUTION_POLICY:-request-required}"
+      NGIT_CI_ADDITIONAL_REQUESTERS: "${NGIT_CI_ADDITIONAL_REQUESTERS:-}"
+      NGIT_CI_DOCKER_HOST: "tcp://dind:2375"
+      NGIT_CI_ACT_BIND_WORKSPACE: "${NGIT_CI_ACT_BIND_WORKSPACE:-false}"
+      NGIT_CI_ACT_CACHE_ENABLED: "${NGIT_CI_ACT_CACHE_ENABLED:-true}"
+      NGIT_CI_ACT_CACHE_MAX_BYTES: "${NGIT_CI_ACT_CACHE_MAX_BYTES:-10737418240}"
+      NGIT_CI_ACT_CONTAINER_OPTIONS: "${NGIT_CI_ACT_CONTAINER_OPTIONS:---memory=4g --memory-swap=4g --cpus=2 --pids-limit=2048}"
+      NGIT_CI_MAX_CONCURRENT_JOBS: "${NGIT_CI_MAX_CONCURRENT_JOBS:-3}"
+      NGIT_CI_QUEUE_RECOVERY_WINDOW_SECS: "${NGIT_CI_QUEUE_RECOVERY_WINDOW_SECS:-600}"
+      NGIT_CI_BLOSSOM_SERVERS: "${NGIT_CI_BLOSSOM_SERVERS:-}"
+      NGIT_CI_BLOSSOM_MAX_LOG_BYTES: "${NGIT_CI_BLOSSOM_MAX_LOG_BYTES:-4194304}"
+      NGIT_CI_BLOSSOM_MAX_ARTIFACT_BYTES: "${NGIT_CI_BLOSSOM_MAX_ARTIFACT_BYTES:-67108864}"
+      NGIT_CI_BLOSSOM_MAX_ARTIFACTS_PER_JOB: "${NGIT_CI_BLOSSOM_MAX_ARTIFACTS_PER_JOB:-16}"
+      NGIT_CI_BLOSSOM_UPLOAD_TIMEOUT_SECS: "${NGIT_CI_BLOSSOM_UPLOAD_TIMEOUT_SECS:-60}"
+      NGIT_CI_BLOSSOM_UPLOAD_BUDGET_SECS: "${NGIT_CI_BLOSSOM_UPLOAD_BUDGET_SECS:-120}"
+      NGIT_CI_BLOSSOM_ARTIFACT_SERVER_ADDR: "${NGIT_CI_BLOSSOM_ARTIFACT_SERVER_ADDR:-}"
+      NGIT_CI_BLOSSOM_PUBLIC_URL: "${NGIT_CI_BLOSSOM_PUBLIC_URL:-}"
+      NGIT_CI_LOG_LEVEL: "${NGIT_CI_LOG_LEVEL:-info}"
+      NGIT_CI_EVENT_CACHE_DIR: "/data/event-cache"
+      NGIT_CI_QUEUE_STATE_PATH: "/data/queued-jobs.json"
+    stop_grace_period: "${NGIT_CI_STOP_GRACE_PERIOD:-33m}"
+    env_file:
+      - path: ./ngit-ci-secrets.env
+        required: false
+    volumes:
+      # Coordinator identity key, Nostr event cache, processed-event-ids and
+      # queued-job state, and work dir.
+      - coordinator-data:/data
+
+  # Dedicated Docker daemon for act's job containers. Unauthenticated TCP is
+  # acceptable here only because the port is never published: it is reachable
+  # solely on the compose-internal network. Do not add a `ports:` mapping.
+  dind:
+    image: {{ ngit_ci_dind_image }}
+    container_name: {{ ngit_ci_project_name }}-dind-1
+    restart: unless-stopped
+    privileged: true # required by dockerd-in-docker
+    environment:
+      DOCKER_TLS_CERTDIR: "" # plain TCP on 2375, internal network only
+    volumes:
+      # Persist pulled job images (the catthehacker act platform image is
+      # several hundred MB) across restarts.
+      - dind-storage:/var/lib/docker
+
+volumes:
+  coordinator-data:
+  dind-storage:
