@@ -1,0 +1,4 @@
+---
+- name: reload caddy
+  command: systemctl reload caddy
+  changed_when: false

@@ -1,0 +1,13 @@
+---
+ngit_ci_dashboard_repo_url: "https://relay.ngit.dev/npub1xtzgnzzu88yfv9es3evykl3ympjz0gc3umy2e6rs3jazruhjyevqe63edh/ngit-ci-dashboard.git"
+ngit_ci_dashboard_src_dir: "{{ tollgate_base_dir }}/src/ngit-ci-dashboard"
+ngit_ci_dashboard_static_dir: "{{ tollgate_static_dir }}/ngit-ci-dashboard"
+ngit_ci_dashboard_dist_dir: "{{ ngit_ci_dashboard_static_dir }}/dist"
+ngit_ci_dashboard_domain: "ci.{{ base_domain }}"
+ngit_ci_dashboard_min_node_major: 20
+ngit_ci_dashboard_min_node_minor: 19
+ngit_ci_dashboard_node_setup_url: "https://deb.nodesource.com/setup_22.x"
+ngit_ci_dashboard_path_chain:
+  - "{{ tollgate_static_dir }}"
+  - "{{ ngit_ci_dashboard_static_dir }}"
+  - "{{ ngit_ci_dashboard_dist_dir }}"

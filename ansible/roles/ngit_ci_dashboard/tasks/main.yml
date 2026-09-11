@@ -1,0 +1,93 @@
+---
+- name: Check for a Node.js binary
+  command: which node
+  register: ngit_ci_dashboard_node_bin
+  changed_when: false
+  failed_when: false
+
+- name: Install Node.js when absent
+  shell: |
+    curl -fsSL {{ ngit_ci_dashboard_node_setup_url }} | bash -
+    apt-get install -y nodejs
+  when: ngit_ci_dashboard_node_bin.rc != 0
+
+- name: Read Node.js version
+  command: node --version
+  register: ngit_ci_dashboard_node_version
+  changed_when: false
+
+- name: Fail when Node.js is too old for the dashboard toolchain
+  fail:
+    msg: >-
+      Node.js {{ ngit_ci_dashboard_node_version.stdout }} is too old for the
+      ngit-ci-dashboard toolchain (vite 8 requires >= v{{ ngit_ci_dashboard_min_node_major }}.{{ ngit_ci_dashboard_min_node_minor }}.0).
+  when: >-
+    (ngit_ci_dashboard_node_version.stdout | regex_replace('^v', '') | split('.') | first | int)
+    < ngit_ci_dashboard_min_node_major
+
+- name: Ensure git safe.directory is set for the dashboard source
+  command: "git config --global --add safe.directory {{ ngit_ci_dashboard_src_dir }}"
+  changed_when: false
+  failed_when: false
+
+- name: Clone ngit-ci-dashboard
+  git:
+    repo: "{{ ngit_ci_dashboard_repo_url }}"
+    dest: "{{ ngit_ci_dashboard_src_dir }}"
+    force: yes
+  register: ngit_ci_dashboard_clone
+
+- name: Read dashboard build output state
+  stat:
+    path: "{{ ngit_ci_dashboard_src_dir }}/dist/index.html"
+  register: ngit_ci_dashboard_dist_state
+
+- name: Read package-lock checksum
+  stat:
+    path: "{{ ngit_ci_dashboard_src_dir }}/package-lock.json"
+    checksum_algorithm: sha256
+  register: ngit_ci_dashboard_lock
+
+- name: Check dependency install marker for the current lockfile
+  stat:
+    path: "{{ ngit_ci_dashboard_src_dir }}/node_modules/.npm-ci-{{ ngit_ci_dashboard_lock.stat.checksum }}"
+  register: ngit_ci_dashboard_ci_marker
+
+- name: Install dashboard dependencies
+  shell: "rm -rf node_modules && npm ci && touch node_modules/.npm-ci-{{ ngit_ci_dashboard_lock.stat.checksum }}"
+  args:
+    chdir: "{{ ngit_ci_dashboard_src_dir }}"
+  register: ngit_ci_dashboard_npm_ci
+  when: not ngit_ci_dashboard_ci_marker.stat.exists
+
+- name: Build dashboard
+  shell: "npm run build"
+  args:
+    chdir: "{{ ngit_ci_dashboard_src_dir }}"
+  when: >-
+    ngit_ci_dashboard_clone.changed
+    or ngit_ci_dashboard_npm_ci.changed
+    or not ngit_ci_dashboard_dist_state.stat.exists
+
+- name: Ensure dashboard static directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ ngit_ci_dashboard_path_chain }}"
+
+- name: Deploy dashboard static files
+  shell: "rsync -a --delete --itemize-changes {{ ngit_ci_dashboard_src_dir }}/dist/ {{ ngit_ci_dashboard_dist_dir }}/"
+  register: ngit_ci_dashboard_rsync
+  changed_when: ngit_ci_dashboard_rsync.stdout | length > 0
+
+- name: Make the served path chain traversable by Caddy
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /srv
+    - "{{ tollgate_static_dir }}"
+    - "{{ ngit_ci_dashboard_static_dir }}"
+    - "{{ ngit_ci_dashboard_dist_dir }}"
