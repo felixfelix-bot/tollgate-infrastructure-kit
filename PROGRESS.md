@@ -199,6 +199,15 @@
 - [x] Source cloned from Nostr (`nostr://npub1hw6amg.../relay.ngit.dev/hive-ci-site`)
 - [x] Built locally (Vue.js + Vite), deployed to VPS
 - [x] Live at `https://ci.orangesync.tech`
+- [ ] **Superseded (Sep 2026)** — `ci.orangesync.tech` now serves the ngit-ci dashboard (see 1D); no hive-ci route remains in `/etc/caddy/Caddyfile`
+
+### 1D. Deploy ngit-ci dashboard (`ci.orangesync.tech`)
+- [x] Role `ansible/roles/ngit_ci_dashboard` — clones the ngit-published dashboard repo, `npm ci`, `npm run build`, rsync `dist/` to `/srv/tollgate/ngit-ci-dashboard/dist`, 0755 on every parent dir Caddy traverses
+- [x] Playbook `ansible/playbooks/53-ngit-ci-dashboard.yml` — Caddyfile `blockinfile` route, `systemctl reload caddy` handler, fatal HTTPS health check, fatal public-DNS assertion
+- [x] Cloudflare A record `ci` → vps2 (proxied `false`); the two other `ci` A records (vps1 + .226) removed so the name resolves to a single host
+- [x] Live at `https://ci.orangesync.tech` — HTTP 200, Let's Encrypt `CN=ci.orangesync.tech`, `caddy validate` passes, re-run reports `changed=0`
+- [x] Public browser gate `tests/verify-ngit-ci-dashboard-public.cjs` (Playwright `channel: 'chrome'`) — title + `.run-list` present, 2 run rows, no uncaught/console errors
+- [ ] Dashboard live-dot shows "connection lost" while both relay WebSockets stay open and events render — app-side indicator (`nostr-tools` `listConnectionStatus`), not a hosting issue
 
 ### Smoke Tests
 - [x] 18/18 services up

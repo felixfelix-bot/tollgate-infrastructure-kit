@@ -21,7 +21,7 @@ A single Ansible-based repository that deploys all Tollgate-related infrastructu
 | 4 | blossom-server (blob storage) | `blossom.` | 3001 | Docker (build from hzrd149/blossom-server) |
 | 5 | nsite-gateway (Nostr site gateway) | `nsite.` | 3002 | Docker (build from hzrd149/nsite-gateway) |
 | 6 | tollgate-release-explorer | `releases.` | — | Static build, Caddy file_server |
-| 7 | hive-ci-site | `ci.` | — | Static build, Caddy file_server |
+| 7 | ngit-ci dashboard (Nostr CI runs) | `ci.` | — | Static build (Vite), Caddy file_server |
 | 8 | Cashu mint infrastructure | `*.mints.` | 8085-8093 | CDK + Nutshell mint containers |
 | 9 | cashu-brrr (money printer) | `print.mints.` | — | Static build, Caddy file_server |
 | 10 | Mint operator proxy | `print.mints./api/` | 3000 | Node.js systemd (tsx) |
@@ -55,7 +55,7 @@ Internet → Cloudflare DNS (auto A records via API)
       ├── blossom.BASE_DOMAIN   → blossom-server (Docker :3001)
       ├── nsite.BASE_DOMAIN     → nsite-gateway (Docker :3002)
       ├── releases.BASE_DOMAIN  → /srv/tollgate/releases/ (Caddy file_server)
-      ├── ci.BASE_DOMAIN        → /srv/tollgate/hive-ci/ (Caddy file_server)
+      ├── ci.BASE_DOMAIN        → /srv/tollgate/ngit-ci-dashboard/dist/ (Caddy file_server, playbook 53)
       ├── git.BASE_DOMAIN       → ngit-grasp (Systemd :7334)
       ├── routstr.BASE_DOMAIN   → Routstr Core (Docker :8000) ← AI inference proxy
         ├── *.mints.BASE_DOMAIN   → CDK + Nutshell mint containers
