@@ -1,0 +1,141 @@
+---
+- name: Deploy ngit-ci dashboard
+  hosts: vps2
+  become: yes
+  gather_facts: yes
+  roles:
+    - ngit_ci_dashboard
+  post_tasks:
+    - name: Set the IPv4 address the dashboard host is reachable at
+      set_fact:
+        ngit_ci_dashboard_ip: "{{ ansible_default_ipv4.address }}"
+
+    - name: Fail when the detected address contradicts the inventory address
+      fail:
+        msg: >-
+          Detected {{ ngit_ci_dashboard_ip }} but the inventory declares
+          '{{ ansible_host }}'. Refusing to write a wrong DNS record.
+      when:
+        - ansible_host | regex_search('^[0-9]') is not none
+        - ngit_ci_dashboard_ip != ansible_host
+
+    - name: Look up existing Cloudflare A records for the dashboard host
+      uri:
+        url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id }}/dns_records?type=A&name={{ ngit_ci_dashboard_domain }}&per_page=100"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ cloudflare_api_token }}"
+        return_content: yes
+      register: ngit_ci_dashboard_cf_lookup
+      no_log: true
+      when: cloudflare_api_token | length > 0
+
+    - name: Create the Cloudflare A record for the dashboard host
+      uri:
+        url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id }}/dns_records"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ cloudflare_api_token }}"
+          Content-Type: application/json
+        body:
+          type: A
+          name: "{{ ngit_ci_dashboard_domain }}"
+          content: "{{ ngit_ci_dashboard_ip }}"
+          ttl: 300
+          proxied: false
+        body_format: json
+        status_code: [200, 400]
+      register: ngit_ci_dashboard_cf_create
+      no_log: true
+      when:
+        - cloudflare_api_token | length > 0
+        - ngit_ci_dashboard_cf_lookup.json.result | selectattr('content', 'equalto', ngit_ci_dashboard_ip) | list | length == 0
+
+    - name: Remove Cloudflare A records for the dashboard host that point elsewhere
+      uri:
+        url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id }}/dns_records/{{ item.id }}"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ cloudflare_api_token }}"
+        status_code: [200]
+      loop: "{{ ngit_ci_dashboard_cf_lookup.json.result | rejectattr('content', 'equalto', ngit_ci_dashboard_ip) | list }}"
+      loop_control:
+        label: "{{ item.name }} -> {{ item.content }}"
+      no_log: true
+      when: cloudflare_api_token | length > 0
+
+    - name: Query public DNS for the dashboard host
+      command: "dig +short {{ ngit_ci_dashboard_domain }} A @1.1.1.1"
+      register: ngit_ci_dashboard_dns
+      changed_when: false
+      until: (ngit_ci_dashboard_dns.stdout_lines | sort) == [ngit_ci_dashboard_ip]
+      retries: 24
+      delay: 5
+      failed_when: false
+
+    - name: Fail when the dashboard host does not resolve to exactly one address
+      fail:
+        msg: >-
+          {{ ngit_ci_dashboard_domain }} resolves to
+          [{{ ngit_ci_dashboard_dns.stdout_lines | join(', ') }}] but must resolve
+          only to {{ ngit_ci_dashboard_ip }}.
+      when: (ngit_ci_dashboard_dns.stdout_lines | sort) != [ngit_ci_dashboard_ip]
+
+    - name: Inject the Caddy route for the dashboard
+      blockinfile:
+        path: /etc/caddy/Caddyfile
+        marker: "# {mark} NGIT CI DASHBOARD ROUTES"
+        block: |
+          {{ ngit_ci_dashboard_domain }} {
+          	root * {{ ngit_ci_dashboard_dist_dir }}
+          	file_server
+          	try_files {path} /index.html
+          	header {
+          		X-Content-Type-Options "nosniff"
+          		X-Frame-Options "DENY"
+          		Referrer-Policy "strict-origin-when-cross-origin"
+          	}
+          }
+      notify: reload caddy
+
+    - name: Validate the Caddy configuration
+      command: caddy validate --config /etc/caddy/Caddyfile
+      register: ngit_ci_dashboard_caddy_validate
+      changed_when: false
+
+    - name: Reload Caddy
+      meta: flush_handlers
+
+    - name: Verify the dashboard is served over HTTPS
+      uri:
+        url: "https://{{ ngit_ci_dashboard_domain }}/"
+        method: GET
+        return_content: yes
+        status_code: 200
+        validate_certs: yes
+      register: ngit_ci_dashboard_health
+      until: ngit_ci_dashboard_health.status == 200
+      retries: 20
+      delay: 5
+      failed_when: false
+
+    - name: Fail when the dashboard is not reachable over HTTPS
+      fail:
+        msg: >-
+          https://{{ ngit_ci_dashboard_domain }}/ returned
+          {{ ngit_ci_dashboard_health.status | default(0) }} instead of 200
+          ({{ ngit_ci_dashboard_health.msg | default('no response') }}).
+      when: ngit_ci_dashboard_health.status | default(0) != 200
+
+    - name: Fail when the served page is not the ngit-ci dashboard
+      fail:
+        msg: >-
+          https://{{ ngit_ci_dashboard_domain }}/ did not serve the dashboard shell.
+      when: "'Nostr CI Dashboard' not in ngit_ci_dashboard_health.content"
+
+    - name: Report the dashboard deployment
+      debug:
+        msg: >-
+          ngit-ci dashboard live at https://{{ ngit_ci_dashboard_domain }}/ from
+          {{ ngit_ci_dashboard_dist_dir }} on {{ ngit_ci_dashboard_ip }}
+          (HTTP {{ ngit_ci_dashboard_health.status }}, Caddy config valid).
