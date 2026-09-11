@@ -8,7 +8,7 @@
   post_tasks:
     - name: Set the IPv4 address the dashboard host is reachable at
       set_fact:
-        ngit_ci_dashboard_ip: "{{ ansible_default_ipv4.address }}"
+        ngit_ci_dashboard_ip: "{{ ansible_facts['default_ipv4']['address'] }}"
 
     - name: Fail when the detected address contradicts the inventory address
       fail:
@@ -61,6 +61,23 @@
       loop: "{{ ngit_ci_dashboard_cf_lookup.json.result | rejectattr('content', 'equalto', ngit_ci_dashboard_ip) | list }}"
       loop_control:
         label: "{{ item.name }} -> {{ item.content }}"
+      no_log: true
+      when: cloudflare_api_token | length > 0
+
+    - name: Enforce DNS-only mode on the dashboard A record
+      uri:
+        url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id }}/dns_records/{{ item.id }}"
+        method: PATCH
+        headers:
+          Authorization: "Bearer {{ cloudflare_api_token }}"
+          Content-Type: application/json
+        body:
+          proxied: false
+        body_format: json
+        status_code: [200]
+      loop: "{{ ngit_ci_dashboard_cf_lookup.json.result | selectattr('content', 'equalto', ngit_ci_dashboard_ip) | selectattr('proxied', 'equalto', true) | list }}"
+      loop_control:
+        label: "{{ item.name }}"
       no_log: true
       when: cloudflare_api_token | length > 0
 
