@@ -49,6 +49,19 @@ ngit_ci_act_cache_enabled: true
 ngit_ci_act_cache_max_bytes: 10737418240
 ngit_ci_act_bind_workspace: false
 
+# Docker capability for job containers. act bind-mounts this daemon socket into
+# every job container (ngit-ci `--act-container-daemon-socket`, whose default
+# of '-' disables the mount). Enabled 2026-09-11 on operator approval so
+# docker-based builds work — FreedomTechFeed/packages' OpenWrt SDK step
+# (`openwrt/gh-action-sdk`, BuildKit) failed with "no container daemon".
+# The path is resolved by the *container daemon act talks to*, i.e. the dind
+# sidecar, so jobs get the dedicated dind daemon and never the host socket.
+# Trade-off: a job with daemon access can spawn sibling containers on dind and
+# so escape its own `--memory/--cpus/--pids-limit` caps (dind is privileged,
+# so that is a bigger blast radius than a job without it). Set to "" or "-" to
+# restore the no-daemon default.
+ngit_ci_act_container_daemon_socket: "unix:///var/run/docker.sock"
+
 ngit_ci_blossom_servers: ""
 ngit_ci_blossom_max_log_bytes: 4194304
 ngit_ci_blossom_max_artifact_bytes: 67108864
