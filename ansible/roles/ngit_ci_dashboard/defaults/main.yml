@@ -17,7 +17,14 @@ ngit_ci_dashboard_repo_url: "https://relay.ngit.dev/npub1xtzgnzzu88yfv9es3evykl3
 ngit_ci_dashboard_repo_version: "22bcb25cf9fb4a9857bdab5d33ea1f06b7e9b7ae"
 
 ngit_ci_dashboard_src_dir: "{{ tollgate_base_dir }}/src/ngit-ci-dashboard"
-ngit_ci_dashboard_dist_dir: "{{ tollgate_static_dir }}/ci"
+# Published static root. This MUST match the `root *` of the Caddy site block
+# below AND the site block already present on VPS2: the route was first injected
+# by an earlier revision of this role with marker "NGIT CI DASHBOARD ROUTES" and
+# root /srv/tollgate/ngit-ci-dashboard/dist. Keeping both identical lets
+# blockinfile REPLACE that block in place — a different marker or root would add
+# a second site block for the same host and Caddy would refuse the config
+# (`ambiguous site definition`).
+ngit_ci_dashboard_dist_dir: "{{ tollgate_static_dir }}/ngit-ci-dashboard/dist"
 ngit_ci_dashboard_report_dir: "{{ tollgate_base_dir }}/ngit-ci-dashboard"
 # git/npm run as root + `sudo -u` (Debian 13 rejects become_user ACLs).
 ngit_ci_dashboard_owner: debian
@@ -25,7 +32,7 @@ ngit_ci_dashboard_owner: debian
 # systemd Caddy owns :80/:443 on VPS2 (pitfall #23 — never `docker restart caddy`).
 ngit_ci_dashboard_caddy_service: caddy
 ngit_ci_dashboard_caddyfile: /etc/caddy/Caddyfile
-ngit_ci_dashboard_caddy_marker: "NGIT-CI-DASHBOARD ROUTES"
+ngit_ci_dashboard_caddy_marker: "NGIT CI DASHBOARD ROUTES"
 
 ngit_ci_dashboard_force_build: false
 

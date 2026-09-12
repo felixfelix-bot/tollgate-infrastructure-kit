@@ -123,9 +123,17 @@
           encode gzip
           try_files {path} /index.html
           file_server
+          header {
+              X-Content-Type-Options "nosniff"
+              X-Frame-Options "DENY"
+              Referrer-Policy "strict-origin-when-cross-origin"
+          }
       }
     backup: true
-    validate: "caddy validate --config %s"
+    # The Caddyfile is a Caddyfile, not JSON: without --adapter caddyfile
+    # `caddy validate` tries the JSON parser and always fails, which aborts the
+    # play the moment the block content changes.
+    validate: "caddy validate --adapter caddyfile --config %s"
   notify: reload caddy
 
 - name: Apply the Caddy route change now
