@@ -66,7 +66,9 @@ echo "[4/5] Checking gateway process inside containers..."
 echo "  (NOTE: Gateway process check is informational only - fix in Task 2)"
 for container in "${EXPECTED_CONTAINERS[@]}"; do
     if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
-        if docker exec "$container" pgrep -f 'hermes gateway run' > /dev/null 2>&1; then
+        # t_f75e5030: an unanchored pgrep on the gateway command matches its own
+        # `sh -c` wrapper and reports success with no gateway running. Anchor argv0.
+        if docker exec "$container" sh -c "/package/admin/s6/command/s6-svstat /run/service/gateway-default 2>/dev/null | grep -q '^up (pid ' && pgrep -f '^/opt/hermes/.venv/bin/python3 /opt/hermes/.venv/bin/hermes gateway run' >/dev/null" > /dev/null 2>&1; then
             echo -e "${GREEN}  ✓ ${container}: gateway process running${NC}"
         else
             echo -e "${YELLOW}  ⚠ ${container}: gateway process not running (expected - fix in Task 2)${NC}"

@@ -128,7 +128,15 @@ assert_equals 2 "$(exit_code_for meltdown)" "exit code meltdown"
 echo ""
 echo "Unit: readers parse fixture files"
 FIX_DIR="$(mktemp -d)"
-trap 'rm -rf "$FIX_DIR"' EXIT
+HC_TEST_CONTAINERS=(hc-fp-liveness-test)
+cleanup_hc_containers() {
+    local c
+    for c in "${HC_TEST_CONTAINERS[@]:-}"; do
+        [[ -n "$c" ]] || continue
+        docker rm -f "$c" &>/dev/null || true
+    done
+}
+trap 'cleanup_hc_containers; rm -rf "$FIX_DIR"' EXIT
 printf '2.05 3.10 33.42 1/500 12345\n' > "$FIX_DIR/loadavg"
 assert_equals "33.42" "$(read_load15 "$FIX_DIR/loadavg")" "read_load15 takes field 3"
 
@@ -199,9 +207,151 @@ assert_equals "rc=0" "$SKIP_SERVICE_CHECKS_OUTPUT" "host-only mode exits 0 on th
 echo ""
 echo "Unit: tenant + gateway regression (V2-10 checks retained)"
 assert_equals "sitarani chiefmonkey bekka" "${TENANTS[*]}" "TENANTS list"
-assert_equals "9100 9101 9102" "${HEALTH_PORTS[*]}" "HEALTH_PORTS list (role health_port_base 9100)"
 assert_equals "http://localhost:3007" "$BUZZ_RELAY_URL" "BUZZ_RELAY_URL host-binding 127.0.0.1:3007"
 assert_equals "http://localhost:8009/v1/models" "$ROUTSTR_URL" "ROUTSTR_URL routstr-proxy 8009"
+
+# ---------------------------------------------------------------------------
+# t_f75e5030: gateway liveness contract (process liveness — NOT a port/HTTP probe)
+# ---------------------------------------------------------------------------
+# The gateway exposes NO HTTP surface (`platforms.api_server` is not enabled in
+# any tenant config), so the old HEALTH_PORTS=(9100 9101 9102) curl probe paged
+# on a dead port every 5 min from 2026-08-15 to 2026-09-12 (24k alerts that hid
+# real failures). check_gateway() now asserts the s6-supervised process instead.
+echo ""
+echo "Unit: gateway liveness contract (t_f75e5030 — no port/HTTP probe)"
+if declare -p HEALTH_PORTS &>/dev/null; then
+    test_fail "HEALTH_PORTS is still defined — the dead-port probe was not removed"
+else
+    test_pass "HEALTH_PORTS removed (no port/HTTP assertion anywhere)"
+fi
+assert_equals "/package/admin/s6/command/s6-svstat" "$S6_SVSTAT" "S6_SVSTAT points at the s6 supervision tool"
+if [[ "$GATEWAY_LIVENESS_CMD" == *'grep -q "^up (pid "'* && "$GATEWAY_LIVENESS_CMD" == *'pgrep -f "^/opt/hermes/.venv/bin/python3 /opt/hermes/.venv/bin/hermes gateway run"'* ]]; then
+    test_pass "GATEWAY_LIVENESS_CMD gates s6 '^up (pid ' + argv0-anchored pgrep"
+else
+    test_fail "GATEWAY_LIVENESS_CMD is not the expected liveness assertion: $GATEWAY_LIVENESS_CMD"
+fi
+if grep -qE "pgrep[[:space:]]+-f[[:space:]]+'hermes gateway run'" <<< "$GATEWAY_LIVENESS_CMD"; then
+    test_fail "GATEWAY_LIVENESS_CMD still carries the self-matching unanchored pattern"
+else
+    test_pass "GATEWAY_LIVENESS_CMD has no self-matching unanchored pattern"
+fi
+if grep -q 'curl' <<< "$(declare -f check_gateway)"; then
+    test_fail "check_gateway still curls a port — HTTP assertion crept back in"
+else
+    test_pass "check_gateway contains no curl (no HTTP/port assertion)"
+fi
+
+# ---------------------------------------------------------------------------
+# t_f75e5030 AC1 regression: a stopped/absent gateway must FAIL the assertion
+# ---------------------------------------------------------------------------
+# Stubbing `docker` reproduces — on any machine, without the tenant image — the
+# exact false positive proven on VPS2: the deployed healthcheck reports
+# `healthy` on a container with zero gateway processes.
+echo ""
+echo "Unit: check_gateway / check_container_health verdicts (AC1 regression, stubbed docker)"
+STUB_INSPECT_OUT=""
+STUB_INSPECT_RC=0
+STUB_EXEC_RC=0
+docker() {
+    local sub="${1:-}"
+    case "$sub" in
+        inspect)
+            [[ -n "$STUB_INSPECT_OUT" ]] && printf '%s\n' "$STUB_INSPECT_OUT"
+            return "$STUB_INSPECT_RC" ;;
+        exec) return "$STUB_EXEC_RC" ;;
+        *) return 1 ;;
+    esac
+}
+gateway_verdict() {
+    FAILURES=()
+    if check_gateway "unit" >/dev/null 2>&1; then echo "ok"; else echo "fail"; fi
+}
+container_verdict() {
+    FAILURES=()
+    if check_container_health "unit" >/dev/null 2>&1; then echo "ok"; else echo "fail"; fi
+}
+
+STUB_INSPECT_OUT=""; STUB_INSPECT_RC=0; STUB_EXEC_RC=0
+assert_equals "ok" "$(gateway_verdict)" "gateway alive (s6 up + argv0-anchored process) -> ok"
+
+STUB_EXEC_RC=1
+assert_equals "fail" "$(gateway_verdict)" "gateway ABSENT -> fail (the old pgrep test passed here)"
+gateway_verdict >/dev/null 2>&1 || true
+if [[ "${FAILURES[*]:-}" == *"no supervised gateway process"* ]]; then
+    test_pass "failure detail names the s6 supervision state"
+else
+    test_fail "failure detail unhelpful: ${FAILURES[*]:-<empty>}"
+fi
+
+STUB_INSPECT_RC=1
+assert_equals "fail" "$(gateway_verdict)" "missing container -> fail"
+
+STUB_INSPECT_RC=0; STUB_INSPECT_OUT="starting"; STUB_EXEC_RC=0
+assert_equals "ok" "$(container_verdict)" "container health 'starting' -> ok (no page inside start_period)"
+STUB_INSPECT_OUT="unhealthy"
+assert_equals "fail" "$(container_verdict)" "container health 'unhealthy' -> fail"
+STUB_INSPECT_OUT=""; STUB_INSPECT_RC=0
+unset -f docker
+
+# ---------------------------------------------------------------------------
+# t_f75e5030: the ansible role template must render the proven VPS2 healthcheck
+# ---------------------------------------------------------------------------
+echo ""
+echo "Unit: role template healthcheck matches the deployed VPS2 test"
+ANSIBLE_TEMPLATE="$PROJECT_DIR/ansible/roles/hermes_tenants/templates/docker-compose.tenant.yml.j2"
+EXPECTED_LIVENESS="/package/admin/s6/command/s6-svstat /run/service/gateway-default 2>/dev/null | grep -q '^up (pid ' && pgrep -f '^/opt/hermes/.venv/bin/python3 /opt/hermes/.venv/bin/hermes gateway run' >/dev/null"
+if [[ -f "$ANSIBLE_TEMPLATE" ]]; then
+    TPL_TEST="$(sed -n 's/^ *test: \["CMD-SHELL", "\(.*\)"\]$/\1/p' "$ANSIBLE_TEMPLATE" | tail -1)"
+    assert_equals "$EXPECTED_LIVENESS" "$TPL_TEST" "role template renders the self-match-proof healthcheck"
+    if grep -qE "pgrep[[:space:]]+-f[[:space:]]+'hermes gateway run'" "$ANSIBLE_TEMPLATE"; then
+        test_fail "template still carries the self-matching unanchored pattern"
+    else
+        test_pass "template carries no self-matching unanchored pattern"
+    fi
+    if grep -qE "curl.*(9100|9101|9102|/health)" "$ANSIBLE_TEMPLATE"; then
+        test_fail "template still probes an HTTP /health port"
+    else
+        test_pass "template probes no HTTP /health port"
+    fi
+else
+    test_fail "role template not found at $ANSIBLE_TEMPLATE"
+fi
+
+# ---------------------------------------------------------------------------
+# Opt-in integration: the deployed healthcheck really flips to `unhealthy`
+# Requires docker + the tenant image, so it is off by default. Run it ON the
+# VPS (image hermes-agent:nostr present):
+#   HERMES_HEALTHCHECK_DOCKER_TEST=1 bash tests/test-hermes-health-check.sh
+# ---------------------------------------------------------------------------
+echo ""
+echo "Integration (opt-in): gateway-less container must report unhealthy"
+if [[ "${HERMES_HEALTHCHECK_DOCKER_TEST:-0}" != "1" ]]; then
+    echo "  SKIP: set HERMES_HEALTHCHECK_DOCKER_TEST=1 (needs docker + the tenant image)"
+else
+    HC_IMAGE="${HEALTHCHECK_TEST_IMAGE:-hermes-agent:nostr}"
+    if ! command -v docker &>/dev/null; then
+        test_fail "HERMES_HEALTHCHECK_DOCKER_TEST=1 but docker is not in PATH"
+    elif ! docker image inspect "$HC_IMAGE" &>/dev/null; then
+        test_fail "HERMES_HEALTHCHECK_DOCKER_TEST=1 but image $HC_IMAGE is not present locally"
+    elif [[ -z "${TPL_TEST:-}" ]]; then
+        test_fail "could not extract the healthcheck test from $ANSIBLE_TEMPLATE"
+    else
+        docker rm -f hc-fp-liveness-test &>/dev/null || true
+        # `sleep infinity` as the container command => s6 supervision down and zero
+        # gateway processes: the exact shape that used to report `healthy`.
+        docker run -d --name hc-fp-liveness-test \
+            --health-cmd "$TPL_TEST" \
+            --health-interval 2s --health-timeout 3s --health-retries 1 --health-start-period 1s \
+            "$HC_IMAGE" sleep infinity >/dev/null
+        sleep 8
+        NEW_VERDICT="$(docker inspect --format '{{.State.Health.Status}}' hc-fp-liveness-test 2>/dev/null || echo unknown)"
+        REAL_GW="$(docker exec hc-fp-liveness-test sh -c "ps -eo args | grep -c '[h]ermes gateway run' || true" 2>/dev/null | tr -d '\r')"
+        REAL_GW="${REAL_GW:-unknown}"
+        docker rm -f hc-fp-liveness-test &>/dev/null || true
+        assert_equals "unhealthy" "$NEW_VERDICT" "deployed healthcheck verdict on a gateway-less container"
+        assert_equals "0" "$REAL_GW" "zero real gateway processes in that container"
+    fi
+fi
 
 # Summary
 echo ""

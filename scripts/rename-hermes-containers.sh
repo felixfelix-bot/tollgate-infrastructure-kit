@@ -127,7 +127,7 @@ services:
       - "${old_port_prefix}:8080"
       - "91${old_port_prefix#90}:9000"
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'hermes gateway run' || exit 1"]
+      test: ["CMD-SHELL", "/package/admin/s6/command/s6-svstat /run/service/gateway-default 2>/dev/null | grep -q '^up (pid ' && pgrep -f '^/opt/hermes/.venv/bin/python3 /opt/hermes/.venv/bin/hermes gateway run' >/dev/null"]
       interval: 30s
       timeout: 10s
       retries: 3

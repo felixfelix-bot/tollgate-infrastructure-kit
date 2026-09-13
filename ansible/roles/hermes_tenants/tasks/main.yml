@@ -153,6 +153,7 @@
   loop: "{{ hermes_tenants_tenants }}"
   loop_control:
     label: "{{ item.name }}"
+  when: hermes_tenants_routstrd_enabled | bool
 
 - name: Deploy per-tenant Hermes config (write-only-if-absent)
   ansible.builtin.template:
@@ -182,6 +183,13 @@
     tenant_zai_api_key: "{{ item.zai_api_key }}"
     tenant_gateway_port: "{{ hermes_tenants_gateway_port_base | int + tenant_index }}"
     tenant_health_port: "{{ hermes_tenants_health_port_base | int + tenant_index }}"
+    # IM-01 live-fidelity knobs: supplied per tenant by the playbook so the
+    # rendered compose matches the running container (else `compose up`
+    # recreates it). Defaults below are the secure/loopback shape.
+    tenant_command: "{{ item.command | default(['gateway', 'run']) }}"
+    tenant_publish_host: "{{ item.publish_host | default('127.0.0.1:') }}"
+    tenant_health_publish_host: "{{ item.health_publish_host | default('127.0.0.1:') }}"
+    tenant_config_yaml_mount: "{{ item.config_yaml_mount | default(false) }}"
 
 - name: Deploy per-tenant .env files
   ansible.builtin.copy:

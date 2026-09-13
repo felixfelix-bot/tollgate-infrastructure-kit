@@ -41,7 +41,14 @@ MEMINFO_FILE="${MEMINFO_FILE:-/proc/meminfo}"
 : "${SKIP_SERVICE_CHECKS:=0}"
 
 TENANTS=("sitarani" "chiefmonkey" "bekka")
-HEALTH_PORTS=(9100 9101 9102)
+# t_4112c589 (defect 2): the gateway exposes NO HTTP surface — the api_server platform
+# is not enabled in any tenant config, so the published 900x/910x ports never answered
+# anything and check_gateway() paged every 5 min from 2026-08-15 to 2026-09-12 (24,091
+# pages on the dead endpoint).  check_gateway() now asserts the supervised gateway
+# process instead of a dead port.  Reintroduce a port/HTTP expectation only together
+# with enabling the api_server platform (API_SERVER_PORT=8080) in every tenant config.
+S6_SVSTAT=/package/admin/s6/command/s6-svstat
+GATEWAY_LIVENESS_CMD='/package/admin/s6/command/s6-svstat /run/service/gateway-default 2>/dev/null | grep -q "^up (pid " && pgrep -f "^/opt/hermes/.venv/bin/python3 /opt/hermes/.venv/bin/hermes gateway run" >/dev/null'
 : "${HERMES_BUZZ_RELAY_URL:=http://localhost:3007}"
 : "${HERMES_ROUTSTR_URL:=http://localhost:8009/v1/models}"
 BUZZ_RELAY_URL="$HERMES_BUZZ_RELAY_URL"
@@ -243,6 +250,13 @@ check_container_health() {
     local health_status
     health_status=$(docker inspect --format '{{.State.Health.Status}}' "$container_name" 2>/dev/null || echo "unknown")
 
+    # t_4112c589: 'starting' means the container is still inside its healthcheck
+    # start_period (60s) — docker has no verdict yet, so it is not a failure. A
+    # start_period is always bounded: docker then settles on healthy or unhealthy.
+    if [[ "$health_status" == "starting" ]]; then
+        return 0
+    fi
+
     if [[ "$health_status" != "healthy" ]]; then
         FAILURES+=("$container_name: health status is '$health_status'")
         return 1
@@ -252,11 +266,21 @@ check_container_health() {
 
 check_gateway() {
     local name="$1"
-    local port="$2"
-    local url="http://localhost:$port/health"
+    local container_name="hermes-$name"
 
-    if ! curl -sf --max-time 5 "$url" &>/dev/null; then
-        FAILURES+=("hermes-$name gateway /health: no response on port $port")
+    if ! docker inspect "$container_name" &>/dev/null; then
+        FAILURES+=("$container_name gateway: container does not exist")
+        return 1
+    fi
+
+    # t_4112c589 (defect 2, option b): no HTTP endpoint exists to curl. Assert the
+    # s6-supervised gateway process — the same command each tenant's docker
+    # healthcheck runs (single source of truth, self-match impossible: the pattern
+    # is anchored at ^ so the healthcheck's own 'sh -c' wrapper cannot match it).
+    if ! docker exec "$container_name" sh -c "$GATEWAY_LIVENESS_CMD" &>/dev/null; then
+        local svstat
+        svstat=$(docker exec "$container_name" "$S6_SVSTAT" /run/service/gateway-default 2>&1 | tr -d '\n' || true)
+        FAILURES+=("hermes-$name gateway: no supervised gateway process (s6 gateway-default: ${svstat:-docker exec failed})")
         return 1
     fi
     return 0
@@ -389,7 +413,7 @@ main() {
 
         for i in "${!TENANTS[@]}"; do
             check_container_health "${TENANTS[$i]}" || true
-            check_gateway "${TENANTS[$i]}" "${HEALTH_PORTS[$i]}" || true
+            check_gateway "${TENANTS[$i]}" || true
         done
 
         check_buzz_relay || true

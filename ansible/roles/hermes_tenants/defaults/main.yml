@@ -1,6 +1,12 @@
 ---
-hermes_tenants_image: "hermes-agent:nostr-slim"
+# IM-01: the live VPS2 fleet runs the FULL nostr image (`hermes-agent:nostr`),
+# not `:nostr-slim`. Changing this default changes the rendered service hash and
+# forces a container recreate — keep it aligned with `docker inspect`.
+hermes_tenants_image: "hermes-agent:nostr"
 hermes_tenants_routstrd_image: "routstrd:latest"
+# routstrd sidecars are NOT deployed on VPS2 (see docker-compose.tenant.yml.j2).
+# Set true only on a host that actually carries the `routstrd:latest` image.
+hermes_tenants_routstrd_enabled: false
 hermes_tenants_base_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/hermes"
 hermes_tenants_relay_url: "ws://nip29-relay:7780"
 hermes_tenants_deployment_admin_nsec: ""
@@ -17,10 +23,12 @@ hermes_tenants_log_max_file: "3"
 hermes_tenants_healthcheck_interval: 30s
 hermes_tenants_healthcheck_timeout: 10s
 hermes_tenants_healthcheck_retries: 3
-hermes_tenants_healthcheck_start_period: 120s
+# IM-01: live containers carry start_period 60s; changing it recreates them.
+hermes_tenants_healthcheck_start_period: 60s
 
 hermes_tenants_resource_limits:
-  memory: 1g
+  # IM-01: live containers carry 512m; changing it recreates them.
+  memory: 512m
   cpus: "1.0"
 
 hermes_tenants_routstrd_resource_limits:

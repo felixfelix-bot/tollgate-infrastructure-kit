@@ -1,70 +1,85 @@
+# Per-tenant docker-compose (rendered by ansible role: hermes_tenants).
+#
+# IM-01 (2026-09-11): reconciled to the LIVE VPS2 fleet. Every tenant routes its
+# LLM traffic through the SHARED routstr-proxy on the `routstr_default` docker
+# network (service name `routstr`, port 8000) with its own per-tenant child key
+# (see config.yaml.j2 / IM-05). The routstrd SIDECAR (port 8008) is NOT deployed
+# on VPS2 and image `routstrd:latest` is not present on the host — do NOT
+# reintroduce a `routstrd-<tenant>` service or `depends_on: service_healthy`
+# here, or `docker compose up` fails to pull and takes the tenant down.
+#
+# Fidelity notes (keep in sync with the running containers, or `compose up`
+# will recreate them — verify with `docker compose config --hash='*'` before
+# running the playbook against a live fleet):
+#   - image `hermes-agent:nostr` (NOT `:nostr-slim`)
+#   - state volume mounted at /data (NOT /opt/data)
+#   - healthcheck asserts the s6-SUPERVISED gateway process: s6-svstat must
+#     report `up (pid ` AND an argv0-anchored pgrep must find the gateway. The
+#     gateway serves NO HTTP /health (nothing listens on the api_server port —
+#     `platforms.api_server` is not enabled in any tenant config), so a port or
+#     HTTP probe is a pure false alarm (it paged every 5 min for 4 weeks), and an
+#     UNANCHORED `pgrep -f` on the gateway command is a pure false negative — it
+#     matches its own `sh -c` wrapper and reports `healthy` with no gateway
+#     running (t_4112c589 on VPS2, ported to this repo by t_f75e5030)
+#   - resource limits live under `deploy.resources` (that is what the live
+#     containers carry); adding top-level mem_limit/cpus changes the service
+#     hash and forces a recreate
+#   - no `stop_grace_period` (live containers run on the image default)
+#   - per-tenant knobs are supplied by the playbook and default to the
+#     sitarani/chiefmonkey/bekka shape: `command` (list), `publish_host` and
+#     `health_publish_host` ('' publishes on 0.0.0.0, '127.0.0.1:' loopback
+#     only), `config_yaml_mount` (mount ./config.yaml over /opt/data/config.yaml
+#     — only tenants whose live container carries that mount set this true).
+#   - keep the `config_yaml_mount` conditional on its OWN line (never inline):
+#     with Jinja trim_blocks (Ansible's default) an inline conditional tag eats
+#     the newline that follows it, gluing `.../nsec:ro` and `networks:` onto one
+#     line — `docker compose config` then aborts with "volume ... is missing a
+#     mount target" for EVERY tenant (found by the t_f75e5030 render check).
 services:
   hermes-{{ tenant_name }}:
     image: {{ hermes_tenants_image }}
+    command: {{ tenant_command | default(['gateway', 'run']) | to_json }}
     container_name: hermes-{{ tenant_name }}
-    # Use the image's default entrypoint (/init) which runs s6-overlay.
-    # This allows s6 to properly supervise the gateway service.
-    # Do NOT override with 'sleep infinity' - that prevents gateway from starting.
     restart: {{ hermes_tenants_container_restart }}
-    stop_grace_period: {{ hermes_tenants_stop_grace_period }}
     env_file:
       - .env
-    environment:
-      # Route LLM calls through routstrd sidecar for Cashu payment handling
-      LLM_PROXY_URL: http://routstrd-{{ tenant_name }}:{{ hermes_tenants_routstrd_config.port }}/v1
-      GATEWAY_ALLOW_ALL_USERS: "{{ hermes_tenants_gateway_allow_all_users | lower }}"
     volumes:
-      # Must match HERMES_HOME in the image (/opt/data in Dockerfile.slim),
-      # otherwise the gateway reads/writes the wrong home.
-      - hermes-{{ tenant_name }}-data:/opt/data
+      - hermes-{{ tenant_name }}-data:/data
       - ./config:/config
       - ./nsec:/nsec:ro
+{% if tenant_config_yaml_mount | default(false) %}
+      - ./config.yaml:/opt/data/config.yaml
+{% endif %}
     networks:
       - routstr_default
       - hermes-net-{{ tenant_name }}
     ports:
-      - "127.0.0.1:{{ tenant_gateway_port }}:8080"
-    depends_on:
-      routstrd-{{ tenant_name }}:
-        condition: service_healthy
+      - "{{ tenant_publish_host | default('127.0.0.1:') }}{{ tenant_gateway_port }}:8080"
+      - "{{ tenant_health_publish_host | default('127.0.0.1:') }}{{ tenant_health_port }}:9000"
     healthcheck:
-      # HTTP-only: the gateway serves /health via the api_server platform.
-      # A pgrep-based check matches its own 'sh -c' wrapper and always passes.
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      # t_f75e5030 / t_4112c589: two independent gates — (1) s6 must report the
+      # service as `up (pid ...)`, (2) a process must exist whose full cmdline
+      # STARTS WITH the venv python + `hermes gateway run`. The `^` anchor makes
+      # this healthcheck's own `sh -c` wrapper impossible to match, which is what
+      # defeated the previous unanchored `pgrep -f` test (proven on VPS2: a
+      # gateway-less container reported `healthy`). Byte-identical to the test
+      # running in every live tenant on VPS2 — do not relax it, and do not replace
+      # it with an HTTP probe (see the fidelity note at the top).
+      test: ["CMD-SHELL", "/package/admin/s6/command/s6-svstat /run/service/gateway-default 2>/dev/null | grep -q '^up (pid ' && pgrep -f '^/opt/hermes/.venv/bin/python3 /opt/hermes/.venv/bin/hermes gateway run' >/dev/null"]
       interval: {{ hermes_tenants_healthcheck_interval }}
       timeout: {{ hermes_tenants_healthcheck_timeout }}
       retries: {{ hermes_tenants_healthcheck_retries }}
       start_period: {{ hermes_tenants_healthcheck_start_period }}
-    mem_limit: {{ hermes_tenants_resource_limits.memory }}
-    mem_reservation: {{ hermes_tenants_resource_reservations.memory }}
-    cpus: "{{ hermes_tenants_resource_limits.cpus }}"
-    logging:
-      driver: {{ hermes_tenants_log_driver }}
-      options:
-        max-size: {{ hermes_tenants_log_max_size }}
-        max-file: "{{ hermes_tenants_log_max_file }}"
-    security_opt:
-      - no-new-privileges:true
-
-  routstrd-{{ tenant_name }}:
-    image: {{ hermes_tenants_routstrd_image }}
-    container_name: routstrd-{{ tenant_name }}
-    restart: {{ hermes_tenants_container_restart }}
-    stop_grace_period: {{ hermes_tenants_stop_grace_period }}
-    volumes:
-      - routstrd-{{ tenant_name }}-data:/data
-    networks:
-      - routstr_default
-      - hermes-net-{{ tenant_name }}
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:{{ hermes_tenants_routstrd_config.port }}/health || exit 1"]
-      interval: {{ hermes_tenants_healthcheck_interval }}
-      timeout: {{ hermes_tenants_healthcheck_timeout }}
-      retries: {{ hermes_tenants_healthcheck_retries }}
-      start_period: {{ hermes_tenants_healthcheck_start_period }}
-    mem_limit: {{ hermes_tenants_routstrd_resource_limits.memory }}
-    mem_reservation: {{ hermes_tenants_routstrd_resource_reservations.memory }}
-    cpus: "{{ hermes_tenants_routstrd_resource_limits.cpus }}"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: {{ hermes_tenants_container_restart }}
+      resources:
+        limits:
+          memory: {{ hermes_tenants_resource_limits.memory }}
+          cpus: "{{ hermes_tenants_resource_limits.cpus }}"
+        reservations:
+          memory: {{ hermes_tenants_resource_reservations.memory }}
     logging:
       driver: {{ hermes_tenants_log_driver }}
       options:
@@ -77,9 +92,6 @@ volumes:
   hermes-{{ tenant_name }}-data:
     external: true
     name: hermes-{{ tenant_name }}-data
-  routstrd-{{ tenant_name }}-data:
-    external: true
-    name: routstrd-{{ tenant_name }}-data
 
 networks:
   routstr_default:

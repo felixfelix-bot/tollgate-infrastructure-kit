@@ -9,7 +9,8 @@
 #     --wss--> [Caddy :443 relay.orangesync.tech]
 #     --> [buzz-relay NIP-29 (127.0.0.1:3007 -> :3000)]
 #     --> [hermes-sitarani nostr adapter]
-#     --> [Hermes gateway :8080 -> host :9000]
+#     --> [Hermes gateway — s6-supervised process; NO HTTP surface (the
+#          api_server platform is disabled in every tenant config)]
 #     --> [LLM via LLM_PROXY_URL]
 #     --> [signed kind-9 reply published to the group]
 #     --> [observed via nak req]
@@ -40,6 +41,16 @@ note()   { printf '       %s\n' "$*"; }
 ok()     { PASS=$((PASS+1)); printf '[PASS] %s\n' "$*"; }
 bad()    { FAIL=$((FAIL+1)); printf '[FAIL] %s\n' "$*"; }
 remote() { ssh -o ConnectTimeout=25 "$VPS2_HOST" "$*"; }
+
+# t_f75e5030: gateway liveness — the exact assertion the tenant docker healthcheck
+# runs. No HTTP surface exists (api_server platform disabled in every tenant
+# config), so the old `curl :9000/health` criterion was unsatisfiable from
+# 2026-08-15 on. s6 must supervise gateway-default AND a process must exist whose
+# cmdline starts with the venv python + `hermes gateway run` — the `^` anchor
+# stops the check's own `sh -c` wrapper from self-matching (the false positive
+# that made a gateway-less container report `healthy`).
+GATEWAY_LIVENESS_CMD='/package/admin/s6/command/s6-svstat /run/service/gateway-default 2>/dev/null | grep -q "^up (pid " && pgrep -f "^/opt/hermes/.venv/bin/python3 /opt/hermes/.venv/bin/hermes gateway run" >/dev/null'
+gateway_live() { remote "docker exec $CONTAINER sh -c '$GATEWAY_LIVENESS_CMD'" >/dev/null 2>&1; }
 
 CLEANUP_OWNER=0
 ORIG_GROUPS=""
@@ -89,12 +100,15 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# P2 — Hermes gateway healthy (HTTP API :8080 -> host :9000)
-# NOTE: docker's pgrep healthcheck false-positives; only /health counts.
+# P2 — Hermes gateway alive (s6-supervised process; NO HTTP surface exists)
+# t_f75e5030: no tenant config enables the api_server platform, so the old
+# `curl localhost:9000/health = 200` criterion was unsatisfiable from 2026-08-15
+# (every port -> 000). Assert process liveness instead — the same assertion the
+# deployed docker healthcheck runs. Do NOT resurrect an HTTP probe unless the
+# api_server platform is enabled in every tenant config.
 # ---------------------------------------------------------------------------
-printf -- '-- P2 hermes gateway health\n'
-GW_CODE=$(remote "curl -s -o /dev/null -w '%{http_code}' -m 5 http://localhost:9000/health" 2>/dev/null || true)
-if [ "$GW_CODE" = 200 ]; then ok "gateway /health = 200 on :9000"; else bad "gateway /health = ${GW_CODE:-none} on :9000"; fi
+printf -- '-- P2 hermes gateway liveness\n'
+if gateway_live; then ok "gateway supervised and running (s6 'up (pid', argv0-anchored pgrep)"; else bad "no supervised gateway process in $CONTAINER"; fi
 
 # ---------------------------------------------------------------------------
 # P3 — nostr adapter loaded (gateway log evidence)
@@ -153,11 +167,11 @@ else
 fi
 
 deadline=$(( $(date +%s) + 90 ))
-until [ "$(remote "curl -s -o /dev/null -w '%{http_code}' -m 5 http://localhost:9000/health" 2>/dev/null || true)" = 200 ]; do
-  if [ "$(date +%s)" -ge $deadline ]; then bad "gateway did not become healthy after retarget"; exit 1; fi
+until gateway_live; do
+  if [ "$(date +%s)" -ge $deadline ]; then bad "gateway did not come back after retarget (no supervised process)"; exit 1; fi
   sleep 5
 done
-ok "gateway healthy again after retarget"
+ok "gateway alive again after retarget (s6-supervised process)"
 sleep 10   # nostr adapter (re)subscribe grace
 
 # ---------------------------------------------------------------------------

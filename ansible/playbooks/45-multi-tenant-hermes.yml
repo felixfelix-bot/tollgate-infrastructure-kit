@@ -95,20 +95,40 @@
       when: hermes_tenants_enabled | default(true)
   vars:
     hermes_tenants_tenants:
+      # LIVE FIDELITY (IM-01, 2026-09-11): `docker compose up` compares the
+      # rendered service definition with the running container and RECREATES on
+      # any drift, so each knob below mirrors what the live VPS2 container
+      # carries. Verify with `docker compose up -d --dry-run` in
+      # /opt/tollgate/hermes/<tenant> before trusting a playbook run.
+      #   publish_host / health_publish_host: '' → publish on 0.0.0.0,
+      #     '127.0.0.1:' → loopback only. sitarani is loopback-only; the other
+      #     two publish on 0.0.0.0 today (existing live state, see IM-01 notes).
+      #   config_yaml_mount: bind ./config.yaml over /opt/data/config.yaml
+      #     (only sitarani carries this mount today).
+      #   command: container CMD (default: `gateway run`).
       - name: "sitarani"
         npub: "{{ lookup('env', 'SITARANI_NPUB') }}"
         nsec: "{{ lookup('env', 'SITARANI_NSEC') }}"
         zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_SITARANI') }}"
+        publish_host: "127.0.0.1:"
+        health_publish_host: "127.0.0.1:"
+        config_yaml_mount: true
       - name: "chiefmonkey"
         npub: "{{ lookup('env', 'CHIEFMONKEY_NPUB') }}"
         nsec: "{{ lookup('env', 'CHIEFMONKEY_NSEC') }}"
         zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_CHIEFMONKEY') }}"
+        publish_host: ""
+        health_publish_host: ""
       - name: "bekka"
         npub: "{{ lookup('env', 'BEKKA_NPUB') }}"
         nsec: "{{ lookup('env', 'BEKKA_NSEC') }}"
         zai_api_key: "{{ lookup('env', 'ZAI_API_KEY_BEKKA') }}"
+        publish_host: ""
+        health_publish_host: ""
     hermes_tenants_deployment_admin_nsec: "{{ lookup('env', 'DEPLOYMENT_ADMIN_NSEC') }}"
-    hermes_tenants_image: "hermes-agent:nostr-slim"
+    # Do NOT downgrade to hermes-agent:nostr-slim: the live fleet runs the full
+    # `hermes-agent:nostr` image; changing it forces a recreate.
+    hermes_tenants_image: "hermes-agent:nostr"
     hermes_tenants_base_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/hermes"
 
 - name: Verify multi-tenant deployment
