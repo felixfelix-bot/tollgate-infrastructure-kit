@@ -42,8 +42,9 @@ ngit_ci_dashboard_force_build: false
 
 # Playwright render check. Hard-fails when the SPA shell does not render.
 # ngit_ci_dashboard_require_run_rows additionally hard-fails when the deployed
-# page shows zero runs — leave it false until the coordinator has CI history
-# (a request-required coordinator with no maintainer Service Request renders an
-# empty, but healthy, run list), set it true to enforce the run-row gate.
-ngit_ci_dashboard_require_run_rows: false
+# page shows zero runs. TRUE by default: the card's acceptance is a rendered run
+# list, and the coordinator has live history (80+ rows on 2026-09-13), so zero
+# rows now means the dashboard is not doing its job — not that CI is idle. Set
+# false only while a coordinator legitimately has no history yet.
+ngit_ci_dashboard_require_run_rows: true
 ngit_ci_dashboard_playwright_enabled: true

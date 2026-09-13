@@ -5,8 +5,12 @@
 # built from the git-staged source, docker-in-docker sidecar, /data persisted
 # volume, environment from a Jinja2 template, MAX_CONCURRENT_JOBS raised to 3.
 #
-#   ansible-playbook ansible/playbooks/54-ngit-ci.yml -l dq05
-#   ansible-playbook ansible/playbooks/54-ngit-ci.yml -l dq05 -e ngit_ci_build=never
+# Run from ansible/ (ansible.cfg is only read from the cwd, and it is what sets
+# roles_path):
+#
+#   cd ansible
+#   ansible-playbook playbooks/54-ngit-ci.yml -l dq05
+#   ansible-playbook playbooks/54-ngit-ci.yml -l dq05 -e ngit_ci_build=never
 #
 # The compose project name is pinned (ngit_ci_project_name), so the existing
 # ngit-ci-deploy_coordinator-data volume — and the coordinator signing identity

@@ -100,16 +100,12 @@
   when: not ngit_ci_secrets_file.stat.exists
 
 - name: Count the per-repo secrets carried by the existing environment file
-  shell: >-
-    grep -cE '^(NGIT_CI_SECRET_[A-Za-z0-9_]+|NGIT_CI_OPERATOR_BUNKER)='
-    {{ ngit_ci_base_dir }}/.env || true
+  shell: "{{ ngit_ci_secret_grep }} {{ ngit_ci_base_dir }}/.env || true"
   register: ngit_ci_live_secret_count
   changed_when: false
 
 - name: Count the per-repo secrets already preserved
-  shell: >-
-    grep -cE '^(NGIT_CI_SECRET_[A-Za-z0-9_]+|NGIT_CI_OPERATOR_BUNKER)='
-    {{ ngit_ci_base_dir }}/ngit-ci-secrets.env || true
+  shell: "{{ ngit_ci_secret_grep }} {{ ngit_ci_base_dir }}/ngit-ci-secrets.env || true"
   register: ngit_ci_secrets_before
   changed_when: false
 
@@ -124,9 +120,7 @@
   no_log: true
 
 - name: Count the per-repo secrets after the harvest
-  shell: >-
-    grep -cE '^(NGIT_CI_SECRET_[A-Za-z0-9_]+|NGIT_CI_OPERATOR_BUNKER)='
-    {{ ngit_ci_base_dir }}/ngit-ci-secrets.env || true
+  shell: "{{ ngit_ci_secret_grep }} {{ ngit_ci_base_dir }}/ngit-ci-secrets.env || true"
   register: ngit_ci_secrets_after
   changed_when: >-
     ngit_ci_secrets_after.stdout | trim | int
@@ -203,9 +197,11 @@
 # is the right scope: a `--since` window would drop the startup banner on an
 # idempotent re-run and fail a healthy coordinator.
 - name: Wait for the coordinator to open its subscriptions
-  shell: >-
-    docker logs {{ ngit_ci_container_name }} 2>&1
-    | grep -c 'Watcher running'
+  shell: |
+    set -uo pipefail
+    docker logs {{ ngit_ci_container_name }} 2>&1 | grep -c 'Watcher running' || true
+  args:
+    executable: /bin/bash
   register: ngit_ci_watcher_ready
   until: ngit_ci_watcher_ready.stdout | trim | int > 0
   retries: 30
@@ -213,9 +209,11 @@
   changed_when: false
 
 - name: Confirm the coordinator publishes its advertisement
-  shell: >-
-    docker logs {{ ngit_ci_container_name }} 2>&1
-    | grep -c 'Published coordinator advertisement'
+  shell: |
+    set -uo pipefail
+    docker logs {{ ngit_ci_container_name }} 2>&1 | grep -c 'Published coordinator advertisement' || true
+  args:
+    executable: /bin/bash
   register: ngit_ci_advertised
   until: ngit_ci_advertised.stdout | trim | int > 0
   retries: 24
@@ -252,29 +250,46 @@
   when: ngit_ci_identity.stdout | trim != 'present'
 
 - name: Read the coordinator's effective environment
-  shell: "docker exec {{ ngit_ci_container_name }} env | sort"
+  command: "docker exec {{ ngit_ci_container_name }} env"
   register: ngit_ci_effective_env
   changed_when: false
   failed_when: false
 
 - name: List the per-repo secret names preserved for the coordinator
-  shell: >-
-    grep -oE '^(NGIT_CI_SECRET_[A-Za-z0-9_]+|NGIT_CI_OPERATOR_BUNKER)'
-    {{ ngit_ci_base_dir }}/ngit-ci-secrets.env | sort -u || true
+  shell: |
+    set -euo pipefail
+    grep -oE -e '^NGIT_CI_SECRET_[A-Za-z0-9_]+' -e '^NGIT_CI_OPERATOR_BUNKER' \
+      {{ ngit_ci_base_dir }}/ngit-ci-secrets.env | sort -u || true
+  args:
+    executable: /bin/bash
   register: ngit_ci_secret_keys
   changed_when: false
 
-- name: Fail when the coordinator runs with the wrong repos or concurrency
+- name: Read the coordinator's effective job ceiling
+  set_fact:
+    ngit_ci_effective_max_jobs: >-
+      {{ ngit_ci_effective_env.stdout
+         | regex_findall('NGIT_CI_MAX_CONCURRENT_JOBS=([0-9]+)') | first | default('') }}
+
+# The role owns the CEILING; an external controller may lower the effective
+# value inside it — kalman-ci-concurrency.timer drives NGIT_CI_MAX_CONCURRENT_JOBS
+# from the dispatch resource-pressure signal every 5 minutes and recreates the
+# coordinator on each change. Asserting equality with the role default would mark
+# a legitimate, operator-owned decision as a failure on every later run.
+- name: Fail when the coordinator runs with the wrong repos or an out-of-range ceiling
   assert:
     that:
       - "('NGIT_CI_REPOS=' ~ (ngit_ci_repos | join(','))) in ngit_ci_effective_env.stdout"
-      - "('NGIT_CI_MAX_CONCURRENT_JOBS=' ~ ngit_ci_max_concurrent_jobs) in ngit_ci_effective_env.stdout"
       - "('NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET=' ~ ngit_ci_act_container_daemon_socket) in ngit_ci_effective_env.stdout"
+      - ngit_ci_effective_max_jobs | length > 0
+      - ngit_ci_effective_max_jobs | int >= 1
+      - ngit_ci_effective_max_jobs | int <= ngit_ci_max_concurrent_jobs
     fail_msg: >-
       The running coordinator does not match the role: expected
       NGIT_CI_REPOS={{ ngit_ci_repos | join(',') }},
-      NGIT_CI_MAX_CONCURRENT_JOBS={{ ngit_ci_max_concurrent_jobs }} and
-      NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET={{ ngit_ci_act_container_daemon_socket }}.
+      NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET={{ ngit_ci_act_container_daemon_socket }}
+      and 1 <= NGIT_CI_MAX_CONCURRENT_JOBS <= {{ ngit_ci_max_concurrent_jobs }};
+      read NGIT_CI_MAX_CONCURRENT_JOBS={{ ngit_ci_effective_max_jobs | default('unset') }}.
       Check `docker compose config` in {{ ngit_ci_base_dir }}.
 
 - name: Fail when a preserved per-repo secret did not reach the coordinator
@@ -292,10 +307,12 @@
 - name: Report the effective job-container ceiling
   debug:
     msg: >-
-      Concurrency: {{ ngit_ci_max_concurrent_jobs }} job(s) x
+      Concurrency: {{ ngit_ci_effective_max_jobs | default(ngit_ci_max_concurrent_jobs) }}
+      job(s) now (role ceiling {{ ngit_ci_max_concurrent_jobs }}) x
       '{{ ngit_ci_act_container_options }}' — host ceiling
       {{ ngit_ci_max_concurrent_jobs * 4 }} GB RAM against DQ05's ~10.9 GB
-      (caps are ceilings, not reservations).
+      (caps are ceilings, not reservations). kalman-ci-concurrency.timer may
+      lower the effective value inside the ceiling.
 
 - name: Coordinator deployment summary
   debug:

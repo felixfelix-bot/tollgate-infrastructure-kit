@@ -3,10 +3,12 @@
 #
 # Static Vite/vanilla-TS SPA (NIP-C1 run viewer) built from the ngit-published
 # source, served by VPS2's SYSTEMD Caddy, fronted by a DNS-only Cloudflare A
-# record. Run from the kit root with the Cloudflare credentials exported:
+# Run with the Cloudflare credentials exported (cwd must be ansible/, or
+# ANSIBLE_CONFIG must point at ansible/ansible.cfg — ansible.cfg is only read
+# from the cwd, and it is what sets roles_path to ansible/roles):
 #
-#   set -a; source .env; set +a
-#   ansible-playbook ansible/playbooks/53-ngit-ci-dashboard.yml -l vps2
+#   set -a; source ../.env; set +a
+#   cd ansible && ansible-playbook playbooks/53-ngit-ci-dashboard.yml -l vps2
 #
 # The play FAILS if the domain does not answer 200 with a valid certificate.
 # Optionally enforce the run-row gate with -e ngit_ci_dashboard_require_run_rows=true

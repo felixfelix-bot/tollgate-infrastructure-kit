@@ -32,11 +32,16 @@ dq05                                   vps2
 cd ~/tollgate-infrastructure-kit
 set -a; source .env; set +a            # CLOUDFLARE_API_TOKEN / ZONE_ID for the dashboard
 
+# ansible.cfg is read only from the cwd, and it is what sets roles_path, so run
+# from ansible/ — from the kit root the role lookup fails:
+#   [ERROR]: The role 'ngit_ci_dashboard' was not found in: .../ansible/playbooks/roles
+cd ansible
+
 # A — dashboard (ci.orangesync.tech)
-ansible-playbook ansible/playbooks/53-ngit-ci-dashboard.yml -l vps2
+ansible-playbook playbooks/53-ngit-ci-dashboard.yml -l vps2
 
 # B — coordinator (dq05)
-ansible-playbook ansible/playbooks/54-ngit-ci.yml -l dq05
+ansible-playbook playbooks/54-ngit-ci.yml -l dq05
 ```
 
 Both plays are idempotent: a second run against unchanged hosts reports
@@ -95,11 +100,16 @@ HTTP 200 is not acceptance for a client-rendered SPA. Two paths:
   Same script; `PLAYWRIGHT_DIR` selects the checkout whose `node_modules`
   provides Playwright.
 
-The script always reports the **run-row count**; it fails on zero rows only when
-`ngit_ci_dashboard_require_run_rows` / `REQUIRE_RUN_ROWS=1` is set. The
-coordinator has live CI history (79 run rows at 2026-09-13T11:44Z, up from 67
-thirty minutes earlier), so that gate can be left on:
-`-e ngit_ci_dashboard_require_run_rows=true`.
+The script always reports the **run-row count** and hard-fails on zero rows:
+`require_run_rows` defaults to **true** (the card's acceptance is a rendered run
+list and the coordinator has live history — 79 rows at 11:44Z, 82 by 12:00Z, 0
+page errors — so zero rows means the dashboard is broken, not that CI is idle).
+Set `-e ngit_ci_dashboard_require_run_rows=false` only while a coordinator
+legitimately has no history yet.
+
+On VPS2 the role delegates the render check (no Chrome there) but the same
+script is what a workstation run uses, and the `REQUIRE_RUN_ROWS=1` invocation
+is the authoritative gate.
 
 ## Deliverable B — `ngit_ci`
 
@@ -146,25 +156,36 @@ thirty minutes earlier), so that gate can be left on:
   startup banner and advertisement in that stream, so an idempotent re-run does
   not fail the play. The play fails when the coordinator never opened its
   subscriptions, never published an advertisement, or runs with a repo list,
-  concurrency or daemon socket that differs from the role.
+  daemon socket or out-of-range ceiling that differs from the role.
 
-### Concurrency: `NGIT_CI_MAX_CONCURRENT_JOBS` 1 → 3
+### Concurrency: `NGIT_CI_MAX_CONCURRENT_JOBS` 1 → 3 (a ceiling, not a fixed value)
 
-DQ05 has 4 cores, 10.9 GB RAM, 180 GB free and idles around load 1.0. Raising
-the ceiling to 3 lets independent runs proceed in parallel; per-job caps are
-unchanged (`--memory=4g --memory-swap=4g --cpus=2 --pids-limit=2048`), so the
-theoretical host ceiling becomes 3 × 4 GB = 12 GB against 10.9 GB RAM. The caps
-are *ceilings*, not reservations, and jobs are short-lived, but sustained
-oversubscription would push the host into swap/throttling. If that is ever
-observed, reduce to `3 × 3g` (or back to 2) before raising further — **do not
-go above 3 without operator sign-off**.
+DQ05 has 4 cores, 10.9 GB RAM, 180 GB free and idles around load 1.0. The role
+raises the ceiling to 3 so independent runs can proceed in parallel; per-job
+caps are unchanged (`--memory=4g --memory-swap=4g --cpus=2 --pids-limit=2048`),
+so the theoretical host ceiling becomes 3 × 4 GB = 12 GB against 10.9 GB RAM.
+The caps are *ceilings*, not reservations, and jobs are short-lived, but
+sustained oversubscription would push the host into swap/throttling. If that is
+ever observed, reduce to `3 × 3g` (or back to 2) before raising further — **do
+not go above 3 without operator sign-off**.
+
+**The role owns the ceiling, not the instantaneous value.** An existing
+operator-owned controller — `kalman-ci-concurrency.timer` on the worker host
+(every 5 min, `/home/c03rad0r/repos/gh-ngit-ci-bridge/ci_concurrency_controller.py`)
+— drives `NGIT_CI_MAX_CONCURRENT_JOBS` on DQ05 from the dispatch
+resource-pressure signal and recreates the coordinator on each change. So a live
+`NGIT_CI_MAX_CONCURRENT_JOBS=1` is that controller's decision inside the ceiling,
+**not** drift. The role's post-deploy assertion therefore checks
+`1 <= effective <= ngit_ci_max_concurrent_jobs` and reports the effective value;
+asserting equality would flag a legitimate, operator-owned decision as a failure
+on every run after a controller tick.
 
 ## Verification (2026-09-13)
 
 | Check | Evidence |
 |-------|----------|
 | Coordinator containers | `ngit-ci-deploy-coordinator-1` / `ngit-ci-deploy-dind-1` both `Up` in `docker compose ps` |
-| Effective config | container env: `NGIT_CI_REPOS=<both watched repos>` (aliased `#TMBG`), `NGIT_CI_MAX_CONCURRENT_JOBS=3`, `NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET=unix:///var/run/docker.sock`, `NGIT_CI_EXECUTION_POLICY=request-required` |
+| Effective config | container env: `NGIT_CI_REPOS=<both watched repos>` (aliased `#TMBG`), `NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET=unix:///var/run/docker.sock`, `NGIT_CI_EXECUTION_POLICY=request-required`; `NGIT_CI_MAX_CONCURRENT_JOBS` within the role ceiling of 3 (the Kalman controller had it at 1 at review time — legitimate, inside the ceiling) |
 | Signing identity | `/data/.coordinator.nsec` present on `ngit-ci-deploy_coordinator-data` (existence only) |
 | Secret preservation | `sha256` of the `NGIT_CI_SECRET_TMBG__NSEC_HEX` line identical before (`.env`) and after (`.env` + `ngit-ci-secrets.env`) the role run |
 | Playbook 54 | first run `ok=31 changed=8 failed=0`; re-runs `ok=29 changed=0 failed=0` |

@@ -22,11 +22,19 @@
       with Chrome to render-check https://{{ ngit_ci_dashboard_domain }}/.
   when: ngit_ci_dashboard_chrome.stdout | trim == ''
 
-- name: Fail when the run-row gate is required but no browser can verify it
-  fail:
+# With require_run_rows true this used to FAIL the play — but VPS2 has no Chrome
+# by design, so that made the documented entrypoint unrunnable on the host the
+# role targets. The gate is authoritative where it can run (the workstation
+# script, which hard-fails on zero rows with REQUIRE_RUN_ROWS=1); here it is
+# recorded as delegated, and the FATAL HTTPS/shell checks above still catch a
+# deploy that is actually broken.
+- name: Record that the run-row gate is delegated when no browser can verify it
+  debug:
     msg: >-
       ngit_ci_dashboard_require_run_rows is true but no Chrome/Chromium is
-      available on {{ inventory_hostname }} to run the render check.
+      available on {{ inventory_hostname }}, so the run-row gate could not be
+      enforced here. It is authoritative from a workstation:
+      `REQUIRE_RUN_ROWS=1 scripts/verify-ngit-ci-dashboard.sh`.
   when:
     - ngit_ci_dashboard_chrome.stdout | trim == ''
     - ngit_ci_dashboard_require_run_rows | bool

@@ -70,6 +70,12 @@ ngit_ci_blossom_upload_budget_secs: 120
 ngit_ci_blossom_artifact_server_addr: ""
 ngit_ci_blossom_public_url: ""
 
+# Per-repo secret lines: NGIT_CI_SECRET_<ALIAS>__<NAME> and
+# NGIT_CI_OPERATOR_BUNKER. Two -e patterns rather than one alternation because
+# a literal `|` inside a shell task trips ansible-lint's risky-shell-pipe rule.
+ngit_ci_secret_grep: >-
+  grep -cE -e '^NGIT_CI_SECRET_[A-Za-z0-9_]+=' -e '^NGIT_CI_OPERATOR_BUNKER='
+
 ngit_ci_queue_recovery_window_secs: 600
 ngit_ci_log_level: info
 # 30m default job timeout + 2m Blossom budget + shutdown overhead.
