@@ -41,12 +41,23 @@
     version: "{{ ngit_ci_repo_version }}"
     force: true
 
+# `file` with recurse always reports changed, so the ownership pass is done by
+# hand and reports changed only when something actually belongs to another user.
+# .git is skipped: the git module fetches as root on every run, so its internals
+# are root-owned by design and are excluded from the docker build context anyway.
 - name: Hand the staged source to the deploy owner
-  file:
-    path: "{{ ngit_ci_src_dir }}"
-    owner: "{{ ngit_ci_owner }}"
-    group: "{{ ngit_ci_owner }}"
-    recurse: true
+  shell: |
+    set -euo pipefail
+    stale="$(find {{ ngit_ci_src_dir }} \
+      \( -path '*/.git' -prune \) -o \( \! -user {{ ngit_ci_owner }} -print -quit \) || true)"
+    if [ -z "$stale" ]; then
+      exit 0
+    fi
+    find {{ ngit_ci_src_dir }} -path '*/.git' -prune -o -print0 \
+      | xargs -0 chown {{ ngit_ci_owner }}:{{ ngit_ci_owner }}
+    echo reowned
+  register: ngit_ci_src_owner
+  changed_when: ngit_ci_src_owner.stdout | trim == 'reowned'
 
 - name: Confirm the staged revision is the one the image will be built from
   command: "git -C {{ ngit_ci_src_dir }} rev-parse HEAD"
@@ -62,15 +73,18 @@
       {{ ngit_ci_repo_version }} was requested — refusing to build a different
       revision than the role declares.
 
-- name: Write the coordinator environment file
-  template:
-    src: coordinator.env.j2
-    dest: "{{ ngit_ci_base_dir }}/.env"
-    owner: "{{ ngit_ci_owner }}"
-    group: "{{ ngit_ci_owner }}"
-    mode: '0600'
+# Live-only state must survive a re-run. The hand deployment kept its per-repo
+# secrets (NGIT_CI_SECRET_<ALIAS>__<NAME>, NGIT_CI_OPERATOR_BUNKER) inside .env,
+# which this role owns and rewrites; they are harvested into the never-
+# overwritten ngit-ci-secrets.env — which compose injects through env_file — so
+# no re-run can drop a job secret. Values are never read back into the play,
+# logged, or committed: only key names and counts are ever printed.
+- name: Look for a hand-written coordinator environment file
+  stat:
+    path: "{{ ngit_ci_base_dir }}/.env"
+  register: ngit_ci_existing_env
 
-- name: Preserve the per-repo secrets file if it exists (never overwrite)
+- name: Look for the per-repo secrets file (never overwritten)
   stat:
     path: "{{ ngit_ci_base_dir }}/ngit-ci-secrets.env"
   register: ngit_ci_secrets_file
@@ -84,6 +98,63 @@
     group: "{{ ngit_ci_owner }}"
     mode: '0600'
   when: not ngit_ci_secrets_file.stat.exists
+
+- name: Count the per-repo secrets carried by the existing environment file
+  shell: >-
+    grep -cE '^(NGIT_CI_SECRET_[A-Za-z0-9_]+|NGIT_CI_OPERATOR_BUNKER)='
+    {{ ngit_ci_base_dir }}/.env || true
+  register: ngit_ci_live_secret_count
+  changed_when: false
+
+- name: Count the per-repo secrets already preserved
+  shell: >-
+    grep -cE '^(NGIT_CI_SECRET_[A-Za-z0-9_]+|NGIT_CI_OPERATOR_BUNKER)='
+    {{ ngit_ci_base_dir }}/ngit-ci-secrets.env || true
+  register: ngit_ci_secrets_before
+  changed_when: false
+
+# Logic lives in files/harvest-secrets.sh so it can be unit-tested without a
+# host (tests/test-ngit-ci-secret-harvest.sh).
+- name: Harvest per-repo secrets into the preserved secrets file
+  script: >-
+    harvest-secrets.sh {{ ngit_ci_base_dir }}/.env
+    {{ ngit_ci_base_dir }}/ngit-ci-secrets.env
+  when: ngit_ci_live_secret_count.stdout | trim | int > 0
+  changed_when: false
+  no_log: true
+
+- name: Count the per-repo secrets after the harvest
+  shell: >-
+    grep -cE '^(NGIT_CI_SECRET_[A-Za-z0-9_]+|NGIT_CI_OPERATOR_BUNKER)='
+    {{ ngit_ci_base_dir }}/ngit-ci-secrets.env || true
+  register: ngit_ci_secrets_after
+  changed_when: >-
+    ngit_ci_secrets_after.stdout | trim | int
+    > ngit_ci_secrets_before.stdout | trim | int
+
+- name: Fail when a per-repo secret would be dropped
+  assert:
+    that:
+      - >-
+        ngit_ci_secrets_after.stdout | trim | int
+        >= ngit_ci_live_secret_count.stdout | trim | int
+      - >-
+        ngit_ci_secrets_after.stdout | trim | int
+        >= ngit_ci_secrets_before.stdout | trim | int
+    fail_msg: >-
+      {{ ngit_ci_base_dir }}/.env carried
+      {{ ngit_ci_live_secret_count.stdout | trim }} per-repo secret(s) but
+      {{ ngit_ci_secrets_after.stdout | trim }} are preserved in
+      ngit-ci-secrets.env — refusing to rewrite .env and lose a job secret for
+      {{ ngit_ci_repos | join(', ') }}.
+
+- name: Write the coordinator environment file
+  template:
+    src: coordinator.env.j2
+    dest: "{{ ngit_ci_base_dir }}/.env"
+    owner: "{{ ngit_ci_owner }}"
+    group: "{{ ngit_ci_owner }}"
+    mode: '0600'
 
 - name: Write the compose file (builds from the staged source)
   template:
@@ -128,12 +199,13 @@
   retries: 30
   delay: 5
 
+# The container is recreated whenever the config changes, so its own log stream
+# is the right scope: a `--since` window would drop the startup banner on an
+# idempotent re-run and fail a healthy coordinator.
 - name: Wait for the coordinator to open its subscriptions
   shell: >-
-    docker compose logs --since 5m coordinator
+    docker logs {{ ngit_ci_container_name }} 2>&1
     | grep -c 'Watcher running'
-  args:
-    chdir: "{{ ngit_ci_base_dir }}"
   register: ngit_ci_watcher_ready
   until: ngit_ci_watcher_ready.stdout | trim | int > 0
   retries: 30
@@ -142,10 +214,8 @@
 
 - name: Confirm the coordinator publishes its advertisement
   shell: >-
-    docker compose logs --since 5m coordinator
+    docker logs {{ ngit_ci_container_name }} 2>&1
     | grep -c 'Published coordinator advertisement'
-  args:
-    chdir: "{{ ngit_ci_base_dir }}"
   register: ngit_ci_advertised
   until: ngit_ci_advertised.stdout | trim | int > 0
   retries: 24
@@ -180,6 +250,44 @@
       {{ ngit_ci_data_volume }} (must be reused, not recreated: it holds the
       identity the dashboard renders events for).
   when: ngit_ci_identity.stdout | trim != 'present'
+
+- name: Read the coordinator's effective environment
+  shell: "docker exec {{ ngit_ci_container_name }} env | sort"
+  register: ngit_ci_effective_env
+  changed_when: false
+  failed_when: false
+
+- name: List the per-repo secret names preserved for the coordinator
+  shell: >-
+    grep -oE '^(NGIT_CI_SECRET_[A-Za-z0-9_]+|NGIT_CI_OPERATOR_BUNKER)'
+    {{ ngit_ci_base_dir }}/ngit-ci-secrets.env | sort -u || true
+  register: ngit_ci_secret_keys
+  changed_when: false
+
+- name: Fail when the coordinator runs with the wrong repos or concurrency
+  assert:
+    that:
+      - "('NGIT_CI_REPOS=' ~ (ngit_ci_repos | join(','))) in ngit_ci_effective_env.stdout"
+      - "('NGIT_CI_MAX_CONCURRENT_JOBS=' ~ ngit_ci_max_concurrent_jobs) in ngit_ci_effective_env.stdout"
+      - "('NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET=' ~ ngit_ci_act_container_daemon_socket) in ngit_ci_effective_env.stdout"
+    fail_msg: >-
+      The running coordinator does not match the role: expected
+      NGIT_CI_REPOS={{ ngit_ci_repos | join(',') }},
+      NGIT_CI_MAX_CONCURRENT_JOBS={{ ngit_ci_max_concurrent_jobs }} and
+      NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET={{ ngit_ci_act_container_daemon_socket }}.
+      Check `docker compose config` in {{ ngit_ci_base_dir }}.
+
+- name: Fail when a preserved per-repo secret did not reach the coordinator
+  assert:
+    that:
+      - "(item ~ '=') in ngit_ci_effective_env.stdout"
+    fail_msg: >-
+      {{ item }} is preserved in ngit-ci-secrets.env but is absent from the
+      coordinator's environment — jobs of that repo would silently lose their
+      secret. Check the env_file entry in
+      {{ ngit_ci_base_dir }}/docker-compose.yml.
+  loop: "{{ ngit_ci_secret_keys.stdout_lines }}"
+  when: ngit_ci_secret_keys.stdout_lines | length > 0
 
 - name: Report the effective job-container ceiling
   debug:

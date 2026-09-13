@@ -11,7 +11,7 @@ A single Ansible-based repository that deploys all Tollgate-related infrastructu
 - **Domain**: User brings their own (`BASE_DOMAIN` variable)
 - **Secrets**: `.env` file (not committed to git)
 
-## Services (25 total)
+## Services (28 total)
 
 | # | Service | Subdomain | Internal Port | Install Method |
 |---|---------|-----------|---------------|----------------|
@@ -21,7 +21,7 @@ A single Ansible-based repository that deploys all Tollgate-related infrastructu
 | 4 | blossom-server (blob storage) | `blossom.` | 3001 | Docker (build from hzrd149/blossom-server) |
 | 5 | nsite-gateway (Nostr site gateway) | `nsite.` | 3002 | Docker (build from hzrd149/nsite-gateway) |
 | 6 | tollgate-release-explorer | `releases.` | — | Static build, Caddy file_server |
-| 7 | hive-ci-site | `ci.` | — | Static build, Caddy file_server |
+| 7 | ngit-ci dashboard (NIP-C1 SPA) | `ci.` | — | Static Vite build, Caddy file_server (VPS2, systemd Caddy) |
 | 8 | Cashu mint infrastructure | `*.mints.` | 8085-8093 | CDK + Nutshell mint containers |
 | 9 | cashu-brrr (money printer) | `print.mints.` | — | Static build, Caddy file_server |
 | 10 | Mint operator proxy | `print.mints./api/` | 3000 | Node.js systemd (tsx) |
@@ -43,6 +43,7 @@ A single Ansible-based repository that deploys all Tollgate-related infrastructu
 | 25 | ACT Runner (CI/CD) | `runner.` | 8095 | Python daemon + nektos/act binary |
 | 26 | Voting Worker | none | — | Rust binary (audit proxy), systemd |
 | 27 | Auditable Voting E2E Tests | none | — | Playwright tests, triggered via Ansible |
+| 28 | ngit-ci coordinator (NIP-C1 actions runner) | none | 2375 (dind sidecar, internal) | Docker compose on DQ05 (coordinator + `docker:dind`) |
 
 ## Architecture
 
@@ -55,7 +56,7 @@ Internet → Cloudflare DNS (auto A records via API)
       ├── blossom.BASE_DOMAIN   → blossom-server (Docker :3001)
       ├── nsite.BASE_DOMAIN     → nsite-gateway (Docker :3002)
       ├── releases.BASE_DOMAIN  → /srv/tollgate/releases/ (Caddy file_server)
-      ├── ci.BASE_DOMAIN        → /srv/tollgate/hive-ci/ (Caddy file_server)
+      ├── ci.BASE_DOMAIN        → /srv/tollgate/ngit-ci-dashboard/dist (Caddy file_server, VPS2 systemd Caddy)
       ├── git.BASE_DOMAIN       → ngit-grasp (Systemd :7334)
       ├── routstr.BASE_DOMAIN   → Routstr Core (Docker :8000) ← AI inference proxy
         ├── *.mints.BASE_DOMAIN   → CDK + Nutshell mint containers
@@ -134,6 +135,14 @@ Internet → Cloudflare DNS (auto A records via API)
        ├── runner.{{ base_domain }} (Caddy proxy + static dashboard)
        │     Dark-themed CI dashboard, auto-refreshes every 15s
        └── Config: allowlisted repos in YAML, Nostr keypair for event signing
+
+     ngit-ci (Nostr-native CI, NIP-C1 — separate from the ACT runner above):
+       ├── ci.{{ base_domain }}  → static Vite SPA (VPS2 systemd Caddy, playbook 53)
+       │     Renders kinds 39842/9841/9842 from the DQ05 coordinator
+       └── dq05 coordinator + docker:dind sidecar (playbook 54, role ngit_ci)
+             Watches TollGate repos, act jobs run in the dedicated dind daemon
+             Per-repo secrets in ngit-ci-secrets.env (env_file, never printed)
+             Identity /data/.coordinator.nsec on ngit-ci-deploy_coordinator-data
 
      System services (not HTTP):
       ├── shadowsocks-libev (TCP :65101, MPTCP enabled)

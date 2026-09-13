@@ -27,9 +27,16 @@ ngit_ci_dind_volume: "{{ ngit_ci_project_name }}_dind-storage"
 ngit_ci_repo_url: "https://gitnostr.com/npub15qydau2hjma6ngxkl2cyar74wzyjshvl65za5k5rl69264ar2exs5cyejr/ngit-ci.git"
 ngit_ci_repo_version: "0580b27382b4fc9b6b3937d549a1cb2d125954fb"
 
-# Repositories watched for kind-30617 announcements (npub/identifier).
+# Repositories watched for kind-30617 announcements: npub, npub/identifier, or
+# npub#ALIAS. The alias binds that repo's jobs to
+# NGIT_CI_SECRET_<ALIAS>__<NAME> values. Mirrors the live DQ05 .env exactly
+# (all repos of the TollGate upstream key, aliased TMBG because that is the
+# alias its per-repo CI secret is stored under, plus the second npub the
+# coordinator already watches). Narrowing this list silently stops CI for the
+# dropped repo, so it must stay in lockstep with the running deployment.
 ngit_ci_repos:
-  - "npub1x677kgulh6lqaa8e658f9ts4s0x692wgrhcptw535877wfkuwnsqztaquc/tollgate-module-basic-go"
+  - "npub1x677kgulh6lqaa8e658f9ts4s0x692wgrhcptw535877wfkuwnsqztaquc#TMBG"
+  - "npub1xtzgnzzu88yfv9es3evykl3ympjz0gc3umy2e6rs3jazruhjyevqe63edh"
 
 ngit_ci_index_relays: "wss://index.ngit.dev"
 ngit_ci_nostr_secret_relays: ""
@@ -45,6 +52,11 @@ ngit_ci_additional_requesters: ""
 # operator sign-off.
 ngit_ci_max_concurrent_jobs: 3
 ngit_ci_act_container_options: "--memory=4g --memory-swap=4g --cpus=2 --pids-limit=2048"
+# Daemon socket act bind-mounts into job containers. Jobs talk to the dedicated
+# dind sidecar (NGIT_CI_DOCKER_HOST=tcp://dind:2375); this value only has to be
+# stated explicitly because compose passes .env variables solely when the
+# service's environment block names them. Live value, kept verbatim.
+ngit_ci_act_container_daemon_socket: "unix:///var/run/docker.sock"
 ngit_ci_act_cache_enabled: true
 ngit_ci_act_cache_max_bytes: 10737418240
 ngit_ci_act_bind_workspace: false

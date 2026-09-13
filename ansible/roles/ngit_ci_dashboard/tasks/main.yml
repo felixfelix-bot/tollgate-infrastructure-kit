@@ -62,24 +62,44 @@
     dest: "{{ ngit_ci_dashboard_src_dir }}"
     version: "{{ ngit_ci_dashboard_repo_version }}"
     force: true
+  register: ngit_ci_dashboard_checkout
 
+# `file` with recurse always reports changed, so ownership is checked and fixed
+# by hand. .git is skipped: the git module fetches as root on every run.
 - name: Hand the source tree to the build user
-  file:
-    path: "{{ ngit_ci_dashboard_src_dir }}"
-    owner: "{{ ngit_ci_dashboard_owner }}"
-    group: "{{ ngit_ci_dashboard_owner }}"
-    recurse: true
+  shell: |
+    set -euo pipefail
+    stale="$(find {{ ngit_ci_dashboard_src_dir }} \
+      \( -path '*/.git' -prune \) -o \( \! -user {{ ngit_ci_dashboard_owner }} -print -quit \) || true)"
+    if [ -z "$stale" ]; then
+      exit 0
+    fi
+    find {{ ngit_ci_dashboard_src_dir }} -path '*/.git' -prune -o -print0 \
+      | xargs -0 chown {{ ngit_ci_dashboard_owner }}:{{ ngit_ci_dashboard_owner }}
+    echo reowned
+  register: ngit_ci_dashboard_src_owner
+  changed_when: ngit_ci_dashboard_src_owner.stdout | trim == 'reowned'
 
 - name: Install build dependencies (npm ci)
   shell: "cd {{ ngit_ci_dashboard_src_dir }} && sudo -u {{ ngit_ci_dashboard_owner }} npm ci"
   args:
     creates: "{{ ngit_ci_dashboard_src_dir }}/node_modules/.package-lock.json"
 
+# `is exists` in a `when:` is evaluated on the CONTROLLER, so the old check
+# rebuilt the SPA on every run and republished assets with fresh mtimes. Ask the
+# target instead, and rebuild when the pinned revision moved.
+- name: Check for an existing build on the target
+  stat:
+    path: "{{ ngit_ci_dashboard_src_dir }}/dist/index.html"
+  register: ngit_ci_dashboard_build
+
 - name: Build the dashboard (tsc --noEmit + vite build)
   shell: "cd {{ ngit_ci_dashboard_src_dir }} && sudo -u {{ ngit_ci_dashboard_owner }} npm run build"
   when: >-
     ngit_ci_dashboard_force_build | bool or
-    not ((ngit_ci_dashboard_src_dir + '/dist/index.html') is exists)
+    not ngit_ci_dashboard_build.stat.exists or
+    (ngit_ci_dashboard_checkout.after | default(''))
+    != (ngit_ci_dashboard_checkout.before | default(''))
 
 - name: Create the served directory
   file:
@@ -87,11 +107,19 @@
     state: directory
     mode: '0755'
 
+# --itemize-changes prints a line per created/updated/deleted path and nothing
+# at all when the published tree already matches dist/, so re-runs stay clean.
+# --chmod normalises the bundle's modes on the way in: the build runs as the
+# deploy user with umask 002 (files 0664, dirs 0775), and preserving those with
+# `-a` would make the world-readable pass below flip the modes back and forth on
+# every run.
 - name: Publish the built assets
   shell: >-
-    rsync -a --delete {{ ngit_ci_dashboard_src_dir }}/dist/
+    rsync -a --delete --itemize-changes --chmod=D755,F644
+    {{ ngit_ci_dashboard_src_dir }}/dist/
     {{ ngit_ci_dashboard_dist_dir }}/
-  changed_when: true
+  register: ngit_ci_dashboard_rsync
+  changed_when: ngit_ci_dashboard_rsync.stdout | length > 0
 
 # Caddy runs as the unprivileged `caddy` user: every directory on the path to
 # the assets must be world-traversable (pitfall #6) and the files readable.
@@ -105,9 +133,20 @@
     - "{{ ngit_ci_dashboard_dist_dir | dirname }}"
     - "{{ ngit_ci_dashboard_dist_dir }}"
 
+# Only touch the modes when something is actually wrong, so a no-op re-run
+# reports changed=0 instead of pretending to have published the site again.
 - name: Make the published assets world-readable
-  shell: "find {{ ngit_ci_dashboard_dist_dir }} -type d -exec chmod 0755 {} + && find {{ ngit_ci_dashboard_dist_dir }} -type f -exec chmod 0644 {} +"
-  changed_when: true
+  shell: |
+    set -euo pipefail
+    if [ -z "$(find {{ ngit_ci_dashboard_dist_dir }} \
+      \( -type d \! -perm 0755 -o -type f \! -perm 0644 \) -print -quit)" ]; then
+      exit 0
+    fi
+    find {{ ngit_ci_dashboard_dist_dir }} -type d -exec chmod 0755 {} +
+    find {{ ngit_ci_dashboard_dist_dir }} -type f -exec chmod 0644 {} +
+    echo remoded
+  register: ngit_ci_dashboard_modes
+  changed_when: ngit_ci_dashboard_modes.stdout | trim == 'remoded'
 
 - name: Publish the Cloudflare A record for the dashboard
   include_tasks: cloudflare-dns.yml

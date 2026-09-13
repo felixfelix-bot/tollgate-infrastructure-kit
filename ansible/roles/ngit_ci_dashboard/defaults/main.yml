@@ -13,8 +13,12 @@ ngit_ci_dashboard_coordinator_pubkey: "765cd47badcbbc4a38c7d0c57d5607663b484c20c
 
 # Published on ngit (NIP-34) — plain HTTPS git remote, no auth needed.
 ngit_ci_dashboard_repo_url: "https://relay.ngit.dev/npub1xtzgnzzu88yfv9es3evykl3ympjz0gc3umy2e6rs3jazruhjyevqe63edh/ngit-ci-dashboard.git"
-# refs/heads/main as published on relay.ngit.dev at deploy time.
-ngit_ci_dashboard_repo_version: "22bcb25cf9fb4a9857bdab5d33ea1f06b7e9b7ae"
+# refs/heads/main as published on relay.ngit.dev. Must stay equal to the
+# revision the live site was built from: the Caddy site block embeds this value
+# as a comment, so a stale pin rewrites the block AND downgrades the deployed
+# bundle on the next run. a018425 is what VPS2 is serving (verified from the
+# live Caddyfile on 2026-09-13).
+ngit_ci_dashboard_repo_version: "a018425abb920f367e3cbad20b7674f8e5c1ec0d"
 
 ngit_ci_dashboard_src_dir: "{{ tollgate_base_dir }}/src/ngit-ci-dashboard"
 # Published static root. This MUST match the `root *` of the Caddy site block

@@ -195,10 +195,37 @@
 - [x] DNS A record added for `mints` subdomain
 - [x] Caddy redeployed
 
-### 1C. Deploy Hive CI (`ci.orangesync.tech`)
+### 1C. Deploy Hive CI (`ci.orangesync.tech`) — SUPERSEDED
 - [x] Source cloned from Nostr (`nostr://npub1hw6amg.../relay.ngit.dev/hive-ci-site`)
 - [x] Built locally (Vue.js + Vite), deployed to VPS
-- [x] Live at `https://ci.orangesync.tech`
+- [~] Live at `https://ci.orangesync.tech` — **superseded**: `ci.` now serves the
+      ngit-ci dashboard (no hive-ci route remains in the live Caddyfile)
+
+### 1D. ngit-ci dashboard + coordinator (`ci.orangesync.tech` + DQ05)
+- [x] **Role `ngit_ci_dashboard`** — Vite SPA built from the ngit-published source
+      (pin `a018425ab`, `npm ci` + `npm run build` as `debian`), published to
+      `/srv/tollgate/ngit-ci-dashboard/dist` with `rsync --chmod=D755,F644`
+- [x] **Playbook `53-ngit-ci-dashboard.yml`** — systemd-Caddy `blockinfile` route
+      (marker `NGIT CI DASHBOARD ROUTES`, `caddy validate --adapter caddyfile`,
+      `systemctl reload caddy` handler), Cloudflare A record `ci` → 23.182.128.51
+      `proxied:false` read back and asserted to be the only A record, FATAL
+      HTTPS/shell checks
+- [x] **Role `ngit_ci`** — coordinator + `docker:dind` sidecar on DQ05, source
+      staged by git at `0580b27` (v0.1.1), compose project pinned to
+      `ngit-ci-deploy` so `ngit-ci-deploy_coordinator-data` (and the signing
+      identity) is reused
+- [x] **Playbook `54-ngit-ci.yml`** — `.env` from Jinja2, per-repo secrets
+      harvested from the hand-written `.env` into `ngit-ci-secrets.env` (count
+      asserted, values never printed) and asserted present in the container env
+- [x] **Concurrency 1 → 3** per operator instruction (DQ05: 4 cores, 10.9 GB RAM,
+      load ~1.0; caps unchanged at `--memory=4g --cpus=2`, ceiling not reservation)
+- [x] **Live**: `https://ci.orangesync.tech` → 200, valid Let's Encrypt cert,
+      `dig +short` → 23.182.128.51; Playwright (channel `chrome`) renders the
+      shell with **67 run rows**, 0 page errors
+- [x] **Idempotent**: playbook 53 `changed=0` on 3 consecutive runs, playbook 54
+      `changed=0` on re-runs (first run `ok=31 changed=8 failed=0`)
+- [x] `docs/ngit-ci.md` documents both roles; PLAN.md service table + architecture
+      tree updated
 
 ### Smoke Tests
 - [x] 18/18 services up
