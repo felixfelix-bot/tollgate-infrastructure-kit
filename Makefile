@@ -21,4 +21,4 @@ lint:
 
 check:
 	@echo "Syntax check..."
-	ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/setup-all.yml --syntax-check
+	cd ansible && ansible-playbook -i inventory/hosts.yml playbooks/setup-all.yml --syntax-check
