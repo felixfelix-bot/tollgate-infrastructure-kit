@@ -170,12 +170,16 @@ ever observed, reduce to `3 × 3g` (or back to 2) before raising further — **d
 not go above 3 without operator sign-off**.
 
 **The role owns the ceiling, not the instantaneous value.** An existing
-operator-owned controller — `kalman-ci-concurrency.timer` on the worker host
-(every 5 min, `/home/c03rad0r/repos/gh-ngit-ci-bridge/ci_concurrency_controller.py`)
-— drives `NGIT_CI_MAX_CONCURRENT_JOBS` on DQ05 from the dispatch
-resource-pressure signal and recreates the coordinator on each change. So a live
+operator-owned controller drives `NGIT_CI_MAX_CONCURRENT_JOBS` on DQ05 from that
+node's own headroom: `fleet-ci-concurrency.timer` (installed per node, every
+5 min) runs `~/.hermes/scripts/ci_concurrency_nodeaware.py` — the D-131
+node-local controller that superseded the cross-node `kalman-ci-concurrency`
+(disabled on the worker host as of 2026-09-18) — and reports, e.g.,
+`{'node': 'dq05', 'headroom': 0.18, 'configured_max': 3, 'jobs': 1}`. So a live
 `NGIT_CI_MAX_CONCURRENT_JOBS=1` is that controller's decision inside the ceiling,
-**not** drift. The role's post-deploy assertion therefore checks
+**not** drift, and `~/ngit-ci-deploy/.env` can be rewritten between role runs
+(observed mtime 2026-09-17, i.e. after the role's last run). The role's
+post-deploy assertion therefore checks
 `1 <= effective <= ngit_ci_max_concurrent_jobs` and reports the effective value;
 asserting equality would flag a legitimate, operator-owned decision as a failure
 on every run after a controller tick.
@@ -185,7 +189,7 @@ on every run after a controller tick.
 | Check | Evidence |
 |-------|----------|
 | Coordinator containers | `ngit-ci-deploy-coordinator-1` / `ngit-ci-deploy-dind-1` both `Up` in `docker compose ps` |
-| Effective config | container env: `NGIT_CI_REPOS=<both watched repos>` (aliased `#TMBG`), `NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET=unix:///var/run/docker.sock`, `NGIT_CI_EXECUTION_POLICY=request-required`; `NGIT_CI_MAX_CONCURRENT_JOBS` within the role ceiling of 3 (the Kalman controller had it at 1 at review time — legitimate, inside the ceiling) |
+| Effective config | container env: `NGIT_CI_REPOS=<both watched repos>` (aliased `#TMBG`), `NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET=unix:///var/run/docker.sock`, `NGIT_CI_EXECUTION_POLICY=request-required`; `NGIT_CI_MAX_CONCURRENT_JOBS` within the role ceiling of 3 (the node-local concurrency controller held it at 1 at review time — legitimate, inside the ceiling) |
 | Signing identity | `/data/.coordinator.nsec` present on `ngit-ci-deploy_coordinator-data` (existence only) |
 | Secret preservation | `sha256` of the `NGIT_CI_SECRET_TMBG__NSEC_HEX` line identical before (`.env`) and after (`.env` + `ngit-ci-secrets.env`) the role run |
 | Playbook 54 | first run `ok=31 changed=8 failed=0`; re-runs `ok=29 changed=0 failed=0` |
@@ -195,6 +199,36 @@ on every run after a controller tick.
 | Render | Playwright `channel: 'chrome'`: title `ngit-ci · Nostr CI Dashboard`, shell rendered, **79 run rows**, 0 page errors |
 | Repo test | `tests/test-ngit-ci-secret-harvest.sh` → 15/15 assertions pass (move, idempotent re-run, preserved value wins, no secret on stdout) |
 | Syntax | `ansible-playbook --syntax-check` clean for playbooks 53 and 54 |
+
+### Re-verification (2026-09-18)
+
+Re-run by the card worker five days after the deploy. Nothing below mutated
+either host: every check is read-only except the two playbook 53 runs, which
+reported `changed=0`.
+
+| Check | Evidence |
+|-------|----------|
+| Public URL | `curl -sS -o /dev/null -w '%{http_code}/%{ssl_verify_result}' https://ci.orangesync.tech/` → `200/0` |
+| Certificate | `CN=ci.orangesync.tech`, valid 2026-09-11 → 2026-12-10 |
+| DNS | `dig +short ci.orangesync.tech` → `23.182.128.51` (still a single A record) |
+| Render | `REQUIRE_RUN_ROWS=1 scripts/verify-ngit-ci-dashboard.sh` → shell rendered, title `ngit-ci · Nostr CI Dashboard`, **175 run rows**, 0 page errors |
+| Playbook 53 (vps2) | two consecutive real runs of the documented command (`set -a; source ../.env; set +a; cd ansible && ansible-playbook playbooks/53-ngit-ci-dashboard.yml -l vps2`) → `ok=28 changed=0 failed=0` both times |
+| Playbook 53 summary | assets `/srv/tollgate/ngit-ci-dashboard/dist`, commit `a018425abb920f367e3cbad20b7674f8e5c1ec0d`, Caddy `systemd` (`systemctl reload caddy`) |
+| Coordinator containers | `docker compose ps` on DQ05 → `ngit-ci-deploy-coordinator-1` `Up 38 hours`, `ngit-ci-deploy-dind-1` `Up 4 days` |
+| Effective config | container env: `NGIT_CI_REPOS=<both watched repos>` (aliased `#TMBG`), `NGIT_CI_ACT_CONTAINER_DAEMON_SOCKET=unix:///var/run/docker.sock`, `NGIT_CI_EXECUTION_POLICY=request-required`, `NGIT_CI_MAX_CONCURRENT_JOBS=1` (controller decision, inside the role ceiling of 3) |
+| Per-job caps | `NGIT_CI_ACT_CONTAINER_OPTIONS="--memory=4g --memory-swap=4g --cpus=2 --pids-limit=2048"` in `.env` and in the container env |
+| Secret preservation | `sha256` of the `NGIT_CI_SECRET_TMBG__NSEC_HEX` line identical in the container env and in `ngit-ci-secrets.env` (0600) — compared as hashes only, no value read or printed |
+| Signing identity | `/data/.coordinator.nsec` present (0600) on the reused `ngit-ci-deploy_coordinator-data` volume |
+| Repo test | `tests/test-ngit-ci-secret-harvest.sh` → all assertions PASS |
+| Syntax | `ansible-playbook --syntax-check` clean for playbooks 53 and 54 (cwd `ansible/`) |
+| Inventory | `ansible dq05 -i inventory/hosts.yml -m ping` → `pong` (tailnet `100.90.22.201`) |
+
+Playbook 54 was deliberately **not** re-run on 2026-09-18: the external
+controller currently holds `NGIT_CI_MAX_CONCURRENT_JOBS=1` while the role owns the
+ceiling of 3, so a run would re-render `.env` and recreate the coordinator — and
+the coordinator was actively serving runs (175 rows, several started seconds
+before the check). The read-only assertions above cover the same contract; the
+mutation path itself was last exercised and verified on 2026-09-13.
 
 ## Troubleshooting
 

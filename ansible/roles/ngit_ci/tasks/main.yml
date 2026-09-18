@@ -272,10 +272,11 @@
          | regex_findall('NGIT_CI_MAX_CONCURRENT_JOBS=([0-9]+)') | first | default('') }}
 
 # The role owns the CEILING; an external controller may lower the effective
-# value inside it — kalman-ci-concurrency.timer drives NGIT_CI_MAX_CONCURRENT_JOBS
-# from the dispatch resource-pressure signal every 5 minutes and recreates the
-# coordinator on each change. Asserting equality with the role default would mark
-# a legitimate, operator-owned decision as a failure on every later run.
+# value inside it — fleet-ci-concurrency.timer (per node, every 5 min) runs the
+# D-131 node-aware controller (~/.hermes/scripts/ci_concurrency_nodeaware.py),
+# which derives NGIT_CI_MAX_CONCURRENT_JOBS from that node's own headroom.
+# Asserting equality with the role default would mark a legitimate,
+# operator-owned decision as a failure on every later run.
 - name: Fail when the coordinator runs with the wrong repos or an out-of-range ceiling
   assert:
     that:
@@ -311,7 +312,7 @@
       job(s) now (role ceiling {{ ngit_ci_max_concurrent_jobs }}) x
       '{{ ngit_ci_act_container_options }}' — host ceiling
       {{ ngit_ci_max_concurrent_jobs * 4 }} GB RAM against DQ05's ~10.9 GB
-      (caps are ceilings, not reservations). kalman-ci-concurrency.timer may
+      (caps are ceilings, not reservations). fleet-ci-concurrency.timer may
       lower the effective value inside the ceiling.
 
 - name: Coordinator deployment summary
