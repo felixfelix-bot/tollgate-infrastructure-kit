@@ -226,6 +226,13 @@
       `changed=0` on re-runs (first run `ok=31 changed=8 failed=0`)
 - [x] `docs/ngit-ci.md` documents both roles; PLAN.md service table + architecture
       tree updated
+- [x] **Re-verified 2026-09-18** (5 days later, read-only): `curl` 200 / TLS 0,
+      `dig` → 23.182.128.51, Playwright renders **175 run rows** / 0 page errors,
+      playbook 53 `ok=28 changed=0 failed=0` twice in a row, coordinator + dind
+      `Up`, per-repo secret hash still matches the container env, identity
+      present. The concurrency controller is now the D-131 node-local
+      `fleet-ci-concurrency.timer` (`ci_concurrency_nodeaware.py`); the cross-node
+      `kalman-ci-concurrency` is disabled, and the docs now name the live one
 
 ### Smoke Tests
 - [x] 18/18 services up
