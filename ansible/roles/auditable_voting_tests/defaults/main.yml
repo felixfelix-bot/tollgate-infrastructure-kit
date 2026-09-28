@@ -1,0 +1,3 @@
+---
+auditable_voting_tests_dir: "{{ tollgate_base_dir }}/auditable-voting-tests"
+auditable_voting_tests_target: "https://vote.{{ base_domain }}"

@@ -1,0 +1,36 @@
+---
+# wot_sync — sync the root npub's kind-3 follow list to Blossom + grasp-mirror.
+#
+# The strfry-agg-reconcile timer (role: strfry_agg) already reconciles kind-3
+# into allowed.npubs every 15 min. This role deploys two consumers of that
+# allowlist:
+#   * blossom-wot-enforce  — deletes blobs owned by non-WoT npubs (local DB)
+#   * grasp-mirror-sync    — rewrites MIRROR_NPUBS env from the follow list
+#
+# Both run as root systemd oneshots so they can reach the docker volume and
+# restart services. Use `tags: [blossom_wot]` / `[grasp_wot]` to deploy one.
+
+wot_sync_allowed_path: "/opt/tollgate/strfry-agg/state/allowed.npubs"
+
+# Blossom
+wot_sync_blossom_db: "/var/lib/docker/volumes/blossom_blossom-data/_data/blossom.db"
+wot_sync_blossom_blobs: "/var/lib/docker/volumes/blossom_blossom-data/_data/blobs"
+# Run a few minutes AFTER the reconcile timer (:0/15) so allowed.npubs is fresh.
+# :7/15 → fires at :07,:22,:37,:52.
+wot_sync_blossom_offset_min: 7
+wot_sync_blossom_interval_min: 15
+
+# grasp-mirror
+wot_sync_grasp_env_file: "/opt/tollgate/grasp-mirror/grasp-mirror.env"
+wot_sync_grasp_service: "grasp-mirror"
+wot_sync_root_npub: "{{ lookup('env', 'STRFRY_AGG_ROOT_NPUB') | default('npub1c03rad0r6q833vh57kyd3ndu2jry30nkr0wepqfpsm05vq7he25slryrnw', true) }}"
+wot_sync_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+# grasp-mirror env is less time-critical; every 30 min is plenty.
+wot_sync_grasp_offset_min: 12
+wot_sync_grasp_interval_min: 30
+
+# Whether to install python3-websockets (needed only if grasp-mirror-sync must
+# fetch kind-3 over the network — i.e. the allowlist is NOT on this host).
+wot_sync_install_websockets: true

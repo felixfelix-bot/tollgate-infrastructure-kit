@@ -1,0 +1,42 @@
+{
+  "issuer_npub": "{{ dm_issuer_issuer_npub }}",
+  "issuer_nsec_env": "{{ dm_issuer_issuer_nsec_env }}",
+  "relays": [
+{% for relay in dm_issuer_relays %}
+    "{{ relay }}"{% if not loop.last %},{% endif %}
+{% endfor %}
+  ],
+  "mint_url": "{{ dm_issuer_mint_url }}",
+  "mint_grpc_host": "{{ dm_issuer_mint_grpc_host }}",
+  "mint_grpc_port": {{ dm_issuer_mint_grpc_port }},
+  "approve_fallback_url": "{{ dm_issuer_approve_fallback_url }}",
+  "whitelist": [
+{% for entry in dm_issuer_whitelist %}
+    {
+      "npub": "{{ entry.npub }}",
+      "daily_cap_sats": {{ entry.daily_cap_sats | default(dm_issuer_defaults.daily_cap_sats) }},
+      "max_request_sats": {{ entry.max_request_sats | default(dm_issuer_defaults.max_request_sats) }}{% if entry.note is defined %},
+      "note": "{{ entry.note }}"{% endif %}
+    }{% if not loop.last %},{% endif %}
+{% endfor %}
+  ],
+  "defaults": {
+    "daily_cap_sats": {{ dm_issuer_defaults.daily_cap_sats }},
+    "max_request_sats": {{ dm_issuer_defaults.max_request_sats }}
+  },
+  "min_request_sats": {{ dm_issuer_min_request_sats }},
+  "max_requests_per_hour": {{ dm_issuer_max_requests_per_hour }},
+  "global_daily_cap_sats": {{ dm_issuer_global_daily_cap_sats }},
+  "registry_max_single_issuance": {{ dm_issuer_registry_max_single_issuance }},
+  "poll_seconds": {{ dm_issuer_poll_seconds }},
+  "stale_request_secs": {{ dm_issuer_stale_request_secs }},
+  "dm_lookback_default_secs": {{ dm_issuer_dm_lookback_default_secs }},
+  "dm_retries": {{ dm_issuer_dm_retries }},
+  "dm_backoff_base_secs": {{ dm_issuer_dm_backoff_base_secs }},
+  "grpc_retries": {{ dm_issuer_grpc_retries }},
+  "grpc_backoff_base_secs": {{ dm_issuer_grpc_backoff_base_secs }},
+  "quote_ttl_secs": {{ dm_issuer_quote_ttl_secs }},
+  "verify_before_send": {{ dm_issuer_verify_before_send | lower }},
+  "ops_host": "0.0.0.0",
+  "ops_port": {{ dm_issuer_ops_port }}
+}

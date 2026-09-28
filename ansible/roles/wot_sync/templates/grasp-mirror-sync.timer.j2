@@ -1,0 +1,9 @@
+[Unit]
+Description=grasp-mirror WoT sync timer
+
+[Timer]
+OnCalendar=*-*-* *:{{ wot_sync_grasp_offset_min }}/{{ wot_sync_grasp_interval_min }}:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

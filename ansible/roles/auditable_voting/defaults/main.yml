@@ -1,0 +1,15 @@
+---
+auditable_voting_repo: "https://github.com/tidley/auditable-voting.git"
+auditable_voting_branch: "main"
+auditable_voting_domain: "vote.{{ base_domain }}"
+auditable_voting_static_dir: "{{ tollgate_static_dir }}/auditable-voting"
+auditable_voting_src_dir: "{{ tollgate_base_dir }}/src/auditable-voting"
+auditable_voting_nsite_relays:
+  - "wss://relay.orangesync.tech"
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://relay.nostr.net"
+auditable_voting_nsite_servers:
+  - "https://blossom.orangesync.tech"
+  - "https://blossom.primal.net"
+  - "https://cdn.sovbit.host"

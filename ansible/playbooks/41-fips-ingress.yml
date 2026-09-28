@@ -1,0 +1,9 @@
+---
+- name: Deploy FIPS ingress gate (SSH proxy via socat)
+  hosts: "{{ target | default('vps') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - role: fips-ingress
+      when: fips_ingress_ssh_proxy_enabled | default(true)

@@ -1,0 +1,9 @@
+---
+- name: Deploy hive-ci-site 
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - hive_ci

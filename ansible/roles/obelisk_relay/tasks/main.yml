@@ -1,0 +1,49 @@
+---
+- name: Create obelisk directory
+  file:
+    path: "{{ tollgate_base_dir }}/obelisk"
+    state: directory
+    mode: '0755'
+
+- name: Deploy obelisk-relay docker-compose (build from source)
+  copy:
+    dest: "{{ tollgate_base_dir }}/obelisk/docker-compose.yml"
+    content: |
+      services:
+        obelisk:
+          build:
+            context: https://github.com/obelisk-app/obelisk-relay.git
+            dockerfile: Dockerfile
+          container_name: tollgate-obelisk
+          restart: unless-stopped
+          ports:
+            - "127.0.0.1:{{ obelisk_port }}:8080"
+          volumes:
+            - obelisk-data:/app/data
+          environment:
+            - ADMIN_NPUB={{ obelisk_admin_npub }}
+          networks:
+            - {{ docker_network_name }}
+
+      volumes:
+        obelisk-data:
+
+      networks:
+        {{ docker_network_name }}:
+          external: true
+    mode: '0644'
+
+- name: Build and start obelisk-relay
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/obelisk"
+    build: always
+    state: present
+  environment:
+    DOCKER_DEFAULT_PLATFORM: linux/amd64
+
+- name: Wait for obelisk-relay
+  wait_for:
+    port: "{{ obelisk_port }}"
+    host: localhost
+    delay: 5
+    timeout: 300

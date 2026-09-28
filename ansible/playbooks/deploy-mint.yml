@@ -1,0 +1,9 @@
+---
+- name: Deploy a Cashu mint for an operator
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - cashu_mint

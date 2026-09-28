@@ -1,0 +1,41 @@
+---
+- name: Deploy test mints (MB, KB, GB, min)
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  vars:
+    operator_npub: "npub1zzt0d0s2f4lsanpd7nkjep5r79p7ljq7aw37eek64hf0ef6v0mxqgwljrv"
+    test_mints:
+      - name: test-mb
+        unit: "MB"
+        rest_port: 8085
+        grpc_port: 50051
+      - name: test-kb
+        unit: "KB"
+        rest_port: 8086
+        grpc_port: 50052
+      - name: test-gb
+        unit: "GB"
+        rest_port: 8087
+        grpc_port: 50053
+      - name: test-min
+        unit: "min"
+        rest_port: 8088
+        grpc_port: 50054
+      - name: testnut
+        unit: "sat"
+        rest_port: 8091
+        grpc_port: 50055
+  tasks:
+    - name: Deploy each test mint
+      include_role:
+        name: cashu_mint
+      vars:
+        mint_name: "{{ item.name }}"
+        mint_units: "{{ item.unit }}"
+        custom_port: "{{ item.rest_port }}"
+        custom_grpc_port: "{{ item.grpc_port }}"
+        npub: "{{ operator_npub }}"
+      loop: "{{ test_mints }}"

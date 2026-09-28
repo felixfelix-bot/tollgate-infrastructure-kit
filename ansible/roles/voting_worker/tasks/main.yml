@@ -1,0 +1,89 @@
+---
+- name: Ensure worker source directory exists
+  stat:
+    path: "{{ tollgate_base_dir }}/src/auditable-voting/worker/Cargo.toml"
+  register: worker_src
+
+- name: Fail if auditable-voting not deployed
+  fail:
+    msg: "Auditable voting source not found. Run 17-auditable-voting.yml first."
+  when: not worker_src.stat.exists
+
+- name: Build worker binary
+  command: /root/.cargo/bin/cargo build --release
+  args:
+    chdir: "{{ tollgate_base_dir }}/src/auditable-voting/worker"
+    creates: "{{ tollgate_base_dir }}/src/auditable-voting/worker/target/release/auditable-voting-worker"
+  environment:
+    PATH: "/root/.cargo/bin:{{ ansible_env.PATH }}"
+
+- name: Ensure install directory exists
+  file:
+    path: "{{ tollgate_base_dir }}/auditable-voting/worker"
+    state: directory
+    mode: "0755"
+
+- name: Install worker binary
+  copy:
+    src: "{{ tollgate_base_dir }}/src/auditable-voting/worker/target/release/auditable-voting-worker"
+    dest: "{{ voting_worker_binary }}"
+    mode: "0755"
+    remote_src: yes
+
+- name: Ensure state directory exists
+  file:
+    path: "{{ voting_worker_state_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Check for existing worker keypair
+  slurp:
+    src: /opt/tollgate/.env
+  register: env_file
+  failed_when: false
+
+- name: Check if VOTING_WORKER_NSEC already in .env
+  set_fact:
+    worker_nsec_exists: "{{ env_file.content is defined and 'VOTING_WORKER_NSEC' in (env_file.content | b64decode) }}"
+
+- name: Generate worker keypair
+  shell: |
+    set -o pipefail
+    python3 << 'PYEOF'
+    import secrets, json
+    from bech32 import bech32_encode, convertbits
+    from nacl.signing import SigningKey
+    sk = secrets.token_bytes(32)
+    nsec = bech32_encode('nsec', convertbits(sk, 8, 5))
+    signing_key = SigningKey(sk)
+    pk = bytes(signing_key.verify_key)
+    npub = bech32_encode('npub', convertbits(pk, 8, 5))
+    print(json.dumps({'nsec': nsec, 'npub': npub}))
+    PYEOF
+  register: worker_keypair
+  when: not worker_nsec_exists
+
+- name: Store worker keypair in .env
+  shell: |
+    echo "VOTING_WORKER_NSEC=$(echo '{{ worker_keypair.stdout }}' | python3 -c 'import sys,json; print(json.load(sys.stdin)["nsec"])')" >> /opt/tollgate/.env
+    echo "VOTING_WORKER_NPUB=$(echo '{{ worker_keypair.stdout }}' | python3 -c 'import sys,json; print(json.load(sys.stdin)["npub"])')" >> /opt/tollgate/.env
+  when: not worker_nsec_exists
+
+- name: Read worker nsec from .env
+  shell: "grep VOTING_WORKER_NSEC /opt/tollgate/.env | cut -d= -f2"
+  register: worker_nsec
+  changed_when: false
+
+- name: Deploy systemd service
+  template:
+    src: tollgate-voting-worker.service.j2
+    dest: /etc/systemd/system/tollgate-voting-worker.service
+    mode: "0644"
+  notify: restart voting worker
+
+- name: Enable and start worker service
+  systemd:
+    name: tollgate-voting-worker
+    state: started
+    enabled: yes
+    daemon_reload: yes

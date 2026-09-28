@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tollgate Mint Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Tollgate Mint Dashboard</h1>
+            <div id="auth-status"></div>
+        </header>
+
+        <div id="login-section" class="section">
+            <h2>Login</h2>
+            <p>Enter your nsec (private key). It never leaves your browser.</p>
+            <input type="password" id="nsec-input" placeholder="nsec1...">
+            <button id="login-btn">Login</button>
+        </div>
+
+        <div id="dashboard-section" class="section" style="display:none">
+            <div id="mint-info" class="card">
+                <h2>Your Mint</h2>
+                <div id="mint-details"></div>
+            </div>
+
+            <div id="quotes-section" class="card">
+                <h2>Pending Quotes</h2>
+                <button id="refresh-btn">Refresh</button>
+                <table id="quotes-table">
+                    <thead>
+                        <tr>
+                            <th>Quote ID</th>
+                            <th>Amount</th>
+                            <th>State</th>
+                            <th>Created</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quotes-body"></tbody>
+                </table>
+            </div>
+
+            <div id="audit-section" class="card">
+                <h2>Approval Log</h2>
+                <table id="audit-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Quote</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

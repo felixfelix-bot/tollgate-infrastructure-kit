@@ -1,0 +1,22 @@
+---
+- name: Converge — apply backup role with Hermes tenant volumes
+  hosts: all
+  become: true
+  vars:
+    docker_install_compose: false
+    tollgate_status_nsec_hex: "test-nsec-hex-placeholder"
+    tollgate_status_npub: "npub1test"
+  pre_tasks:
+    - name: Install base packages (no Docker — tested separately)
+      ansible.builtin.apt:
+        name:
+          - python3-pip
+          - curl
+          - rsync
+        state: present
+        update_cache: true
+    - name: Install community.docker collection
+      ansible.builtin.command: ansible-galaxy collection install community.docker
+      changed_when: false
+  roles:
+    - role: backup

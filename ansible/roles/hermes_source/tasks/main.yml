@@ -1,0 +1,73 @@
+---
+- name: Ensure hermes parent dir exists
+  ansible.builtin.file:
+    path: "{{ hermes_source_dest | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Clone hermes-agent fork if not present
+  ansible.builtin.git:
+    repo: "{{ hermes_source_repo }}"
+    dest: "{{ hermes_source_dest }}"
+    version: "{{ hermes_source_branch }}"
+    force: false
+  register: hermes_clone_result
+
+- name: Fetch latest from fork branch
+  ansible.builtin.git:
+    repo: "{{ hermes_source_repo }}"
+    dest: "{{ hermes_source_dest }}"
+    version: "{{ hermes_source_branch }}"
+    update: true
+    force: false
+
+- name: Checkout pinned commit
+  ansible.builtin.command:
+    argv:
+      - git
+      - checkout
+      - "{{ hermes_source_version }}"
+    chdir: "{{ hermes_source_dest }}"
+  register: hermes_checkout_result
+  changed_when: "'HEAD is now at' in hermes_checkout_result.stdout"
+
+- name: Verify pinned commit is checked out
+  ansible.builtin.command:
+    argv:
+      - git
+      - rev-parse
+      - HEAD
+    chdir: "{{ hermes_source_dest }}"
+  register: hermes_sha_check
+  changed_when: false
+
+- name: Assert commit SHA matches
+  ansible.builtin.assert:
+    that:
+      - "hermes_sha_check.stdout == hermes_source_version"
+    fail_msg: >
+      Expected {{ hermes_source_version }} but got {{ hermes_sha_check.stdout }}.
+      The fork may have been force-pushed.
+
+- name: Ensure venv exists
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - venv
+      - "{{ hermes_source_dest }}/.venv"
+    chdir: "{{ hermes_source_dest }}"
+  args:
+    creates: "{{ hermes_source_dest }}/.venv/bin/activate"
+
+- name: Install hermes-agent in editable mode
+  ansible.builtin.command:
+    argv:
+      - "{{ hermes_source_dest }}/.venv/bin/pip"
+      - install
+      - -e
+      - "."
+    chdir: "{{ hermes_source_dest }}"
+  environment:
+    PIP_NO_CACHE_DIR: "1"
+  when: hermes_clone_result.changed or hermes_checkout_result.changed

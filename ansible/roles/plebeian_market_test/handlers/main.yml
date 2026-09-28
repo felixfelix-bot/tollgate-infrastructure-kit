@@ -1,0 +1,5 @@
+---
+- name: reload caddy
+  shell: docker exec tollgate-caddy caddy reload --config /etc/caddy/Caddyfile 2>&1
+  register: caddy_reload
+  changed_when: "'success' in caddy_reload.stdout.lower() or caddy_reload.rc == 0"

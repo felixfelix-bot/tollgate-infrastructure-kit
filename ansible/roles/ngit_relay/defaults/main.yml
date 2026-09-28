@@ -1,0 +1,9 @@
+ngit_relay_port: 7778
+ngit_relay_max_event_size: 10485760
+ngit_relay_max_ws_frame_size: 10485760
+ngit_relay_max_connections: 5000
+ngit_relay_max_subs_per_conn: 100
+ngit_relay_db_size_gb: 20
+ngit_relay_domain: "ngit.{{ base_domain }}"
+ngit_relay_image: "ghcr.io/hoytech/strfry:latest"
+ngit_relay_container_name: tollgate-ngit

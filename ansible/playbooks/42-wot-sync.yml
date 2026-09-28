@@ -1,0 +1,41 @@
+---
+# 42-wot-sync.yml — Deploy kind-3 WoT sync to Blossom + grasp-mirror.
+#
+# The strfry-agg-reconcile timer (on vps2) writes allowed.npubs from the root
+# npub's kind-3 every 15 min. This role deploys two consumers:
+#
+#   * blossom-wot-enforce  (tag: blossom_wot)  — purges Blossom blobs whose
+#     owners are all outside the allowlist. Targets the Blossom host.
+#   * grasp-mirror-sync    (tag: grasp_wot)    — rewrites the daemon's
+#     MIRROR_NPUBS env from the allowlist / kind-3 and restarts it. Targets
+#     the grasp-mirror host.
+#
+# Default target is vps2 (live Blossom + strfry-agg allowlist host as of
+# Sep 2026). Override with -e blossom_target=<host> / grasp_target=<host>.
+#
+# Deploy selectively:
+#   ansible-playbook 42-wot-sync.yml -e blossom_target=vps2 --tags blossom_wot
+#   ansible-playbook 42-wot-sync.yml -e grasp_target=<grasp-host> --tags grasp_wot
+#   ansible-playbook 42-wot-sync.yml                       # both
+#
+# NOTE: deploying blossom_wot ENABLES the purge timer. On a host with an
+# un-backup'd Blossom DB and non-WoT backlog, run the script --dry-run FIRST
+# and confirm the purge is intended before enabling the timer.
+
+- name: Deploy Blossom WoT enforcement
+  hosts: "{{ blossom_target | default('vps2') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - role: wot_sync
+      tags: [blossom_wot]
+
+- name: Deploy grasp-mirror dynamic WoT sync
+  hosts: "{{ grasp_target | default('vps2') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - role: wot_sync
+      tags: [grasp_wot]

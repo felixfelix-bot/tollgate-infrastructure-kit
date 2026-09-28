@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tollgate-strfry-agg"
+version = "0.1.0"
+description = "Strfry aggregation relay: gated write policy + follow-list reconciliation + negentropy scraping"
+requires-python = ">=3.10"
+dependencies = [
+    "bech32>=1.2.0",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+strfry-agg-reconcile = "strfry_agg.cli:reconcile_main"
+strfry-agg-scrape = "strfry_agg.cli:scrape_main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

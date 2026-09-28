@@ -1,0 +1,9 @@
+[Unit]
+Description=Tollgate Infrastructure Backup
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tollgate-backup.sh
+StandardOutput=journal
+StandardError=journal

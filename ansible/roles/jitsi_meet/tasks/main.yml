@@ -1,0 +1,44 @@
+---
+- name: Create jitsi-meet directory
+  file:
+    path: "{{ jitsi_meet_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy jitsi-meet docker-compose
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ jitsi_meet_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Pull jitsi-meet images
+  community.docker.docker_compose_v2:
+    project_src: "{{ jitsi_meet_dir }}"
+    state: present
+    pull: always
+  register: jitsi_pull
+
+- name: Ensure jitsi-meet is running
+  community.docker.docker_compose_v2:
+    project_src: "{{ jitsi_meet_dir }}"
+    state: present
+
+- name: Wait for jitsi-meet web container
+  wait_for:
+    port: "{{ jitsi_meet_http_port }}"
+    host: localhost
+    delay: 10
+    timeout: 120
+
+- name: Verify jitsi-meet is responding
+  uri:
+    url: "http://localhost:{{ jitsi_meet_http_port }}"
+    return_content: yes
+  register: jitsi_check
+  until: jitsi_check.status == 200
+  retries: 10
+  delay: 5
+
+- name: Display jitsi-meet info
+  debug:
+    msg: "Jitsi Meet deployed at https://{{ jitsi_meet_subdomain }}.{{ base_domain }}"

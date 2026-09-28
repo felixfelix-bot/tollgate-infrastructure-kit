@@ -1,0 +1,24 @@
+test-market.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    reverse_proxy localhost:{{ plebeian_market_test_port }}
+}
+
+test-relay.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    @websocket header Connection *Upgrade*
+    @websocket header Upgrade websocket
+
+    handle @websocket {
+        reverse_proxy localhost:{{ plebeian_market_test_relay_port }}
+    }
+
+    handle {
+        reverse_proxy localhost:{{ plebeian_market_test_relay_port }}
+    }
+}

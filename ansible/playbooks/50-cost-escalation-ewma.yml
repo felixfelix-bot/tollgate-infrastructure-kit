@@ -1,0 +1,10 @@
+---
+- name: Deploy cost-escalation layer (EWMA outlier + aux-model audit)
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: yes
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ lookup('pipe', 'id -u') }}"
+  roles:
+    - hermes_cost_escalation

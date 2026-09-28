@@ -1,0 +1,55 @@
+---
+- name: Create ngit relay directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ tollgate_base_dir }}/ngit-relay"
+    - "{{ tollgate_base_dir }}/ngit-relay/db"
+
+- name: Deploy strfry config
+  template:
+    src: strfry.conf.j2
+    dest: "{{ tollgate_base_dir }}/ngit-relay/strfry.conf"
+    mode: '0644'
+
+- name: Deploy docker-compose
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ tollgate_base_dir }}/ngit-relay/docker-compose.yml"
+    mode: '0644'
+
+- name: Start ngit relay container
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/ngit-relay"
+    state: present
+  register: ngit_deploy
+
+- name: Wait for ngit relay to start
+  uri:
+    url: "http://localhost:{{ ngit_relay_port }}"
+    return_content: yes
+  register: ngit_health
+  until: ngit_health.status == 200
+  retries: 30
+  delay: 3
+
+- name: Verify ngit relay is accessible via Caddy
+  uri:
+    url: "https://{{ ngit_relay_domain }}"
+    return_content: yes
+    validate_certs: no
+  register: ngit_caddy_health
+  until: ngit_caddy_health.status == 200
+  retries: 15
+  delay: 3
+
+- name: Display ngit relay deployment info
+  debug:
+    msg: |
+      ngit relay deployed successfully!
+      URL: https://{{ ngit_relay_domain }}
+      Port: {{ ngit_relay_port }}
+      Max event size: {{ ngit_relay_max_event_size }} bytes
+      Container: {{ ngit_relay_container_name }}

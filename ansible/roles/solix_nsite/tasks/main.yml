@@ -1,0 +1,237 @@
+---
+- name: Check if solix site is already built
+  stat:
+    path: "{{ solix_nsite_src_dir }}/site/dist/index.html"
+  register: solix_built
+  delegate_to: localhost
+  run_once: yes
+  become: no
+
+- name: Check if solix source exists
+  stat:
+    path: "{{ solix_nsite_src_dir }}/.git"
+  register: solix_git
+  delegate_to: localhost
+  run_once: yes
+  become: no
+
+- name: Clone contextvm-anker-solix repo (local)
+  git:
+    repo: "{{ solix_nsite_repo }}"
+    dest: "{{ solix_nsite_src_dir }}"
+    depth: 1
+    force: yes
+    version: "{{ solix_nsite_branch }}"
+  delegate_to: localhost
+  run_once: yes
+  become: no
+  when: not solix_git.stat.exists
+
+- name: Update solix repo (pull latest)
+  git:
+    repo: "{{ solix_nsite_repo }}"
+    dest: "{{ solix_nsite_src_dir }}"
+    depth: 1
+    force: yes
+    version: "{{ solix_nsite_branch }}"
+  delegate_to: localhost
+  run_once: yes
+  become: no
+  when: solix_git.stat.exists and not solix_built.stat.exists
+
+- name: Install site dependencies
+  shell: npm install --ignore-scripts
+  args:
+    chdir: "{{ solix_nsite_src_dir }}/site"
+    creates: "{{ solix_nsite_src_dir }}/site/node_modules/.package-lock.json"
+  delegate_to: localhost
+  run_once: yes
+  become: no
+
+- name: Build static site
+  shell: npm run build
+  args:
+    chdir: "{{ solix_nsite_src_dir }}/site"
+    creates: "{{ solix_nsite_src_dir }}/site/dist/index.html"
+  delegate_to: localhost
+  run_once: yes
+  become: no
+
+- name: Ensure static directory exists on VPS
+  file:
+    path: "{{ solix_nsite_static_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Clean old deployment
+  shell: "rm -rf {{ solix_nsite_static_dir }}/*"
+
+- name: Copy built files to VPS
+  synchronize:
+    src: "{{ solix_nsite_src_dir }}/site/dist/"
+    dest: "{{ solix_nsite_static_dir }}/"
+    delete: yes
+    rsync_opts:
+      - "--chmod=D0755,F0644"
+
+- name: Deploy nsite config
+  template:
+    src: nsite.config.json.j2
+    dest: "{{ solix_nsite_src_dir }}/site/.nsite/config.json"
+    mode: '0644'
+  delegate_to: localhost
+  run_once: yes
+  become: no
+
+- name: Check for existing solix keypair
+  slurp:
+    src: /opt/tollgate/.env
+  register: env_file
+  failed_when: false
+
+- name: Check if SOLIX_NSEC already in .env
+  set_fact:
+    solix_nsec_exists: "{{ env_file.content is defined and 'SOLIX_NSEC' in (env_file.content | b64decode) }}"
+
+- name: Generate nsite keypair
+  shell: |
+    set -o pipefail
+    python3 << 'PYEOF'
+    import secrets, hashlib, json
+    from bech32 import bech32_encode, convertbits
+    sk = secrets.token_bytes(32)
+    nsec = bech32_encode('nsec', convertbits(sk, 8, 5))
+    pk = hashlib.sha256(sk).digest()[-32:]
+    npub = bech32_encode('npub', convertbits(pk, 8, 5))
+    print(json.dumps({'nsec': nsec, 'npub': npub}))
+    PYEOF
+  register: solix_keypair
+  when: not solix_nsec_exists
+  delegate_to: localhost
+  run_once: yes
+  become: no
+
+- name: Store solix keypair in .env
+  shell: |
+    echo "SOLIX_NSEC=$(echo '{{ solix_keypair.stdout }}' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"nsec\"])')" >> /opt/tollgate/.env
+    echo "SOLIX_NPUB=$(echo '{{ solix_keypair.stdout }}' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"npub\"])')" >> /opt/tollgate/.env
+  when: not solix_nsec_exists
+
+- name: Read solix keypair from .env
+  shell: "grep SOLIX_NPUB /opt/tollgate/.env | cut -d= -f2"
+  register: solix_npub
+  changed_when: false
+
+- name: Check nsyte is available
+  command: nsyte --version
+  register: nsyte_check
+  changed_when: false
+  failed_when: false
+
+- name: Deploy to nsite
+  shell: |
+    bash -c 'set -a && . /opt/tollgate/.env && set +a && cd {{ solix_nsite_src_dir }}/site && nsyte deploy dist --sec "$SOLIX_NSEC" --publish-server-list --publish-relay-list --publish-profile --skip-secrets-scan --non-interactive --force --verbose'
+  delegate_to: localhost
+  run_once: yes
+  become: no
+  when: nsyte_check.rc == 0
+  ignore_errors: yes
+  register: solix_nsite_deploy
+
+- name: Display deployment info
+  debug:
+    msg: |
+      Solix nsite deployed!
+      Static: https://{{ solix_nsite_domain }}
+      {% if solix_nsite_deploy is succeeded %}
+      Nsite: accessible via nsite gateways for npub {{ solix_npub.stdout }}
+      {% else %}
+      Nsite: skipped or failed (nsyte rc={{ nsyte_check.rc }})
+      {% endif %}
+      Repo: {{ solix_nsite_repo }}
+
+# ---------------------------------------------------------------------------
+# Telemetry Logger (nostr subscriber service)
+# ---------------------------------------------------------------------------
+
+- name: Create solix-logger user
+  user:
+    name: "{{ solix_logger_user }}"
+    system: yes
+    shell: /usr/sbin/nologin
+    create_home: no
+
+- name: Ensure logger directory exists
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ solix_logger_user }}"
+    group: "{{ solix_logger_user }}"
+    mode: '0755'
+  loop:
+    - "{{ solix_logger_dir }}"
+    - "{{ solix_logger_dir }}/scripts"
+    - "{{ solix_logger_csv_dir }}"
+
+- name: Create Python virtual environment for logger
+  command: python3 -m venv {{ solix_logger_dir }}/venv
+  args:
+    creates: "{{ solix_logger_dir }}/venv/bin/python3"
+
+- name: Install Python dependencies in venv
+  pip:
+    name:
+      - websockets>=12.0
+    virtualenv: "{{ solix_logger_dir }}/venv"
+
+- name: Copy logger script
+  copy:
+    src: "{{ solix_nsite_src_dir }}/scripts/solix_logger.py"
+    dest: "{{ solix_logger_dir }}/scripts/solix_logger.py"
+    owner: "{{ solix_logger_user }}"
+    group: "{{ solix_logger_user }}"
+    mode: '0755'
+
+- name: Set venv ownership
+  file:
+    path: "{{ solix_logger_dir }}"
+    owner: "{{ solix_logger_user }}"
+    group: "{{ solix_logger_user }}"
+    recurse: yes
+
+- name: Read daemon npub from .env (for logger subscription)
+  shell: "grep SOLIX_DAEMON_NPUB /opt/tollgate/.env 2>/dev/null | cut -d= -f2 || echo ''"
+  register: solix_daemon_npub_val
+  changed_when: false
+
+- name: Set daemon npub fact
+  set_fact:
+    _solix_daemon_npub: "{{ solix_daemon_npub_val.stdout | default(solix_daemon_npub, true) }}"
+
+- name: Deploy nostr logger systemd service
+  template:
+    src: solix-logger-nostr.service.j2
+    dest: "/etc/systemd/system/solix-logger-nostr.service"
+    mode: '0644'
+  when: _solix_daemon_npub | length > 0
+
+- name: Enable and start nostr logger service
+  systemd:
+    name: solix-logger-nostr
+    enabled: yes
+    state: restarted
+    daemon_reload: yes
+  when: _solix_daemon_npub | length > 0
+  register: logger_service
+
+- name: Display logger info
+  debug:
+    msg: |
+      {% if _solix_daemon_npub | length > 0 %}
+      Solix telemetry logger (nostr) deployed and running!
+      Subscribing to: {{ _solix_daemon_npub }}
+      CSV output: {{ solix_logger_csv_path }}
+      Journal: journalctl -u solix-logger-nostr -f
+      {% else %}
+      Solix logger: skipped (no SOLIX_DAEMON_NPUB in /opt/tollgate/.env)
+      {% endif %}

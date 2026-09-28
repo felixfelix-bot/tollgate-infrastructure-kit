@@ -1,0 +1,125 @@
+---
+- name: Install build dependencies for ngit-grasp
+  apt:
+    name:
+      - build-essential
+      - pkg-config
+      - libssl-dev
+      - git
+    state: present
+
+- name: Install Rust
+  shell: |
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  args:
+    creates: /root/.cargo/bin/rustup
+
+- name: Check current grasp source version
+  command: git log --oneline -1
+  args:
+    chdir: "{{ tollgate_base_dir }}/src/ngit-grasp"
+  register: grasp_current_version
+  changed_when: false
+  failed_when: false
+
+- name: Remove old source for upgrade
+  file:
+    path: "{{ tollgate_base_dir }}/src/ngit-grasp"
+    state: absent
+  when: grasp_version is defined and grasp_version | length > 0
+
+- name: Ensure source directory exists
+  file:
+    path: "{{ tollgate_base_dir }}/src/ngit-grasp"
+    state: directory
+    mode: '0755'
+
+- name: Clone ngit-grasp (ngit URL via local GRASP)
+  shell: |
+    git clone {{ grasp_repo_url | replace('nostr://', 'http://localhost:' + grasp_port|string + '/') | regex_replace('^[^/]+//', 'http://localhost:' + grasp_port|string + '/') }} {{ tollgate_base_dir }}/src/ngit-grasp
+  when:
+    - grasp_repo_url is regex('^nostr://')
+    - grasp_version is not defined or grasp_version | length == 0
+
+- name: Check if ngit-grasp staging directory exists
+  stat:
+    path: /tmp/ngit-grasp-upgrade
+  register: grasp_staging
+
+- name: Copy ngit-grasp source from staging
+  shell: |
+    rm -rf {{ tollgate_base_dir }}/src/ngit-grasp/*
+    cp -r /tmp/ngit-grasp-upgrade/.git {{ tollgate_base_dir }}/src/ngit-grasp/
+    cp -r /tmp/ngit-grasp-upgrade/* {{ tollgate_base_dir }}/src/ngit-grasp/
+  when:
+    - grasp_version is defined
+    - grasp_version | length > 0
+    - grasp_staging.stat.exists
+
+- name: Remove broken ngit-grasp directory
+  file:
+    path: "{{ tollgate_base_dir }}/src/ngit-grasp"
+    state: absent
+  when:
+    - grasp_repo_url is not regex('^https?://')
+    - grasp_version is defined
+    - not grasp_staging.stat.exists
+
+- name: Clone ngit-grasp from GitHub
+  git:
+    repo: "https://github.com/danconwaydev/ngit-grasp.git"
+    dest: "{{ tollgate_base_dir }}/src/ngit-grasp"
+    depth: 1
+    force: yes
+  when:
+    - grasp_repo_url is not regex('^https?://')
+    - grasp_version is defined
+
+- name: Clone ngit-grasp (HTTPS URL)
+  git:
+    repo: "{{ grasp_repo_url }}"
+    dest: "{{ tollgate_base_dir }}/src/ngit-grasp"
+    depth: 1
+    force: yes
+  when: grasp_repo_url is regex('^https?://')
+
+- name: Checkout specific version
+  shell: |
+    cd {{ tollgate_base_dir }}/src/ngit-grasp
+    git checkout {{ grasp_version }}
+  when:
+    - grasp_version is defined
+    - grasp_version | length > 0
+    - grasp_staging.stat.exists | default(false)
+
+- name: Build ngit-grasp (release)
+  shell: |
+    cd {{ tollgate_base_dir }}/src/ngit-grasp
+    /root/.cargo/bin/cargo build --release
+  environment:
+    PATH: "/root/.cargo/bin:{{ ansible_env.PATH }}"
+  register: grasp_build
+  changed_when: "'Compiling' in grasp_build.stderr"
+
+- name: Install ngit-grasp binary
+  copy:
+    src: "{{ tollgate_base_dir }}/src/ngit-grasp/target/release/ngit-grasp"
+    dest: /usr/local/bin/ngit-grasp
+    mode: '0755'
+    remote_src: yes
+  notify: restart ngit-grasp
+
+- name: Deploy ngit-grasp systemd unit
+  template:
+    src: ngit-grasp.service.j2
+    dest: /etc/systemd/system/ngit-grasp.service
+    mode: '0644'
+  notify: restart ngit-grasp
+
+- name: Enable and start ngit-grasp
+  systemd:
+    name: ngit-grasp
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  when: machine_active | default(true)

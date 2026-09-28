@@ -1,0 +1,11 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# 3:00 AM daily — clean apt cache, docker, journal logs
+0 3 * * * root apt clean 2>/dev/null; docker system prune -f 2>/dev/null; journalctl --vacuum-size=50M 2>/dev/null
+
+# 3:15 AM — remove grasp snapshots older than 24 hours
+15 3 * * * root find /opt/tollgate/snapshots -mindepth 1 -mmin +1440 -exec rm -rf {} \; 2>/dev/null
+
+# 3:30 AM — rotate docker container logs (keep last 10MB per container)
+30 3 * * * root for c in $(docker ps -q 2>/dev/null); do truncate -s 10M $(docker inspect --format "{{.LogPath}}" $c 2>/dev/null) 2>/dev/null; done

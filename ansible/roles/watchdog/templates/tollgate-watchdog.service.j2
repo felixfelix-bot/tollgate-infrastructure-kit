@@ -1,0 +1,14 @@
+[Unit]
+Description=Tollgate VPS Watchdog - Health Monitor & Auto-Redeploy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 {{ watchdog_script_dir | realpath }}/watchdog.py
+WorkingDirectory={{ watchdog_script_dir | realpath | dirname }}
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,32 @@
+---
+# Default variables for ssd_vps_probe
+
+# Installation directory
+ssd_vps_probe_install_dir: /opt/tollgate/scripts
+
+# State directory for probe logs
+ssd_vps_probe_state_dir: /var/lib/ssd-vps-probe
+
+# Log directory
+ssd_vps_probe_log_dir: /var/log
+
+# Target IPs to probe
+ssd_vps_probe_targets:
+  - 64.188.7.38
+  - 66.92.204.38
+
+# V2-11 task ID (for kanban integration)
+ssd_vps_probe_v2_11_task_id: t_v2_11_ssd_ready
+
+# Vantage ID (defaults to hostname)
+ssd_vps_probe_vantage_id: "{{ ansible_hostname }}"
+
+# Kanban database path
+ssd_vps_probe_kanban_db: "{{ ansible_env.HOME | default('/home/' + ansible_user_id) }}/.hermes/kanban/boards/hermes-for-friends/kanban.db"
+
+# Probe timeouts
+ssd_vps_probe_icmp_timeout: 3
+ssd_vps_probe_tcp_timeout: 3
+
+# Success threshold (number of vantages)
+ssd_vps_probe_success_threshold: 2

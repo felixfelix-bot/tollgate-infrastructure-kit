@@ -1,0 +1,8 @@
+---
+- name: Deploy VPS watchdog (local health monitor + auto-redeploy)
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  become: no
+  roles:
+    - watchdog

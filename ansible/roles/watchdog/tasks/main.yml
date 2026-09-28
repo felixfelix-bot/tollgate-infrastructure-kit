@@ -1,0 +1,48 @@
+---
+- name: Create watchdog state and log directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ ansible_env.HOME }}/.local/state/tollgate-watchdog"
+    - "{{ ansible_env.HOME }}/.local/log"
+
+- name: Deploy watchdog config
+  template:
+    src: watchdog.json.j2
+    dest: "{{ watchdog_script_dir | realpath }}/watchdog.json"
+    mode: '0644'
+  register: watchdog_config
+
+- name: Deploy systemd user service
+  template:
+    src: tollgate-watchdog.service.j2
+    dest: "{{ ansible_env.HOME }}/.config/systemd/user/{{ watchdog_service_name }}.service"
+    mode: '0644'
+  register: watchdog_service
+
+- name: Reload systemd user daemon
+  systemd:
+    daemon_reload: yes
+    scope: user
+  when: watchdog_service.changed
+
+- name: Enable and start watchdog service
+  systemd:
+    name: "{{ watchdog_service_name }}.service"
+    enabled: yes
+    state: "{{ 'restarted' if (watchdog_config.changed or watchdog_service.changed) else 'started' }}"
+    scope: user
+
+- name: Display watchdog info
+  debug:
+    msg: |
+      Watchdog service deployed!
+      Config: {{ watchdog_script_dir | realpath }}/watchdog.json
+      Service: {{ watchdog_service_name }}.service (systemd user)
+      Check interval: {{ watchdog_check_interval }}s
+      Cooldown: {{ watchdog_cooldown }}s
+      Monitor: {{ watchdog_services_count | default(16) }} services
+      Logs: {{ ansible_env.HOME }}/.local/log/watchdog.log
+      Manage: systemctl --user start/stop/restart {{ watchdog_service_name }}

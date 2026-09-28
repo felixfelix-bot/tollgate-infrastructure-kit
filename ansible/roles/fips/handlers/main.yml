@@ -1,0 +1,23 @@
+---
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart fips
+  systemd:
+    name: fips
+    state: restarted
+
+- name: reload nftables
+  command: nft -f /etc/fips/fips.nft
+  when: ansible_facts['distribution'] == 'Debian'
+
+- name: restart fips-dns
+  systemd:
+    name: fips-dns
+    state: restarted
+
+- name: restart systemd-resolved
+  systemd:
+    name: systemd-resolved
+    state: restarted

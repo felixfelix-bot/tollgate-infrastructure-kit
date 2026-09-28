@@ -1,0 +1,18 @@
+db = "{{ nip29_db_dir }}"
+
+relay {
+    bind = "{{ nip29_bind }}"
+    port = {{ nip29_port }}
+    nofiles = 524288
+    realIpHeader = ""
+
+    writePolicy {
+        plugin = "{{ nip29_base_dir }}/strfry29-bin"
+        timeoutSeconds = 10
+    }
+
+    negentropy {
+        enabled = true
+        maxSyncEvents = 1000000
+    }
+}

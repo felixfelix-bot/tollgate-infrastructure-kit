@@ -1,0 +1,181 @@
+---
+- name: Set mint identity
+  set_fact:
+    mint_subdomain: "{{ mint_name | default((npub | default(''))[5:17], true) }}"
+
+- name: Validate mint identity
+  assert:
+    that:
+      - mint_subdomain | length > 0
+    fail_msg: "mint_name or npub is required"
+
+- name: Validate custom_port or assign one
+  block:
+    - name: Load existing registry
+      slurp:
+        src: "{{ tollgate_base_dir }}/mints/registry.json"
+      register: registry_file
+      failed_when: false
+
+    - name: Parse registry
+      set_fact:
+        existing_mints: "{{ (registry_file.content | b64decode | from_json).mints | default([]) }}"
+      when: registry_file.content is defined and registry_file.content | length > 0
+
+    - name: Set empty mints list
+      set_fact:
+        existing_mints: []
+      when: registry_file.content is not defined or registry_file.content | length == 0
+
+    - name: Set port assignments
+      set_fact:
+        mint_rest_port: "{{ custom_port | default(8085) }}"
+        mint_grpc_port: "{{ custom_grpc_port | default(50051) }}"
+
+- name: Install mnemonic library
+  pip:
+    name: mnemonic
+    state: present
+    extra_args: "--break-system-packages"
+
+- name: Generate mint mnemonic
+  shell: "python3 -c \"from mnemonic import Mnemonic; print(Mnemonic('english').generate(strength=128))\""
+  register: mnemonic_output
+  changed_when: false
+
+- name: Set mint facts
+  set_fact:
+    mint_mnemonic: "{{ mnemonic_output.stdout }}"
+    mint_url: "https://{{ mint_subdomain }}.{{ mint_domain }}"
+    mint_container_name: "mint-{{ mint_subdomain }}"
+    mint_supported_units: "{{ mint_units | default('sat,usd,eur,B,KB,MB,GB,sec,min,hr,day,wk,mo') }}"
+
+- name: Convert npub to hex pubkey (if provided)
+  shell: |
+    python3 -c "
+    import subprocess, sys
+    try:
+        from bech32 import bech32_decode, convertbits
+    except ImportError:
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'bech32', '-q', '--break-system-packages'])
+        from bech32 import bech32_decode, convertbits
+    hrp, data = bech32_decode('{{ npub }}')
+    decoded = convertbits(data, 5, 8, False)
+    print(bytes(decoded).hex())
+    "
+  register: hex_pubkey_output
+  changed_when: false
+  when: npub is defined and npub | length > 0
+
+- name: Set hex pubkey
+  set_fact:
+    mint_hex_pubkey: "{{ hex_pubkey_output.stdout | default('unknown', true) }}"
+
+- name: Create mint directory
+  file:
+    path: "{{ tollgate_base_dir }}/mints/{{ mint_subdomain }}/data"
+    state: directory
+    mode: '0755'
+
+- name: Check if mint already has a key
+  stat:
+    path: "{{ tollgate_base_dir }}/mints/{{ mint_subdomain }}/mint_key"
+  register: existing_key
+
+- name: Save mint mnemonic
+  copy:
+    content: "{{ mint_mnemonic }}"
+    dest: "{{ tollgate_base_dir }}/mints/{{ mint_subdomain }}/mint_key"
+    mode: '0600'
+  when: not existing_key.stat.exists
+
+- name: Reuse existing key if available
+  slurp:
+    src: "{{ tollgate_base_dir }}/mints/{{ mint_subdomain }}/mint_key"
+  register: saved_key
+  when: existing_key.stat.exists
+
+- name: Set final mnemonic
+  set_fact:
+    mint_mnemonic: "{{ saved_key.content | default(mint_mnemonic) | b64decode }}"
+  when: existing_key.stat.exists
+
+- name: Deploy mint docker-compose
+  template:
+    src: docker-compose.mint.yml.j2
+    dest: "{{ tollgate_base_dir }}/mints/{{ mint_subdomain }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Start mint container
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/mints/{{ mint_subdomain }}"
+    state: present
+    build: always
+  register: mint_deploy
+  when: machine_active | default(true)
+
+- name: Wait for mint to start
+  uri:
+    url: "http://localhost:{{ mint_rest_port }}/v1/info"
+    return_content: yes
+  register: mint_health
+  until: mint_health.status == 200
+  retries: 30
+  delay: 2
+  when: machine_active | default(true)
+
+- name: Verify mint is accessible via Caddy
+  uri:
+    url: "https://{{ mint_subdomain }}.{{ mint_domain }}/v1/info"
+    return_content: yes
+    validate_certs: no
+  register: mint_caddy_health
+  until: mint_caddy_health.status == 200
+  retries: 15
+  delay: 2
+  when: machine_active | default(true)
+
+- name: Reload Caddy to pick up new routes
+  shell: docker exec tollgate-caddy caddy reload --config /etc/caddy/Caddyfile 2>&1
+  register: caddy_reload
+  when: machine_active | default(true)
+
+- name: Update mint registry
+  shell: |
+    python3 -c "
+    import json, os
+    reg_path = '{{ tollgate_base_dir }}/mints/registry.json'
+    if os.path.exists(reg_path):
+        with open(reg_path) as f:
+            reg = json.load(f)
+    else:
+        reg = {'mints': []}
+    mints = [m for m in reg['mints'] if m['subdomain'] != '{{ mint_subdomain }}']
+    mints.append({
+        'npub': '{{ npub | default("unknown") }}',
+        'hex_pubkey': '{{ mint_hex_pubkey }}',
+        'subdomain': '{{ mint_subdomain }}',
+        'url': '{{ mint_url }}',
+        'rest_port': {{ mint_rest_port }},
+        'grpc_port': {{ mint_grpc_port }},
+        'container_name': '{{ mint_container_name }}',
+        'units': '{{ mint_supported_units }}',
+        'created_at': '{{ ansible_date_time.iso8601 }}',
+        'max_single_issuance': 10000,
+        'max_balance': 1000000
+    })
+    reg['mints'] = mints
+    with open(reg_path, 'w') as f:
+        json.dump(reg, f, indent=2)
+    "
+
+- name: Display mint info
+  debug:
+    msg: |
+      Mint deployed successfully!
+      URL: {{ mint_url }}
+      Subdomain: {{ mint_subdomain }}.{{ mint_domain }}
+      Units: {{ mint_supported_units }}
+      REST Port: {{ mint_rest_port }}
+      gRPC Port: {{ mint_grpc_port }}
+      Container: {{ mint_container_name }}

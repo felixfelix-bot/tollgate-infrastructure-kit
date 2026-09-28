@@ -1,0 +1,77 @@
+---
+- name: Check if relatr is enabled
+  block:
+    - name: Create relatr directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ relatr_data_dir }}"
+        - "{{ relatr_plugins_dir }}"
+
+    - name: Check for existing RELATR_SERVER_SECRET_KEY in .env
+      command: grep -c '^RELATR_SERVER_SECRET_KEY=' {{ tollgate_base_dir | default('/opt/tollgate') }}/../.env 2>/dev/null || true
+      register: relatr_key_check
+      changed_when: false
+      failed_when: false
+
+    - name: Generate random Relatr server secret key
+      shell: openssl rand -hex 32
+      register: relatr_generated_key
+      changed_when: false
+      when: relatr_key_check.stdout | default('0') | int == 0
+
+    - name: Store generated key in .env
+      lineinfile:
+        path: "{{ playbook_dir }}/../.env"
+        line: "RELATR_SERVER_SECRET_KEY={{ relatr_generated_key.stdout }}"
+        create: yes
+        mode: "0600"
+      when: relatr_key_check.stdout | default('0') | int == 0 and relatr_generated_key.stdout is defined
+
+    - name: Set relatr server secret key fact
+      set_fact:
+        relatr_server_secret: "{{ lookup('env', 'RELATR_SERVER_SECRET_KEY') | default(relatr_generated_key.stdout | default('changeme', true), true) }}"
+
+    - name: Deploy relatr docker-compose
+      template:
+        src: docker-compose.relatr.yml.j2
+        dest: "{{ tollgate_base_dir }}/relatr/docker-compose.yml"
+        mode: "0644"
+
+    - name: Start relatr containers
+      community.docker.docker_compose_v2:
+        project_src: "{{ tollgate_base_dir }}/relatr"
+        state: present
+      register: relatr_deploy
+
+    - name: Wait for relatr config UI
+      uri:
+        url: "http://localhost:{{ relatr_port }}"
+        return_content: yes
+      register: relatr_health
+      until: relatr_health.status == 200
+      retries: 30
+      delay: 3
+
+    - name: Verify relatr is accessible via Caddy
+      uri:
+        url: "https://{{ relatr_domain }}"
+        return_content: yes
+        validate_certs: no
+      register: relatr_caddy_health
+      until: relatr_caddy_health.status == 200
+      retries: 15
+      delay: 3
+
+    - name: Display relatr deployment info
+      debug:
+        msg: |
+          Relatr WoT service deployed successfully!
+          Config UI: https://{{ relatr_domain }}
+          Root of trust: npub1c03rad0r6q833vh57kyd3ndu2jry30nkr0wepqfpsm05vq7he25slryrnw
+          Hops: {{ relatr_number_of_hops }}
+          Trust threshold: {{ relatr_trust_threshold }}
+          Database: {{ relatr_data_dir }}/relatr.db
+  when: relatr_enabled | bool

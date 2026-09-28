@@ -1,0 +1,198 @@
+#!/bin/bash
+set -uo pipefail
+
+BACKUP_DIR="{{ backup_staging_dir }}"
+TIMESTAMP=$(date +%F_%H%M%S)
+RETENTION_DAYS={{ backup_retention_days }}
+ERRORS=0
+
+export RESTIC_REPOSITORY="{{ backup_restic_repo }}"
+export RESTIC_PASSWORD="<redacted>"
+export RESTIC_PACK_SIZE=32
+
+restic_ready() {
+    command -v restic >/dev/null 2>&1 || return 1
+    if ! restic snapshots >/dev/null 2>&1; then
+        restic init >/dev/null 2>&1 || return 1
+    fi
+    return 0
+}
+
+restic_add() {
+    local path="$1"; local tag="$2"
+    if restic_ready; then
+        if restic backup "$path" --tag "$tag" >/dev/null 2>&1; then
+            log "restic snapshot stored (tag=$tag): $path"
+            return 0
+        else
+            bail "restic backup failed (tag=$tag)"
+            return 1
+        fi
+    fi
+    return 1
+}
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+bail() {
+    log "ERROR: $1"
+    ERRORS=$((ERRORS + 1))
+}
+
+mkdir -p "$BACKUP_DIR"/{strfry,ngit-relay,grasp,mints,routstr,caddy}
+
+if [ -x /usr/local/bin/gen-backup-status.py ]; then
+    /usr/local/bin/gen-backup-status.py > /dev/null 2>&1 && log "Pre-backup status written" || bail "gen-backup-status.py pre-run failed"
+fi
+
+log "Starting tollgate backup..."
+
+# --- strfry export (restic dedup snapshot) ---
+if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^{{ backup_strfry_container }}$'; then
+    TMPFILE="$BACKUP_DIR/strfry/strfry_${TIMESTAMP}.jsonl"
+    log "Exporting strfry..."
+    if docker exec {{ backup_strfry_container }} /app/strfry export > "$TMPFILE"; then
+        log "strfry export done: $TMPFILE ($(du -h "$TMPFILE" | cut -f1))"
+        if restic_add "$TMPFILE" strfry; then
+            rm -f "$TMPFILE"
+        fi
+    else
+        rm -f "$TMPFILE"
+        bail "strfry export failed"
+    fi
+else
+    log "SKIP: strfry container not running"
+fi
+
+# --- ngit-relay export (restic dedup snapshot) ---
+if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^{{ backup_ngit_relay_container }}$'; then
+    TMPFILE="$BACKUP_DIR/ngit-relay/ngit_${TIMESTAMP}.jsonl"
+    log "Exporting ngit-relay..."
+    if docker exec {{ backup_ngit_relay_container }} /app/strfry export > "$TMPFILE"; then
+        log "ngit-relay export done: $TMPFILE ($(du -h "$TMPFILE" | cut -f1))"
+        if restic_add "$TMPFILE" ngit-relay; then
+            rm -f "$TMPFILE"
+        fi
+    else
+        rm -f "$TMPFILE"
+        bail "ngit-relay export failed"
+    fi
+else
+    log "SKIP: ngit-relay container not running"
+fi
+
+# --- GRASP git mirror (incremental via rsync) ---
+if [ -d "{{ backup_grasp_git_dir }}" ]; then
+    log "Mirroring GRASP git repos (incremental rsync)..."
+    GRASP_PREV="$BACKUP_DIR/grasp/git.prev"
+    GRASP_CUR="$BACKUP_DIR/grasp/git"
+    if [ -d "$GRASP_CUR" ]; then
+        if [ -d "$GRASP_PREV" ]; then
+            rm -rf "$GRASP_PREV"
+        fi
+        mv "$GRASP_CUR" "$GRASP_PREV"
+    fi
+    mkdir -p "$GRASP_CUR"
+    if [ -d "$GRASP_PREV" ]; then
+        rsync -a --delete --link-dest="$GRASP_PREV" "{{ backup_grasp_git_dir }}/" "$GRASP_CUR/"
+    else
+        rsync -a --delete "{{ backup_grasp_git_dir }}/" "$GRASP_CUR/"
+    fi
+    rm -rf "$GRASP_PREV"
+    log "GRASP git mirror done"
+else
+    log "SKIP: GRASP git dir not found"
+fi
+
+# --- Mint SQLite databases ---
+if [ -d "{{ backup_mints_dir }}" ]; then
+    log "Copying mint databases..."
+    rm -rf "$BACKUP_DIR/mints"/*
+    find "{{ backup_mints_dir }}" -name '*.db' -exec bash -c 'mkdir -p "$BACKUP_DIR/mints/$(dirname "$1" | sed "s|{{ backup_mints_dir }}/\?||")" && cp "$1" "$BACKUP_DIR/mints/$(dirname "$1" | sed "s|{{ backup_mints_dir }}/\?||")/"' _ {} \;
+    log "Mint databases copied"
+else
+    log "SKIP: mints dir not found"
+fi
+
+# --- Routstr data ---
+if [ -d "{{ backup_routstr_dir }}" ]; then
+    log "Copying Routstr data..."
+    rm -rf "$BACKUP_DIR/routstr"/*
+    cp -a "{{ backup_routstr_dir }}/." "$BACKUP_DIR/routstr/"
+    log "Routstr data copied"
+else
+    log "SKIP: Routstr dir not found"
+fi
+
+# --- Caddy certs ---
+if [ -d "{{ backup_caddy_dir }}" ]; then
+    log "Copying Caddy certs..."
+    rm -rf "$BACKUP_DIR/caddy"/*
+    cp -a "{{ backup_caddy_dir }}/." "$BACKUP_DIR/caddy/"
+    log "Caddy certs copied"
+else
+    log "SKIP: Caddy data dir not found"
+fi
+
+# --- Hermes tenant volume backups ---
+{% if backup_hermes_enabled %}
+HERMES_STAGING="$BACKUP_DIR/{{ backup_hermes_staging_subdir }}"
+mkdir -p "$HERMES_STAGING"
+{% for tenant in backup_hermes_tenants %}
+if docker volume inspect hermes-{{ tenant.name }}-data >/dev/null 2>&1; then
+    TMPFILE="$HERMES_STAGING/{{ tenant.name }}_${TIMESTAMP}.tar.gz"
+    log "Backing up Hermes volume: hermes-{{ tenant.name }}-data..."
+    if docker run --rm -v hermes-{{ tenant.name }}-data:/data:ro -v "$HERMES_STAGING":/backup alpine \
+        tar czf "/backup/{{ tenant.name }}_${TIMESTAMP}.tar.gz" -C /data . 2>/dev/null; then
+        log "Hermes volume backup done: {{ tenant.name }} ($(du -h "$TMPFILE" | cut -f1))"
+        if restic_add "$TMPFILE" hermes-{{ tenant.name }}; then
+            rm -f "$TMPFILE"
+        fi
+    else
+        rm -f "$TMPFILE"
+        bail "Hermes volume backup failed: {{ tenant.name }}"
+    fi
+else
+    log "SKIP: Hermes volume hermes-{{ tenant.name }}-data not found"
+fi
+{% endfor %}
+
+# Cleanup old Hermes volume archives
+find "$HERMES_STAGING" -name '*.tar.gz' -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+{% endif %}
+
+# --- rsync backups to VPS2 ---
+{% if backup_rsync_vps2_enabled and backup_rsync_vps2_host | length > 0 %}
+log "Rsyncing backups to VPS2 ({{ backup_rsync_vps2_host }})..."
+if rsync -az --delete -e "ssh -i {{ backup_rsync_vps2_key }} -o StrictHostKeyChecking=no" \
+    "$BACKUP_DIR/" "{{ backup_rsync_vps2_user }}@{{ backup_rsync_vps2_host }}:{{ backup_rsync_vps2_path }}/" 2>/dev/null; then
+    log "Rsync to VPS2 complete"
+else
+    bail "Rsync to VPS2 failed"
+fi
+{% endif %}
+
+# --- Cleanup old backups ---
+log "Cleaning up backups older than $RETENTION_DAYS days..."
+find "$BACKUP_DIR" -name '*.jsonl' -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+find "$BACKUP_DIR" -name '*.tmp' -type f -mtime +1 -delete 2>/dev/null || true
+find "$BACKUP_DIR" -name '*.tar.gz' -type f -mtime +$RETENTION_DAYS -delete 2>/dev/null || true
+
+# --- restic retention (dedup snapshots: keep last N, prune rest) ---
+if restic_ready; then
+    log "Applying restic retention (keep-last {{ backup_restic_keep_last }})..."
+    restic forget --keep-last {{ backup_restic_keep_last }} --prune >/dev/null 2>&1 || bail "restic forget/prune failed"
+fi
+
+# --- Final status update ---
+if [ -x /usr/local/bin/gen-backup-status.py ]; then
+    /usr/local/bin/gen-backup-status.py > /dev/null 2>&1 && log "Post-backup status written" || bail "gen-backup-status.py post-run failed"
+fi
+
+if [ "$ERRORS" -gt 0 ]; then
+    log "Backup complete with $ERRORS error(s)"
+else
+    log "Backup complete."
+fi

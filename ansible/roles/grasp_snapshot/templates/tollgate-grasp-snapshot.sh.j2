@@ -1,0 +1,17 @@
+#!/bin/bash
+set -eo pipefail
+
+SNAPSHOT_RELAY_DIR="/opt/tollgate/snapshots/grasp/relay"
+SNAPSHOT_GIT_DIR="/opt/tollgate/snapshots/grasp/git"
+LIVE_RELAY_DIR="/opt/tollgate/grasp/data/relay"
+LIVE_GIT_DIR="/opt/tollgate/grasp/data/git"
+
+if ! mdb_copy "$LIVE_RELAY_DIR" "$SNAPSHOT_RELAY_DIR" 2>/dev/null; then
+    logger -t grasp-snapshot "mdb_copy failed, relay snapshot may be stale"
+fi
+
+if [ -d "$LIVE_GIT_DIR" ]; then
+    rsync -a --delete "$LIVE_GIT_DIR/" "$SNAPSHOT_GIT_DIR/"
+fi
+
+logger -t grasp-snapshot "snapshot complete"

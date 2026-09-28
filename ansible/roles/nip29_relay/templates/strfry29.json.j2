@@ -1,0 +1,12 @@
+{
+  "domain": "{{ nip29_domain }}:{{ nip29_port }}",
+  "relay_secret_key": "{{ nip29_relay_hex_key.stdout }}",
+  "strfry_config_path": "{{ nip29_base_dir }}/strfry.conf",
+  "strfry_executable_path": "{{ nip29_base_dir }}/strfry",
+  "permissions": {
+    "admin": ["put-user", "remove-user", "delete-event", "edit-metadata", "create-group", "delete-group", "create-invite", "update-pin-list"],
+    "moderator": ["put-user", "delete-event"],
+    "member": []
+  },
+  "group_creator_default_role": "admin"
+}

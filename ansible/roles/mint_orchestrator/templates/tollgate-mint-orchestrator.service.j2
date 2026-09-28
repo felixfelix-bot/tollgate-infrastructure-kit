@@ -1,0 +1,18 @@
+[Unit]
+Description=Tollgate Mint Orchestrator
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={{ tollgate_base_dir }}/mint-orchestrator
+ExecStart={{ tollgate_base_dir }}/mint-orchestrator-venv/bin/tollgate-mint-orchestrator
+Environment=ORCHESTRATOR_RELAY_URL=ws://localhost:7777
+Environment=ORCHESTRATOR_REGISTRY_PATH={{ tollgate_base_dir }}/mints/registry.json
+Environment=ORCHESTRATOR_AUDIT_LOG_PATH=/var/log/tollgate/mint-approvals.jsonl
+Environment=ORCHESTRATOR_API_HOST=0.0.0.0
+Environment=ORCHESTRATOR_API_PORT=8090
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

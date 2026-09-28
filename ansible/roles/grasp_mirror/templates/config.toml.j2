@@ -1,0 +1,22 @@
+[discovery]
+index_relays = [{% for r in grasp_mirror_index_relays %}"{{ r }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+poll_interval_secs = {{ grasp_mirror_poll_interval }}
+
+[servers]
+known = [{% for s in grasp_mirror_servers %}
+    "{{ s }}"{% if not loop.last %},{% endif %}{% endfor %}
+]
+
+[storage]
+mirror_dir = "{{ grasp_mirror_data_dir }}/repos"
+database = "{{ grasp_mirror_data_dir }}/mirror.db"
+health_port = {{ grasp_mirror_health_port }}
+{% if grasp_mirror_signing_key_file | length > 0 %}
+
+[signing]
+key_file = "{{ grasp_mirror_signing_key_file }}"
+{% endif %}
+
+[nip46]
+relays = [{% for r in grasp_mirror_nip46_relays %}"{{ r }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+signing_timeout_secs = {{ grasp_mirror_nip46_signing_timeout }}

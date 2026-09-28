@@ -1,0 +1,96 @@
+---
+- name: Create blossom directory
+  file:
+    path: "{{ tollgate_base_dir }}/blossom"
+    state: directory
+    mode: '0755'
+
+- name: Deploy blossom docker-compose
+  copy:
+    dest: "{{ tollgate_base_dir }}/blossom/docker-compose.yml"
+    content: |
+      services:
+        blossom:
+          build:
+            context: https://github.com/hzrd149/blossom-server.git
+            dockerfile: Dockerfile
+          container_name: tollgate-blossom
+          restart: unless-stopped
+          ports:
+            - "127.0.0.1:{{ blossom_port }}:3000"
+          volumes:
+            - ./config.yml:/app/config.yml:ro
+            - blossom-data:/app/data
+          networks:
+            - {{ docker_network_name }}
+
+      volumes:
+        blossom-data:
+
+      networks:
+        {{ docker_network_name }}:
+          external: true
+    mode: '0644'
+
+- name: Deploy blossom config
+  copy:
+    dest: "{{ tollgate_base_dir }}/blossom/config.yml"
+    content: |
+      port: 3000
+      host: "0.0.0.0"
+      publicDomain: "blossom.{{ base_domain }}"
+
+      database:
+        path: "./data/blossom.db"
+
+      storage:
+        backend: local
+        local:
+          dir: "./data/blobs"
+        removeWhenNoOwners: false
+
+      upload:
+        enabled: true
+        requireAuth: true
+        maxSize: {{ blossom_upload_max_size | default(10485760) }}
+
+      mirror:
+        enabled: {{ blossom_mirror_enabled | default(false) | lower }}
+
+      delete:
+        requireAuth: true
+
+      list:
+        enabled: true
+        requireAuth: false
+        allowListOthers: true
+
+      media:
+        enabled: true
+
+      dashboard:
+        enabled: true
+        username: admin
+        password: ""
+
+      prune:
+        initialDelayMs: 60000
+        intervalMs: 30000
+
+      landingPage:
+        enabled: true
+        title: "Tollgate Blossom Server"
+    mode: '0644'
+
+- name: Build and start blossom
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/blossom"
+    build: always
+    state: present
+
+- name: Wait for blossom
+  wait_for:
+    port: "{{ blossom_port }}"
+    host: localhost
+    delay: 5
+    timeout: 120

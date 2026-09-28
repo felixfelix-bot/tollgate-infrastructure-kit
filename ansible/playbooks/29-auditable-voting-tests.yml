@@ -1,0 +1,9 @@
+---
+- name: Run Auditable Voting E2E Tests
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - auditable_voting_tests

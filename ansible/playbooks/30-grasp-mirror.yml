@@ -1,0 +1,9 @@
+---
+- name: Deploy grasp-mirror daemon
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - grasp_mirror

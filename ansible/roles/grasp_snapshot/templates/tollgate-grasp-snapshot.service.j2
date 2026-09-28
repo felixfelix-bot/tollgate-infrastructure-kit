@@ -1,0 +1,7 @@
+[Unit]
+Description=GRASP LMDB + git snapshot for syncthing
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tollgate-grasp-snapshot.sh

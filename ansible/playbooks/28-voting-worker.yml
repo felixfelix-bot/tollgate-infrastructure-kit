@@ -1,0 +1,9 @@
+---
+- name: Deploy Auditable Voting Worker
+  hosts: vps2
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - voting_worker

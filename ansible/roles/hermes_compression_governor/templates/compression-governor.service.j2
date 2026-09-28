@@ -1,0 +1,8 @@
+[Unit]
+Description=Compression Cost Governor (Kalman + PI control)
+After=zai-proxy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 {{ hermes_compression_governor_bot_dir }}/compression_cost_governor.py
+Environment=HOME={{ ansible_facts['env']['HOME'] }}

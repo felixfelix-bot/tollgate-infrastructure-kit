@@ -1,0 +1,77 @@
+---
+# IM-01: the live VPS2 fleet runs the FULL nostr image (`hermes-agent:nostr`),
+# not `:nostr-slim`. Changing this default changes the rendered service hash and
+# forces a container recreate — keep it aligned with `docker inspect`.
+hermes_tenants_image: "hermes-agent:nostr"
+hermes_tenants_routstrd_image: "routstrd:latest"
+# routstrd sidecars are NOT deployed on VPS2 (see docker-compose.tenant.yml.j2).
+# Set true only on a host that actually carries the `routstrd:latest` image.
+hermes_tenants_routstrd_enabled: false
+hermes_tenants_base_dir: "{{ tollgate_base_dir | default('/opt/tollgate') }}/hermes"
+hermes_tenants_relay_url: "ws://nip29-relay:7780"
+hermes_tenants_deployment_admin_nsec: ""
+
+hermes_tenants_tenants: []
+
+hermes_tenants_container_restart: unless-stopped
+hermes_tenants_stop_grace_period: 30s
+
+hermes_tenants_log_driver: json-file
+hermes_tenants_log_max_size: 10m
+hermes_tenants_log_max_file: "3"
+
+hermes_tenants_healthcheck_interval: 30s
+hermes_tenants_healthcheck_timeout: 10s
+hermes_tenants_healthcheck_retries: 3
+# IM-01: live containers carry start_period 60s; changing it recreates them.
+hermes_tenants_healthcheck_start_period: 60s
+
+hermes_tenants_resource_limits:
+  # IM-01: live containers carry 512m; changing it recreates them.
+  memory: 512m
+  cpus: "1.0"
+
+hermes_tenants_routstrd_resource_limits:
+  memory: 256m
+  cpus: "0.5"
+
+hermes_tenants_resource_reservations:
+  memory: 256m
+
+hermes_tenants_routstrd_resource_limits:
+  memory: 256m
+  cpus: "0.5"
+
+hermes_tenants_routstrd_resource_reservations:
+  memory: 128m
+
+hermes_tenants_nostr_relays: "ws://nip29-relay:7780,wss://relay.damus.io,wss://nos.lol"
+hermes_tenants_nostr_groups: ""
+hermes_tenants_nostr_nsec_path: "/nsec/nsec.txt"
+# IM-05: every tenant routes through the SHARED routstr-proxy on the
+# routstr_default docker net (service `routstr`, port 8000) with its OWN
+# per-tenant `sk-` child API key (minted under a distinct funded parent for
+# cost isolation). `provider` must be `custom` for a bare OpenAI-compatible
+# base_url; `zai`/`openai` cause "Unknown provider" and hard LLM failure.
+# The routstrd SIDECAR (port 8008) and the old `hermes_tenants_llm_proxy_url`
+# are NOT deployed on VPS2 — the live fleet uses the direct key path.
+hermes_tenants_routstr_api_key: ""
+hermes_tenants_llm_proxy_url: "http://routstr:8000/v1"
+hermes_tenants_routstrd_config:
+  port: 8008
+  health_endpoint: "/health"
+
+hermes_tenants_gateway_config:
+  port: 8080
+  health_endpoint: "/health"
+
+hermes_tenants_gateway_port_base: 9000
+hermes_tenants_health_port_base: 9100
+
+hermes_tenants_no_docker_socket: true
+
+hermes_tenants_enable_monitoring: true
+
+hermes_health_ntfy_url: ""
+
+hermes_tenants_gateway_allow_all_users: true

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+STRFRY_BIN="{{ nip29_base_dir }}/strfry"
+STRFRY_CONF="{{ nip29_base_dir }}/strfry.conf"
+LOG="/var/log/strfry-nip29-sync.log"
+PEERS=(
+{% for peer in nip29_sync_peers %}  "{{ peer }}"
+{% endfor %})
+
+MY_IPS=$(ip -4 addr show | awk '/inet / {print $2}' | cut -d/ -f1 | sort -u)
+
+echo "[$(date -Is)] sync run start" >> "$LOG"
+
+for peer in "${PEERS[@]:-}"; do
+  [ -z "$peer" ] && continue
+  peer_host=$(printf '%s' "$peer" | sed -E 's|^ws://([^:/]+).*|\1|')
+  if printf '%s\n' "$MY_IPS" | grep -qE "^${peer_host}$"; then
+    echo "[$(date -Is)] skipping self: $peer" >> "$LOG"
+    continue
+  fi
+  echo "[$(date -Is)] syncing with $peer" >> "$LOG"
+  timeout 60 "$STRFRY_BIN" --config "$STRFRY_CONF" sync "$peer" --dir both >> "$LOG" 2>&1
+  echo "[$(date -Is)] sync $peer exit=$?" >> "$LOG"
+done
+
+echo "[$(date -Is)] sync run done" >> "$LOG"

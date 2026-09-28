@@ -1,0 +1,1604 @@
+{
+  "sets": {
+    "nostr-infra": [
+      {
+        "pubkey": "bbb5dda0e15567979f0543407bdc2033d6f0bbb30f72512a981cfdb2f09e2747",
+        "name": "Arjen",
+        "disposition": "keep",
+        "petname": "arjen",
+        "reason": "NIP-05 verified and actively working on Nostr networking tools like SugarDaddy.Cash and tollgate."
+      },
+      {
+        "pubkey": "83d999a148625c3d2bb819af3064c0f6a12d7da88f68b2c69221f3a746171d19",
+        "name": "Sovereign Engineering",
+        "disposition": "keep",
+        "petname": "soveng",
+        "reason": "NIP-05 verified and focused on sovereignty engineering including Nostr infrastructure and archival."
+      },
+      {
+        "pubkey": "cdee943cbb19c51ab847a66d5d774373aa9f63d287246bb59b0827fa5e637400",
+        "name": "Biz",
+        "disposition": "keep",
+        "petname": "chebizarro",
+        "reason": "NIP-05 verified builder actively contributing to Nostr and CoinOS with strong dev background."
+      },
+      {
+        "pubkey": "2224da17d76bb87ff4611eef23962da04f154a9bbe641355fcb6448e359d220a",
+        "name": "Thefux",
+        "disposition": "borderline",
+        "petname": "thefux",
+        "reason": "NIP-05 verified with #localfirst focus, but minimal recent activity or topic depth."
+      },
+      {
+        "pubkey": "38e9814f87cd751506aef5d7dbf081de14ad307c6984526ab0ceaf96f6349373",
+        "name": "MathJud",
+        "disposition": "keep",
+        "petname": "mathjud",
+        "reason": "Working on qaul.net for off-grid P2P mesh communication, aligns with privacy/sovereignty tech."
+      },
+      {
+        "pubkey": "3b3a42d34cf0a1402d18d536c9d2ac2eb1c6019a9153be57084c8165d192e325",
+        "name": "Victor Stabile",
+        "disposition": "keep",
+        "petname": "victor",
+        "reason": "NIP-05 verified freedom tech developer and entrepreneur with engineering background."
+      },
+      {
+        "pubkey": "48dbb5e717a6221d64fd13ba12794bc28e5067ac1d7632ee9437d533772750df",
+        "name": "Freedom Tech Co.",
+        "disposition": "borderline",
+        "petname": "ftc",
+        "reason": "Supports open source freedom tech but lacks specific project details or recent activity."
+      },
+      {
+        "pubkey": "efe5d120df0cc290fa748727fb45ac487caad346d4f2293ab069e8f01fc51981",
+        "name": "aljaz",
+        "disposition": "keep",
+        "petname": "aljaz",
+        "reason": "NIP-05 verified and operates multiple Nostr relays and domains, contributing to infrastructure."
+      },
+      {
+        "pubkey": "1dd7992ea0ecbda7480ceed35748c3655691133c8c78af947fd24299db8f481f",
+        "name": "once_aphysicist",
+        "disposition": "borderline",
+        "petname": "aphysicist",
+        "reason": "Background in physics and interest in individual agency, but no recent notes or clear project."
+      },
+      {
+        "pubkey": "d3052ca3e3d523b1ec80671eb1bba0517a2f522e195778dc83dd03a8d84a170e",
+        "name": "vnprc",
+        "disposition": "keep",
+        "petname": "vnprc",
+        "reason": "NIP-05 verified and involved in CTV+, Hashpool, and Triangle BitDevs—relevant to Bitcoin/Nostr."
+      },
+      {
+        "pubkey": "9e8dd91d21e867dec464868a8d1f4a27c0e113c53e32f2bec0a7c6e25ad2e9d5",
+        "name": "Sondre | satoshiconsult.com",
+        "disposition": "keep",
+        "petname": "sondre",
+        "reason": "NIP-05 verified founder promoting Bitcoin and LN adoption through consulting."
+      },
+      {
+        "pubkey": "5468bceeb74ce35cb4173dcc9974bddac9e894a74bf3d44f9ca8b7554605c9ed",
+        "name": "GrapheneOS",
+        "disposition": "keep",
+        "petname": "grapheneos",
+        "reason": "NIP-05 verified project focused on privacy and security with open source mobile OS."
+      },
+      {
+        "pubkey": "3a06add309fd8419ea4d4e475e9c0dff5909c635d9769bf0728232f3a0683a84",
+        "name": "shroominic",
+        "disposition": "keep",
+        "petname": "shroominic",
+        "reason": "Building routstr.com, a decentralized LLM routing marketplace—on-topic for AI/Nostr."
+      },
+      {
+        "pubkey": "4ad6fa2d16e2a9b576c863b4cf7404a70d4dc320c0c447d10ad6ff58993eacc8",
+        "name": "redshift",
+        "disposition": "keep",
+        "petname": "redshift",
+        "reason": "NIP-05 verified and building Routstr, contributing to decentralized AI/LLM infrastructure."
+      },
+      {
+        "pubkey": "8bf629b3d519a0f8a8390137a445c0eb2f5f2b4a8ed71151de898051e8006f13",
+        "name": "routstr",
+        "disposition": "keep",
+        "petname": "routstr",
+        "reason": "Official account for Routstr—decentralized LLM protocol and routing marketplace."
+      },
+      {
+        "pubkey": "e47d738ee8d9525a34aff86caea5c7bd57ea593a71d9b4754211650347ab1078",
+        "name": "Evan",
+        "disposition": "keep",
+        "petname": "evan",
+        "reason": "NIP-05 verified and building routstr.com, directly contributing to AI/Nostr infrastructure."
+      },
+      {
+        "pubkey": "b7c6f6915cfa9a62fff6a1f02604de88c23c6c6c6d1b8f62c7cc10749f307e81",
+        "name": "florian",
+        "disposition": "keep",
+        "petname": "florian-sldstr",
+        "reason": "Building Nostu.be and Slidestr.net, directly contributing to Nostr tooling."
+      },
+      {
+        "pubkey": "266815e0c9210dfa324c6cba3573b14bee49da4209a9456f9484e5106cd408a5",
+        "name": "hzrd149",
+        "disposition": "keep",
+        "petname": "hzrd149",
+        "reason": "NIP-05 verified, builds NoStrudel, Blossom, and Applesauce — key Nostr infrastructure."
+      },
+      {
+        "pubkey": "76c71aae3a491f1d9eec47cba17e229cda4113a0bbb6e6ae1776d7643e29cafa",
+        "name": "rabble",
+        "disposition": "keep",
+        "petname": "rabble",
+        "reason": "Co-builder of nos.social and divine.video, core Nostr infrastructure contributor."
+      },
+      {
+        "pubkey": "71df211931d26ee41121d295bd43cbc7e382505e333b5c13d4016ced9542d9d7",
+        "name": "rodant",
+        "disposition": "borderline",
+        "petname": "rodant",
+        "reason": "NIP-05 verified with Nostr commitment, but no recent notes or project details."
+      },
+      {
+        "pubkey": "c8383d81dd24406745b68409be40d6721c301029464067fcc50a25ddf9139549",
+        "name": "Sync",
+        "disposition": "keep",
+        "petname": "sync-boutique",
+        "reason": "Operates Nostr relays and gateways, co-hosts Open Markets Podcast."
+      },
+      {
+        "pubkey": "ff27d01cb1e56fb58580306c7ba76bb037bf211c5b573c56e4e70ca858755af0",
+        "name": "Stuart Bowman",
+        "disposition": "borderline",
+        "petname": "stuart-sat",
+        "reason": "NIP-05 verified, building Satellite.earth, but no recent activity or notes."
+      },
+      {
+        "pubkey": "d04ecf33a303a59852fdb681ed8b412201ba85d8d2199aec73cb62681d62aa90",
+        "name": "Five",
+        "disposition": "keep",
+        "petname": "five",
+        "reason": "Active builder of BudaBit.club, a static Nostr + git client, and contributor to gitvianostr discussions; strong on-topic signal."
+      },
+      {
+        "pubkey": "6b1b8dac34ffc61d464dfeef00e4a84a604e172ef6391fb629293d6f1666148c",
+        "name": "David Caseria",
+        "disposition": "keep",
+        "petname": "david-caseria",
+        "reason": "CEO of sovereign.app with NIP-05; likely involved in Nostr-adjacent sovereignty tech; verified and relevant."
+      },
+      {
+        "pubkey": "cfd7df62799a22e384a4ab5da8c4026c875b119d0f47c2716b20cdac9cc1f1a6",
+        "name": "Lez",
+        "disposition": "keep",
+        "petname": "lez",
+        "reason": "Inventor of nsite and building tribewiki.org; clear Nostr infrastructure work despite no recent notes."
+      },
+      {
+        "pubkey": "52b4a076bcbbbdc3a1aefa3735816cf74993b1b8db202b01c883c58be7fad8bd",
+        "name": "semisol",
+        "disposition": "keep",
+        "petname": "semisol",
+        "reason": "Nostr.land relay operator and firmware dev; NIP-05 verified with clear infrastructure role."
+      },
+      {
+        "pubkey": "460c25e682fda7832b52d1f22d3d22b3176d972f60dcdc3212ed8c92ef85065c",
+        "name": "Vitor Pamplona",
+        "disposition": "keep",
+        "petname": "vitorpamplona",
+        "reason": "Nostr's Chief Android Officer working on Amethyst; high-signal builder with recent activity."
+      },
+      {
+        "pubkey": "96f652249b0946e1575d78a8bc7450123c8e64f1c56f6b2f93bc23fb249ed85a",
+        "name": "eugene",
+        "disposition": "keep",
+        "petname": "eugene",
+        "reason": "Tech lead at nostrdev.com and working on sigit.io and Angor; directly involved in Nostr tooling."
+      },
+      {
+        "pubkey": "f4d1866e8599563c52ceeedf11c28b8567e465c6e9a91df92add535d57f02ab0",
+        "name": "En",
+        "disposition": "borderline",
+        "petname": "en",
+        "reason": "Full-stack dev at nostrdev.com with NIP-05; relevant by association but lacks individual signal; borderline due to inactivity."
+      },
+      {
+        "pubkey": "453a656903a031395d450f318211a6ec54cd79049a851f92cd6702c65ff5f5bd",
+        "name": "Otto",
+        "disposition": "borderline",
+        "petname": "otto",
+        "reason": "Affiliated with nostrdev.com via NIP-05 but no profile or notes; verified but low individual signal; borderline."
+      },
+      {
+        "pubkey": "27487c9600b16b24a1bfb0519cfe4a5d1ad84959e3cce5d6d7a99d48660a1f78",
+        "name": "Nostr Dev Team",
+        "disposition": "borderline",
+        "petname": "nostrdev-team",
+        "reason": "Official account for Nostr dev tools; relevant but generic; NIP-05 verified so not purged, but low personal signal."
+      },
+      {
+        "pubkey": "dab6c6065c439b9bafb0b0f1ff5a0c68273bce5c1959a4158ad6a70851f507b6",
+        "name": "Juraj",
+        "disposition": "keep",
+        "petname": "juraj",
+        "reason": "NIP-05 verified, author of 'Tamers of Entropy', teaches Nostr and cypherpunk coding."
+      },
+      {
+        "pubkey": "c21b1a6cdb247ccbd938dcb16b15a4fa382d00ffd7b12d5cbbad172a0cd4d170",
+        "name": "ABH3PO",
+        "disposition": "keep",
+        "petname": "abh3po",
+        "reason": "NIP-05 verified, authored NIP-88, built formstr.app and other Nostr tooling."
+      },
+      {
+        "pubkey": "fd208ee8c8f283780a9552896e4823cc9dc6bfd442063889577106940fd927c1",
+        "name": "Silberengel",
+        "disposition": "keep",
+        "petname": "silberengel",
+        "reason": "NIP-05 verified builder of jumble-imwald and Alexandria library, relevant to Nostr ecosystem."
+      },
+      {
+        "pubkey": "f72127cae7d232d88571a8e92d66424f465828146fe3f3d560393774c94e13cf",
+        "name": "NowClaw",
+        "disposition": "borderline",
+        "petname": "nowclaw",
+        "reason": "Runs OpenClaw bot, infrastructure-adjacent, but no profile or notes to assess depth."
+      },
+      {
+        "pubkey": "65912a7ad17fd5cf3bacce9759f3bea3a44f9a3397340e559cf067945dc638bf",
+        "name": "SLCW",
+        "disposition": "borderline",
+        "petname": "slcw",
+        "reason": "Describes systems integration work but no recent notes; NIP-05 verified, so not purged."
+      },
+      {
+        "pubkey": "ec2e0ad4f2d20930b8a4895462016d2d2fd62c7c60523b7d8ec188636bca24c9",
+        "name": "caleb",
+        "disposition": "keep",
+        "petname": "caleb",
+        "reason": "NIP-05 verified, self-identifies as node runner and data scientist, relevant to Nostr infrastructure."
+      },
+      {
+        "pubkey": "6172cd466f0a89976a3e8e7671bd8da1fc31f0e6c96907e6287484f7c87f4a72",
+        "name": "Stan Standard",
+        "disposition": "keep",
+        "petname": "stanstandard",
+        "reason": "NIP-05 verified, likely involved in Nostr ecosystem given handle and context."
+      },
+      {
+        "pubkey": "79cddd5426d8b09762942792ae477c8e26d7693bc68924eae2309b793742d27a",
+        "name": "Paygress",
+        "disposition": "keep",
+        "petname": "paygress",
+        "reason": "NIP-05 verified, runs non-KYC VPS service, supports privacy/sovereignty tech."
+      },
+      {
+        "pubkey": "90c9b3fef4647a1b73cac167e8b19d98474dbc78f2d51f8cead12392271f5871",
+        "name": "Lux ⚡️",
+        "disposition": "borderline",
+        "petname": "lux",
+        "reason": "NIP-05 verified but no profile or notes; identity confirmed but lacks topic signal, so borderline."
+      },
+      {
+        "pubkey": "30782a8323b7c98b172c5a2af7206bb8283c655be6ddce11133611a03d5f1177",
+        "name": "fmar",
+        "disposition": "keep",
+        "petname": "fmar",
+        "reason": "NIP-05 verified and active in Nostr devops, directly relevant to Nostr infrastructure."
+      },
+      {
+        "pubkey": "f683e87035f7ad4f44e0b98cfbd9537e16455a92cd38cefc4cb31db7557f5ef2",
+        "name": "Pip the WoT guy",
+        "disposition": "keep",
+        "petname": "pip",
+        "reason": "NIP-05 verified, focused on social graph and WoT — core Nostr infrastructure topics."
+      },
+      {
+        "pubkey": "7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194",
+        "name": "verbiricha",
+        "disposition": "keep",
+        "petname": "verbiricha",
+        "reason": "NIP-05 verified 'avant-garde nostr dev' with active technical contributions and FOSS focus."
+      }
+    ],
+    "bitcoin-builders": [
+      {
+        "pubkey": "273e7880d38d39a7fb238efcf8957a1b5b27e819127a8483e975416a0a90f8d2",
+        "name": "Hodl Hodl",
+        "disposition": "keep",
+        "petname": "hodlhodl",
+        "reason": "NIP-05 verified P2P Bitcoin trading and lending platform—core Bitcoin infrastructure."
+      },
+      {
+        "pubkey": "29122de55c80f96921c684739b2672a1af3e8c880824356ea7ea20c620515210",
+        "name": "Debifi",
+        "disposition": "keep",
+        "petname": "debifi",
+        "reason": "Building non-custodial Bitcoin-backed lending with institutional-grade liquidity."
+      },
+      {
+        "pubkey": "ddf03aca85ade039e6742d5bef3df352df199d0d31e22b9858e7eda85cb3bbbe",
+        "name": "Egge",
+        "disposition": "keep",
+        "petname": "egge",
+        "reason": "NIP-05 verified and building npub.cash and working on Cashu and Lightning integrations."
+      },
+      {
+        "pubkey": "50d94fc2d8580c682b071a542f8b1e31a200b0508bab95a33bef0855df281d63",
+        "name": "calle",
+        "disposition": "keep",
+        "petname": "calle",
+        "reason": "NIP-05 verified Cashu developer active in discussions and improvements to the ecosystem."
+      },
+      {
+        "pubkey": "06dde95f0268ce40128bf73ca6e85567b8567688ea52f24dcd5734e77c50f2d9",
+        "name": "nadanada.me - eSIM | - Numbers | VPN",
+        "disposition": "keep",
+        "petname": "nadanada",
+        "reason": "NIP-05 verified provider of privacy-focused eSIM, numbers, and no-KYC VPN—supports sovereignty."
+      },
+      {
+        "pubkey": "2183e94758481d0f124fbd93c56ccaa45e7e545ceeb8d52848f98253f497b975",
+        "name": "Super Testnet",
+        "disposition": "keep",
+        "petname": "supertestnet",
+        "reason": "Open-source dev with clear Bitcoin focus and on-chain donation address."
+      },
+      {
+        "pubkey": "06b7819d7f1c7f5472118266ed7bca8785dceae09e36ea3a4af665c6d1d8327c",
+        "name": "Tim Bouma",
+        "disposition": "keep",
+        "petname": "tim-bouma",
+        "reason": "NIP-05 verified, OpenSats grantee, active in Cashu and sovereignty tech with relevant content."
+      },
+      {
+        "pubkey": "04918dfc36c93e7db6cc0d60f37e1522f1c36b64d3f4b424c532d7c595febbc5",
+        "name": "thesimplekid",
+        "disposition": "keep",
+        "petname": "simplekid",
+        "reason": "NIP-05 verified, Spiral grantee working directly on Cashu Dev Kit."
+      },
+      {
+        "pubkey": "8cd2d0f8310f7009e94f50231870756cb39ba68f37506044910e2f71482b1788",
+        "name": "Pedro 🧨",
+        "disposition": "keep",
+        "petname": "pedro-pg",
+        "reason": "NIP-05 verified, actively building multiple Bitcoin-native tools and educational resources."
+      },
+      {
+        "pubkey": "17717ad4d20e2a425cda0a2195624a0a4a73c4f6975f16b1593fc87fa46f2d58",
+        "name": "Zach",
+        "disposition": "keep",
+        "petname": "zach-frost",
+        "reason": "NIP-05 verified, TypeScript and FROST cryptography focus aligns with Bitcoin infra."
+      },
+      {
+        "pubkey": "a008def15796fba9a0d6fab04e8fd57089285d9fd505da5a83fe8aad57a3564d",
+        "name": "DanConwayDev",
+        "disposition": "keep",
+        "petname": "danconway",
+        "reason": "NIP-05 verified builder of gitworkshop.dev and metadata.nostr.com with active work on GRASP and Nostr-integrated dev tools."
+      },
+      {
+        "pubkey": "cd169bd8fbd5179e2a8d498ffc31d3ae0e40825ff2b8a85ea359c4455a107ca8",
+        "name": "René Aaron",
+        "disposition": "keep",
+        "petname": "reneaaron",
+        "reason": "NIP-05 verified, clearly focused on Bitcoin and Lightning development; identity and topic alignment are strong despite no recent notes."
+      },
+      {
+        "pubkey": "d76726da1b64e8679d8b6e66facf551ba96f2612de5a171fac818ee85ce3e5fe",
+        "name": "Alex Lewin",
+        "disposition": "keep",
+        "petname": "alexlewin",
+        "reason": "NIP-05 verified Bitcoin Lightning developer; topic relevance and verified identity justify keep despite inactivity."
+      },
+      {
+        "pubkey": "91c9a5e1a9744114c6fe2d61ae4de82629eaaa0fb52f48288093c7e7e036f832",
+        "name": "UNCLE ROCKSTAR",
+        "disposition": "keep",
+        "petname": "uncle-rockstar",
+        "reason": "NIP-05 verified core contributor to BtcPayServer and active in Bitcoin community; strong on-topic signal."
+      },
+      {
+        "pubkey": "fd38f135ef675eac5e93d5b2a738c41777c250188031caf1dcf07b1687a1fe49",
+        "name": "ziggie",
+        "disposition": "keep",
+        "petname": "ziggie",
+        "reason": "OpenSats grantee with clear Bitcoin alignment; verified identity via association justifies keep despite no recent notes."
+      },
+      {
+        "pubkey": "e8ed3798c6ffebffa08501ac39e271662bfd160f688f94c45d692d8767dd345a",
+        "name": "arkinox",
+        "disposition": "keep",
+        "petname": "arkinox",
+        "reason": "CTO of fanfares.io and creator of cyberspace meta-protocol with OpenSats grant; active in freedom tech and FOSS."
+      },
+      {
+        "pubkey": "c1fc7771f5fa418fd3ac49221a18f19b42ccb7a663da8f04cbbf6c08c80d20b1",
+        "name": "Ben Arc",
+        "disposition": "keep",
+        "petname": "benarc",
+        "reason": "NIP-05 verified builder of early Nostr tools and active commentator on Bitcoin/Nostr freedom tech."
+      },
+      {
+        "pubkey": "61066504617ee79387021e18c89fb79d1ddbc3e7bff19cf2298f40466f8715e9",
+        "name": "atyh",
+        "disposition": "keep",
+        "petname": "atyh",
+        "reason": "NIP-05 verified, off-grid sovereign living aligned with Bitcoin values and posts on voluntarism and minimalism."
+      },
+      {
+        "pubkey": "c7fe92f80c516c0c54b15e8d256ac07281036d934ea1ff39fb0cd8a0fd677736",
+        "name": "Matt",
+        "disposition": "keep",
+        "petname": "mattyb",
+        "reason": "NIP-05 verified, active Bitcoiner with commentary on privacy and societal issues relevant to sovereignty."
+      },
+      {
+        "pubkey": "16f1a0100d4cfffbcc4230e8e0e4290cc5849c1adc64d6653fda07c031b1074b",
+        "name": "OceanSlim",
+        "disposition": "keep",
+        "petname": "oceanslim",
+        "reason": "NIP-05 verified, building freedom tech with Jan3 and active in Bitcoin/node discussions."
+      },
+      {
+        "pubkey": "ab6a73e51fa5f311d404394309aa3611600fd19d3e71128e1efaf1d81c9b1fb5",
+        "name": "Lethal Lee",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes, no signal — matches criteria for anonymous low-signal spam avoidance."
+      },
+      {
+        "pubkey": "fc994dc4d95efe62e5ed1c84542f40a1f513e2c4bf9953003aa4dfe8ad649b11",
+        "name": "",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes — fully anonymous and inactive, meets purge criteria."
+      },
+      {
+        "pubkey": "b7cfd472ff903441ec6cd55bb506f9744211a6e68e52525d42445169bda03f5a",
+        "name": "TheBitcoinBattery",
+        "disposition": "borderline",
+        "petname": "bitcoinbattery",
+        "reason": "NIP-05 verified but no recent activity; pro-Bitcoin stance but lacks depth in recent notes."
+      },
+      {
+        "pubkey": "1e31e4ea0a692f17e6b48009c09bf46e99e24bf72d460517649ac4775a530b36",
+        "name": "₿k",
+        "disposition": "keep",
+        "petname": "bk",
+        "reason": "NIP-05 verified, PhD scientist, blends Bitcoin, science, and philosophy with consistent signal."
+      },
+      {
+        "pubkey": "963f712e0a30fbc77f9091e91da687658606f06729650993f1c38fba2577b2bd",
+        "name": "Mattias Lindberg",
+        "disposition": "borderline",
+        "petname": "mattias",
+        "reason": "NIP-05 verified and active, but content leans more biohacking/carnivore than Bitcoin/tech focus."
+      },
+      {
+        "pubkey": "314072c16fa9433e1374f62e5b02c8163946ed298a9cde3b1541513c29d19fff",
+        "name": "Tauri",
+        "disposition": "keep",
+        "petname": "tauri",
+        "reason": "Active in Bitcoin discourse, critiques midwit takes and emphasizes monetary fundamentals."
+      },
+      {
+        "pubkey": "617f0a854aacda6649a6d90b8a361c4cf11a520df00b576bbcd73888b403d1ed",
+        "name": "plor",
+        "disposition": "keep",
+        "petname": "plor",
+        "reason": "NIP-05 verified, self-identifies as bitcoiner and recovering shitcoiner, on-topic signal."
+      },
+      {
+        "pubkey": "bd9eb657c25b4f6cda68871ce26259d1f9bc62420487e3224905b674a710a45a",
+        "name": "Erik Cason ",
+        "disposition": "keep",
+        "petname": "erikcason",
+        "reason": "NIP-05 verified, cofounder of Vora.io, explicitly discusses Bitcoin and philosophy."
+      },
+      {
+        "pubkey": "b1e1185884a6d14bbfce3899cb53e8183adde642f264d0ff4f1745371e06134c",
+        "name": "Solosatoshi.com 🇺🇸",
+        "disposition": "keep",
+        "petname": "solosatoshi",
+        "reason": "NIP-05 verified, actively promoting home Bitcoin mining and open-source firmware, clear on-topic builder."
+      },
+      {
+        "pubkey": "12ee03d11684a125dd87be879c28190415be3f3b1eca6b4ed743bd74ffd880e6",
+        "name": "SatsAndSports",
+        "disposition": "keep",
+        "petname": "satsandsports",
+        "reason": "Explicitly focused on Bitcoin and Cashu, active in open-source development discussions, strong on-topic signal."
+      },
+      {
+        "pubkey": "80482e60178c2ce996da6d67577f56a2b2c47ccb1c84c81f2b7960637cb71b78",
+        "name": "Leo",
+        "disposition": "keep",
+        "petname": "leo-cashu",
+        "reason": "NIP-05 verified, posts on Cashu mint status and audit, directly relevant to ecash infrastructure."
+      },
+      {
+        "pubkey": "5b393627d3f6732f47e15a9bc334d4674c4b49cb88be31bfb0fa9f0bc770e2b8",
+        "name": "PAɃLO",
+        "disposition": "keep",
+        "petname": "pablo",
+        "reason": "NIP-05 verified, engaged with Nostr tools like Primal, questions tech's role in humanity, relevant to sovereignty."
+      },
+      {
+        "pubkey": "b10c0000079a83cf26815dc7538818d8d56a2983e374e30a4143e50060978457",
+        "name": "b10c",
+        "disposition": "keep",
+        "petname": "b10c",
+        "reason": "NIP-05 verified Bitcoin developer and observer, highly relevant to core Bitcoin infrastructure."
+      },
+      {
+        "pubkey": "d7f0e3917c466f1e2233e9624fbd6d4bd1392dbcfcaf3574f457569d496cb731",
+        "name": "stick",
+        "disposition": "keep",
+        "petname": "stick",
+        "reason": "Co-founder of SatoshiLabs (Trezor), strong on-topic relevance for Bitcoin and self-custody, NIP-05 verified identity implied by reputation."
+      }
+    ],
+    "cashu-ecosystem": [
+      {
+        "pubkey": "c3e23eb5e3d00f18b2f4f588d8cdbc548648be761bdd90812186df4603d7caa9",
+        "name": "c08r4d0r",
+        "disposition": "borderline",
+        "petname": "c08r4d0r",
+        "reason": "Linked to Sovereign Hybrid Compute and Salute Ramp, but profile lacks detail and activity."
+      },
+      {
+        "pubkey": "9ec7a778167afb1d30c4833de9322da0c08ba71a69e1911d5578d3144bb56437",
+        "name": "balas",
+        "disposition": "keep",
+        "petname": "balas",
+        "reason": "Full Stack Sats Dev at alphaama.com, directly in Cashu/ecash space."
+      },
+      {
+        "pubkey": "5d3ab876c206a37ad3b094e20bfc3941df3fa21a15ac8ea76d6918473789669a",
+        "name": "Francis Mars",
+        "disposition": "keep",
+        "petname": "francismars",
+        "reason": "Creator of pubpay.me, a Cashu-related project; NIP-05 verified and on-topic for ecash."
+      },
+      {
+        "pubkey": "e83b66a8ed2d37c07d1abea6e1b000a15549c69508fa4c5875556d52b0526c2b",
+        "name": "mike",
+        "disposition": "keep",
+        "petname": "mike",
+        "reason": "Building 'Brian' with OpenClaw, Chief Prompt Officer, active in AI/Cashu-adjacent experimentation."
+      },
+      {
+        "pubkey": "d030d33c329f56ba7fd6af464f96421a4ffc5298e0ac38e0a24b278c5190e4e1",
+        "name": "Evan",
+        "disposition": "keep",
+        "petname": "evan-cashu",
+        "reason": "Self-identifies as Cashu enthusiast and electronics tinkerer, directly on-topic."
+      },
+      {
+        "pubkey": "f4a29f6397c32409a7cd3bcda1acb7ddad76a38e457ea5ddf7a827705b2b1ea3",
+        "name": "Murdawk",
+        "disposition": "keep",
+        "petname": "murdawk",
+        "reason": "Media and ops for Based Trading Cards, which is part of the Cashu/NIP-05 ecosystem; NIP-05 verified."
+      }
+    ],
+    "privacy-advocates": [
+      {
+        "pubkey": "fc2470ed196801ddace5c2bcb14a53fa5ee9f81ee365bf4958f94c6117d9ee27",
+        "name": "Free Cities Foundation",
+        "disposition": "borderline",
+        "petname": "freecities",
+        "reason": "Promotes free cities and individual rights, but off-topic from tech/building and low activity."
+      },
+      {
+        "pubkey": "46125fafb9e5549aac6a78a3d65bb07d5b917cd19778d0439c3f90cddf47d1bb",
+        "name": "Timothy Allen",
+        "disposition": "borderline",
+        "petname": "timothy",
+        "reason": "Chronicling free societies with NIP-05, but more journalism than tech/building."
+      }
+    ],
+    "ai-ml": [
+      {
+        "pubkey": "5c50da132947fa3bf4759eb978d784db12baad1c3e5b6a575410aeb654639b4b",
+        "name": "Vladimir Krstić",
+        "disposition": "keep",
+        "petname": "vladimir",
+        "reason": "NIP-05 verified and actively analyzing GPT Image 2 behavior, relevant to AI/ML."
+      },
+      {
+        "pubkey": "f2f8fabc20e2e1a4b91732c06cf9ac047478b01049c57c4a67b98ce927e5f3db",
+        "name": "Sovereign Engineering Music",
+        "disposition": "borderline",
+        "petname": "sov_music",
+        "reason": "AI-driven music project inspired by Bitcoin/Nostr ethos—creative but tangential to core tech."
+      },
+      {
+        "pubkey": "7fa56f5d6962ab1e3cd424e758c3002b8665f7b0d8dcee9fe9e288d7751ac194",
+        "name": "verbiricha",
+        "disposition": "keep",
+        "petname": "verbiricha",
+        "reason": "Explicitly interested in AI and humans building with AI, overlapping with Nostr dev work."
+      }
+    ],
+    "inactive": [
+      {
+        "pubkey": "04dcaf2552801937d1c20b69adf89646f21b53c17906271d22c7be9bcadb96c0",
+        "name": "Dhananjay Purohit",
+        "disposition": "borderline",
+        "petname": "dhananjay",
+        "reason": "NIP-05 verified but no recent notes or profile info—identity confirmed but signal unknown."
+      },
+      {
+        "pubkey": "d4246aa932bb256fcceca9cf70701017db0a13f5a5782b3fdd5e7b3425dd0769",
+        "name": "atori",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no recent notes, no NIP-05, no topic signal—meets criteria for anonymous low-signal."
+      },
+      {
+        "pubkey": "f17d78fb7829d3a8ea3ba4c90335eb541dc17a66054478c3aef7b3b8e05f6e8c",
+        "name": "Max Kei",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no recent notes, no NIP-05, no topic signal—anonymous and inactive."
+      },
+      {
+        "pubkey": "6c999653b606d246697398555d19397bdaa2a96a1419f1822648e96fc9a0af81",
+        "name": "rtbit",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No recent notes, minimal profile, no clear tech focus—mix of Bitcoin and unrelated tags."
+      },
+      {
+        "pubkey": "78688c1f371e7b923d95368c9298cca06c1ec0a89ea897aa181bd60091121fea",
+        "name": "MW",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes, no NIP-05—anonymous and no signal."
+      },
+      {
+        "pubkey": "f5bda68c3dcf79344beb1145f18ce5e75e3ff5c8140e9ec3bd1d4ae7ee6458e1",
+        "name": "okjodom",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes, no NIP-05—anonymous and no signal."
+      },
+      {
+        "pubkey": "d83b5ef189df7e884627294b752969547814c3cfe38995cf207c040e03bbe7a4",
+        "name": "TugaJoe",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes, no activity—only 'B word' reference insufficient for signal."
+      },
+      {
+        "pubkey": "fc17bbcf4f09da4e68176226c4dc60afeece3dabfbff342e1d03308986908cf0",
+        "name": "Caviala",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes, no NIP-05—anonymous and inactive."
+      },
+      {
+        "pubkey": "dc17b5dc3fd3c821666401693cbf0f01ae25f8ba79e8fef14b43a0631f9f5b9e",
+        "name": "",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes, no NIP-05—fully anonymous and no signal."
+      },
+      {
+        "pubkey": "fa3c984d5536ebe21bc41f8df5390e9394ec4dfa6f4cb664607e8ed5a1d6694f",
+        "name": "Gaius I. Vicesimus Primus Superior",
+        "disposition": "borderline",
+        "petname": "gaius",
+        "reason": "NIP-05 verified and part of SEC-05, but no recent notes—identity confirmed, dormant."
+      },
+      {
+        "pubkey": "0edc2f474484769bc9bf6d471d180e4e280b0bcd719b6da791001beb730cff1b",
+        "name": "Liz",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "NIP-05 verified but no notes and minimal profile — inactive with weak signal."
+      },
+      {
+        "pubkey": "9839f160d893daae661c84168e07f46f0e1e9746feb8439a6d76738b4ad32eaa",
+        "name": "nQuiz",
+        "disposition": "borderline",
+        "petname": "nquiz",
+        "reason": "Project 'nQuiz' mentioned in bio with Bitcoin gamification; NIP-05 verified but no recent activity; relevant but dormant."
+      },
+      {
+        "pubkey": "4249a4f5e3c13fc368d97ff713cc13ddc6771b0f410bdaa14d2ebc7d0235ef46",
+        "name": "GFY",
+        "disposition": "borderline",
+        "petname": "gfy",
+        "reason": "NIP-05 verified but profile says only 'YES', no notes; verified but minimal signal."
+      },
+      {
+        "pubkey": "e4d854051899e7a86cbe15069cff04156065a64615f75ef4458b830ab8ed5199",
+        "name": "HalleCat408",
+        "disposition": "borderline",
+        "petname": "hallecat",
+        "reason": "No profile or notes, no signal; insufficient data but not spam."
+      },
+      {
+        "pubkey": "973fcb64c2b94185dd2b15ee58349402f516dc9a5f68d707306e5b0d0b574073",
+        "name": "Michael Friedl",
+        "disposition": "borderline",
+        "petname": "michael",
+        "reason": "NIP-05 verified, but profile is off-topic (travel, unicycling), no recent notes; verified but weak relevance."
+      },
+      {
+        "pubkey": "eeda68d04e7dab80be242d61cd4a3b174cfd670192cf62585ddf8de454bef7be",
+        "name": "MethFred",
+        "disposition": "borderline",
+        "petname": "methfred",
+        "reason": "No profile or notes, no signal; name suggests possible joke account but not confirmed spam."
+      },
+      {
+        "pubkey": "e386ca122dc992aa3f27eee62fdbaace96d499671a75fcb94bf19d677a1ff1b9",
+        "name": "John Deere ",
+        "disposition": "borderline",
+        "petname": "johndeere",
+        "reason": "No notes, profile only says location; no topic signal, but not spam."
+      },
+      {
+        "pubkey": "77313c523694bfccaa05034010f6714604098380e77e13deeda40dc91427ef53",
+        "name": "Callum",
+        "disposition": "borderline",
+        "petname": "callum",
+        "reason": "No profile or notes, no signal; insufficient data."
+      },
+      {
+        "pubkey": "07fcd2f90c585a2a16ee7b76eb1f3d59a5a236b5b34191519e076eee6116fc4f",
+        "name": "Henrik Ek",
+        "disposition": "borderline",
+        "petname": "henrik",
+        "reason": "Promotes music and surfing, only 'HODL' as crypto signal; off-topic but NIP-05 missing, low signal."
+      },
+      {
+        "pubkey": "cab4d11105b869f4092570c21beb8689cf521b73a502da8cc21d3269e69a4c09",
+        "name": "Den Yellek",
+        "disposition": "borderline",
+        "petname": "denyellek",
+        "reason": "No notes, minimal profile; 'Austrich' joke but not spam, no topic signal."
+      },
+      {
+        "pubkey": "8f8d53ce38f3844ef5dbc91b6734cdb31114355b6043a0dc724aca4a1866074a",
+        "name": "Matyas Kuchar",
+        "disposition": "borderline",
+        "petname": "matyask",
+        "reason": "Profile mentions orange/red pilled, sardine maximalist; vague but possibly Bitcoin-adjacent, no notes."
+      }
+    ],
+    "low-signal": [
+      {
+        "pubkey": "71fe68231af1292db109bc80332ed27a26658f1060d62b97d60b75a0ba34cd11",
+        "name": "Nostr Hack Day",
+        "disposition": "borderline",
+        "petname": "nostrhack",
+        "reason": "Event planning for future hack day—potential signal but currently low activity."
+      },
+      {
+        "pubkey": "a9fbfba0548b9978b90b91d260b455f27309f8f94ad4d86c0737747c829ccbad",
+        "name": "DNS4SATS.XYZ",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes, no NIP-05—appears to be a placeholder or spammy name."
+      },
+      {
+        "pubkey": "0ce4cfa684d527796c712c6b907e7a991c744db34bddf7c74794bcdbf968d2e4",
+        "name": "",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes — anonymous and inactive with no topic signal."
+      },
+      {
+        "pubkey": "cdebf1cc47e69bf7f19ea393501fc99d179f769081d4ae51e188061170c4236c",
+        "name": "SuperPopLimon",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile beyond 'Food for good', no notes — lacks topic signal and activity."
+      },
+      {
+        "pubkey": "a9434ee165ed01b286becfc2771ef1705d3537d051b387288898cc00d5c885be",
+        "name": "Niel Liesmons",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No notes, minimal profile — anonymous with no topic signal or activity."
+      },
+      {
+        "pubkey": "1096f6be0a4d7f0ecc2df4ed2c8683f143efc81eeba3ece6daadd2fca74c7ecc",
+        "name": "TollGate",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No notes, profile only links to a video — no user identity or topic signal."
+      },
+      {
+        "pubkey": "3aa5817273c3b2f94f491840e0472f049d0f10009e23de63006166bca9b36ea3",
+        "name": "Schlaus Kwab",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Only one note with a YouTube link — no profile or topic signal."
+      },
+      {
+        "pubkey": "e3fc673fc5f99cc554d0ff47756795647d25cb6e6658f912d114ae6429d35d35",
+        "name": "a1denvalu3",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Minimal notes, no profile beyond 'Hack the Planet' — low signal and off-topic."
+      },
+      {
+        "pubkey": "958b754a1d3de5b5eca0fe31d2d555f451325f8498a83da1997b7fcd5c39e88c",
+        "name": "𝕾𝖊𝖗 𝕾𝖑𝖊𝖊𝖯𝖞",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Only posts video links with no context; no profile or NIP-05; fits spam pattern of low-signal video dumps."
+      },
+      {
+        "pubkey": "e4b67f9f7c0a1cce1c24ca9196f8e1446fcce17fdef5d5eb46a3929433ea4d91",
+        "name": "Delete this 💥",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, name is 'Delete this', and posts only videos; clear low-signal or spam behavior."
+      },
+      {
+        "pubkey": "9267545d2917b80f707ffdb44a8ff979182568ef7baa04ee756b1f01d4e3688a",
+        "name": "Sourcenode",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts political rants and unverified claims about public figures; off-topic and low-signal."
+      },
+      {
+        "pubkey": "668ceee55475f595ec0e8ef44c64bf9da8d9dd6008ac54dcd24b2501930b960e",
+        "name": "BTCapsule 🏴",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile or notes; name says 'block me'; no topic signal; anonymous and inactive."
+      },
+      {
+        "pubkey": "ee6ea13ab9fe5c4a68eaf9b1a34fe014a66b40117c50ee2a614f4cda959b6e74",
+        "name": "The Daniel 🖖",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts memes, typos, and vague provocations; off-topic and low-signal despite some Nostr mentions."
+      },
+      {
+        "pubkey": "8230c6222dea501c168d871de40d3ced4946b5608683af486a22e55426642641",
+        "name": "Thekid.999",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Profile says '420 somewhere', notes are incoherent and NSFW — low-signal spam."
+      },
+      {
+        "pubkey": "8fb9450003a599bb1b34f03fadb9b137f6c0e5a850ba205964bee4732ccce549",
+        "name": "the axiom",
+        "disposition": "borderline",
+        "petname": "axiom",
+        "reason": "No NIP-05, minimal notes, but some Nostr discussion — weak signal, not spam."
+      },
+      {
+        "pubkey": "78283e0d50c65682fd63d401f6f187f25dc56372bdf5dd02871f13e8bfb541cb",
+        "name": "Technician",
+        "disposition": "borderline",
+        "petname": "technician",
+        "reason": "Profile says electrical designer, recent notes are off-topic or memes; weak signal despite activity."
+      },
+      {
+        "pubkey": "6a72db8ef3f3b9ee5ecd808ed6d0631d1e4dda5c5dadf07887104d33957eba48",
+        "name": "So Tachi",
+        "disposition": "borderline",
+        "petname": "sotachi",
+        "reason": "NIP-05 verified, some Nostr growth commentary, but notes are brief and low-depth; weak signal."
+      },
+      {
+        "pubkey": "98348b0812b398449645d903f67e18abd033a2d670b50b331d92494d891db664",
+        "name": "ASN",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes, no NIP-05, no topic signal — meets criteria for anonymous low-signal account."
+      },
+      {
+        "pubkey": "1af12235ca57fbd7936eeafe35b1eafa39a06a191550c86a2dd1741e2c44c881",
+        "name": "",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes, no NIP-05 — fully anonymous and inactive."
+      },
+      {
+        "pubkey": "2a41bec7b7604165af61468572d85170e02bb91e6355597d76aaf270d328bb29",
+        "name": "MOTIV PERU",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "NGO with no profile content or notes, no topic signal, not NIP-05 verified."
+      },
+      {
+        "pubkey": "b3050aec02a53019214a63923139c2832e0b545fff5a400cc5d4277093bd8ccf",
+        "name": "Pachamada",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No recent notes, minimal profile, no NIP-05, insufficient topic signal despite Bitcoin mention."
+      },
+      {
+        "pubkey": "dab49fe283d6fe962ecb733ccef3a86eda3c5f35e2ad52374e8ff6084be9ef9c",
+        "name": "Hornet Hodl",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes, no NIP-05 — meets criteria for purge."
+      },
+      {
+        "pubkey": "0ee827a36e8bb0cfc483cf1872781182c4a16c58acba3ae2d7b155e0370e93b8",
+        "name": "hal",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No notes, minimal profile ('i'm sorry dave.'), no NIP-05 — low-signal and inactive."
+      },
+      {
+        "pubkey": "43916f922f574d391e6ae08ae8f32e4740f31af1b8f98f1ce894fe4d8a988100",
+        "name": "Josh",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No notes, no profile beyond motto, no NIP-05 — anonymous and inactive."
+      },
+      {
+        "pubkey": "2754fc862d6bc0b7c3971046612d942563d181c187a391e180ed6b00f80e7e5b",
+        "name": "HR4BTC aka HamRadio4Bitcoin",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Profile mentions Bitcoin and ham radio, but no notes and no NIP-05; off-topic and low-signal."
+      }
+    ],
+    "content-creators": [
+      {
+        "pubkey": "b133bfc57bed61c391d4e8f953b906c7f1709c438d91c75fb6daf79449d5789d",
+        "name": "kidwarp",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts about selling Vanilla, ETH, and XRP—off-topic and low technical signal."
+      },
+      {
+        "pubkey": "f53b9d91a8cd177fb4a1cf081a1b6d58759a381ef120a7c5a18c0e70cae80983",
+        "name": "Thomas",
+        "disposition": "borderline",
+        "petname": "thomas",
+        "reason": "NIP-05 verified with BOLT12 address and anti-bank stance, but no recent notes or activity."
+      },
+      {
+        "pubkey": "94215f42a96335c87fcb9e881a0bbb62b9a795519e109cf5f9d2ef617681f622",
+        "name": "Pete Winn",
+        "disposition": "borderline",
+        "petname": "pete-winn",
+        "reason": "NIP-05 verified and in freedom/AI space, but recent notes are mostly WORD5 spam."
+      },
+      {
+        "pubkey": "fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f52",
+        "name": "PABLOF7z",
+        "disposition": "keep",
+        "petname": "pablof7z",
+        "reason": "NIP-05 verified, rebuilding apps and building weight tracker, shows dev activity."
+      },
+      {
+        "pubkey": "40b9c85fffeafc1cadf8c30a4e5c88660ff6e4971a0dc723d5ab674b5e61b451",
+        "name": "Gzuuus",
+        "disposition": "keep",
+        "petname": "gzuuus",
+        "reason": "NIP-05 verified, active developer discussing Nostr timestamp issues and tech."
+      },
+      {
+        "pubkey": "e771af0b05c8e95fcdf6feb3500544d2fb1ccd384788e9f490bb3ee28e8ed66f",
+        "name": "sandwich",
+        "disposition": "keep",
+        "petname": "sandwich",
+        "reason": "NIP-05 verified, thoughtful commentary on protocol and freedom, relevant to Nostr."
+      },
+      {
+        "pubkey": "ec79b568bdea63ca6091f5b84b0c639c10a0919e175fa09a4de3154f82906f25",
+        "name": "Chiefmonkey",
+        "disposition": "keep",
+        "petname": "chiefmonkey",
+        "reason": "NIP-05 verified, founder of Plebeian, active in Bitcoin art and freedom tech."
+      },
+      {
+        "pubkey": "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec",
+        "name": "calvadev⚡️",
+        "disposition": "keep",
+        "petname": "calvadev",
+        "reason": "NIP-05 verified, founder of shopstrmarkets.com, active in commerce and free markets."
+      },
+      {
+        "pubkey": "726a1e261cc6474674e8285e3951b3bb139be9a773d1acf49dc868db861a1c11",
+        "name": "franzap",
+        "disposition": "keep",
+        "petname": "franzap",
+        "reason": "NIP-05 verified, active on Nostr migration pain points and corporate control."
+      },
+      {
+        "pubkey": "04c915daefee38317fa734444acee390a8269fe5810b2241e5e6dd343dfbecc9",
+        "name": "ODELL",
+        "disposition": "keep",
+        "petname": "odell",
+        "reason": "Posts short reflections on freedom and family; NIP-05 verified and bio aligns with sovereignty themes; occasional off-topic but verified and relevant."
+      },
+      {
+        "pubkey": "1afe0c74e3d7784eba93a5e3fa554a6eeb01928d12739ae8ba4832786808e36d",
+        "name": "HODL",
+        "disposition": "keep",
+        "petname": "hodl",
+        "reason": "NIP-05 verified with philosophical takes on Bitcoin and hierarchy; adds signal to sovereignty discourse despite poetic style."
+      },
+      {
+        "pubkey": "f8e6c64342f1e052480630e27e1016dce35fc3a614e60434fef4aa2503328ca9",
+        "name": "corndalorian",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts memes and images with no technical or curatorial value; off-topic and low-signal despite NIP-05."
+      },
+      {
+        "pubkey": "7ca66d4166b16f54a16868191ba1c6386a976624f4634f3896d9b6740a388ca3",
+        "name": "StackSats.IO",
+        "disposition": "borderline",
+        "petname": "stacksats",
+        "reason": "NIP-05 verified and pro-Nostr, but recent notes are off-topic rants and low-signal."
+      },
+      {
+        "pubkey": "99cefa645b00817373239aebb96d2d1990244994e5e565566c82c04b8dc65b54",
+        "name": "Great Ghee",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Solely promotes ghee product, off-topic and commercial spam."
+      },
+      {
+        "pubkey": "8aedc87160819e490cb0162acbd8c9a26d79e63db74f5b1b65939012924a7f05",
+        "name": "deeznuts",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Gun fetish content with no Bitcoin/Nostr/tech signal, veers into toxic territory."
+      },
+      {
+        "pubkey": "96c87765d900b169f5fdd8bc19bf97bd8c6d163ff416a89d45cbb7cac48c9433",
+        "name": "Brisket",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, minimal notes, no topic signal — anonymous and low-signal."
+      },
+      {
+        "pubkey": "37f2654c028c224b36507facf80c62d53b6c2eebb8d5590aa238d71d3c48723a",
+        "name": "ContrarianAgrarian",
+        "disposition": "borderline",
+        "petname": "contrarianagrarian",
+        "reason": "NIP-05 verified, Christ/liberty focus, but no recent notes to confirm activity or depth."
+      },
+      {
+        "pubkey": "03612b0ebae0ec8d30031c440ba087ff9bd162962dffba4b6e021ec4afd71216",
+        "name": "sudocarlos",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No notes, profile is song lyrics — no signal or activity."
+      },
+      {
+        "pubkey": "34651a9392d34bf9d064e39f3c10beef74b5e28e710c07324317b687c4abd7e8",
+        "name": "Ƒʉͫcͧкͭιͪηͣ 𝕵𝖔𝖍𝖓 ⚡️⚡️",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No notes, profile links to Odysee/BioLivre — no on-topic signal."
+      },
+      {
+        "pubkey": "190b17c8db1b5626012d183c7ae89b1630fbddfffe8eb5b248f5ac30ae1d785b",
+        "name": "Luke",
+        "disposition": "borderline",
+        "petname": "luke",
+        "reason": "NIP-05 verified podcaster, but recent notes are mostly Father’s Day greetings, low signal."
+      },
+      {
+        "pubkey": "341db5a7e3a931f49095d82a4acc939cf8a67293b1e4179fd4b5c0544c4fc2ef",
+        "name": "Kajoozie Maflingo",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No recent notes, profile is absurd — 'licensed money transmitter', 'improved Nostr mascot' — spammy."
+      },
+      {
+        "pubkey": "7999814161743f2279006ab10cfd83bd33adff23c85e5d9d0949fdd60f8f1901",
+        "name": "Eric FJ 🪬⚡️",
+        "disposition": "keep",
+        "petname": "ericfj",
+        "reason": "NIP-05 verified, building decentralized commerce tools and posting on Nostr security."
+      },
+      {
+        "pubkey": "345d4593d868f029bab39c49fc9b11a7611b10b48a65e8151381d3115bfd95db",
+        "name": "royster⚡️",
+        "disposition": "borderline",
+        "petname": "royster",
+        "reason": "Minimal notes, but NIP-05 verified and pro-Bitcoin; lacks depth to be 'keep'."
+      },
+      {
+        "pubkey": "67ada8e344532cbf82f0e702472e24c7896e0e1c96235eacbaaa4b8616052171",
+        "name": "SuiGenerisJohn",
+        "disposition": "borderline",
+        "petname": "suijohn",
+        "reason": "NIP-05 verified, warns about AI-generated content, but limited depth and off-topic rants."
+      },
+      {
+        "pubkey": "8e27ffb5c9bb8cdd0131ade6efa49d56d401b5424d9fdf9a63e074d527b0715c",
+        "name": "BIT 🐳 ISH",
+        "disposition": "borderline",
+        "petname": "bithish",
+        "reason": "NIP-05 verified, promotes music and fatherhood, occasional Bitcoin mention but not core focus."
+      },
+      {
+        "pubkey": "a10260a2aa2f092d85e2c0b82e95eac5f8c60ea19c68e4898719b58ccaa23e3e",
+        "name": "The Bullish ₿itcoiner",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "NIP-05 verified but posts are merch promotions — commercial spam."
+      },
+      {
+        "pubkey": "bdf02ee67066fdeba255e1ac77d67ad95048ded50eb885a01cab39156e4282df",
+        "name": "DRE",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No notes, profile is 'Christ is King' — no tech or Bitcoin signal."
+      },
+      {
+        "pubkey": "c3f12a9a85beea46ea631c95652a17e02d3bcbe477bd1709350f217e06c21301",
+        "name": "Wondrej",
+        "disposition": "borderline",
+        "petname": "wondrej",
+        "reason": "NIP-05 verified, Gen-Z Bitcoin pleb, but no recent notes to assess signal."
+      },
+      {
+        "pubkey": "9c2e0a870413773cb915b9c9cd2e1cbd17e53ae2b0a86aba5e5bf0fc13c420d2",
+        "name": "Dissident Sound",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Profile claims 'most subversive', but notes are edgy trolling — low signal, off-topic."
+      },
+      {
+        "pubkey": "165b9d37a28903103af9ad24036bdc54270882c01add515791fc9666167cfac1",
+        "name": "Kayne",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "NIP-05 verified but posts conspiracy theories (Dead Sea Scrolls, Ashkenazi origins) — off-topic and low signal."
+      },
+      {
+        "pubkey": "6e8f3edfa28bfc8057d735794f76b697bcf18fb894a5a37a132693ebda31a464",
+        "name": "nostrtask",
+        "disposition": "borderline",
+        "petname": "nostrtask",
+        "reason": "Promotes AI agents earning sats — adjacent to Cashu/AI, but no notes to confirm depth."
+      },
+      {
+        "pubkey": "1928ee3558f54e3164d81d26c35e123c254bae128354d7617d7fd862d70d9a2b",
+        "name": "Crusty 👨‍💻",
+        "disposition": "borderline",
+        "petname": "crusty",
+        "reason": "Self-identifies as programmer and believer in Bitcoin and Nostr, but no recent notes; topic relevance without activity."
+      },
+      {
+        "pubkey": "1549ed4be71d1a70ea2dca4596cd0c54c61aea485c6e4e5a8ca463758c98dd4a",
+        "name": "RedTailHawk",
+        "disposition": "borderline",
+        "petname": "redtailhawk",
+        "reason": "NIP-05 verified, describes self as researcher and writer, but recent notes are off-topic or low-signal."
+      },
+      {
+        "pubkey": "ae4c17620c9b3a0413fd019fd7e983da43b2081e7169abecb7764c333a9bfff1",
+        "name": "DagzTagz",
+        "disposition": "borderline",
+        "petname": "dagztagz",
+        "reason": "NIP-05 verified, satirical character, occasional engagement but weak on-topic signal."
+      }
+    ],
+    "ai-ml-privacy": [
+      {
+        "pubkey": "d91191e30e00444b942c0e82cad470b32af171764c2275bee0bd99377efd4075",
+        "name": "gsovereignty",
+        "disposition": "keep",
+        "petname": "gsovereignty",
+        "reason": "NIP-05 verified, active on open-source AI, privacy, and sovereign engineering."
+      },
+      {
+        "pubkey": "df173277182f3155d37b330211ba1de4a81500c02d195e964f91be774ec96708",
+        "name": "OpenSecret",
+        "disposition": "keep",
+        "petname": "opensecret",
+        "reason": "Building confidential backend with Maple AI, directly relevant to privacy tech."
+      },
+      {
+        "pubkey": "d8a2c33f2e2ff3a9d4ff2a5593f3d5a59e9167fa5ded063d0e49891776611e0c",
+        "name": "StarBuilder",
+        "disposition": "keep",
+        "petname": "starbuilder",
+        "reason": "Building Current and PlebAI, combining Nostr, Bitcoin, and AI."
+      },
+      {
+        "pubkey": "d45741f7d496c94edef6e2e7f6be1287d298b0f9234852a9a7bfeaf163f47a3f",
+        "name": "Sasker",
+        "disposition": "keep",
+        "petname": "sasker",
+        "reason": "NIP-05 verified, AI toolmaker and co-founder of Gen8, active with relevant questions."
+      },
+      {
+        "pubkey": "da18e9860040f3bf493876fc16b1a912ae5a6f6fa8d5159c3de2b8233a0d9851",
+        "name": "Dustin Dannenhauer",
+        "disposition": "borderline",
+        "petname": "dustin-ai",
+        "reason": "Founder of Delegance AI, but no recent notes or profile details beyond title."
+      }
+    ],
+    "mutuals-and-friends": [
+      {
+        "pubkey": "1f830dd875130b134fbf3f27a69eecd8613a499748a71b5a271a719febae14ed",
+        "name": "Dimi",
+        "disposition": "borderline",
+        "petname": "dimi",
+        "reason": "Minimal activity (one image note), but 'Bitcoin is my shelter' suggests topical alignment."
+      },
+      {
+        "pubkey": "e1ff3bfdd4e40315959b08b4fcc8245eaa514637e1d4ec2ae166b743341be1af",
+        "name": "benthecarman",
+        "disposition": "borderline",
+        "petname": "benthecarman",
+        "reason": "NIP-05 verified, dev at Spiral, but only one low-signal note ('wow 🤤')."
+      },
+      {
+        "pubkey": "0d6c8388dcb049b8dd4fc8d3d8c3bb93de3da90ba828e4f09c8ad0f346488a33",
+        "name": "Paul",
+        "disposition": "borderline",
+        "petname": "paul-lol",
+        "reason": "NIP-05 verified, combines Jesus and Bitcoin, but no recent notes or activity."
+      },
+      {
+        "pubkey": "b7ed68b062de6b4a12e51fd5285c1e1e0ed0e5128cda93ab11b4150b55ed32fc",
+        "name": "Max",
+        "disposition": "borderline",
+        "petname": "max-tl",
+        "reason": "NIP-05 verified, cypherpunk/praxeologist, but notes are just Nostr profile spam."
+      },
+      {
+        "pubkey": "0eef96197f5c6be3859b6817e6a5736685856c416e29a2925bd5a15b2a57c8b1",
+        "name": "Ian",
+        "disposition": "borderline",
+        "petname": "ian-nextblock",
+        "reason": "NIP-05 verified, associated with NextBlock, but no notes or profile details."
+      },
+      {
+        "pubkey": "5b705e6cb602425c019202dd070a0c009b040ac19960eeef2d8a8fab25c1efe5",
+        "name": "André Loja",
+        "disposition": "borderline",
+        "petname": "andreloja",
+        "reason": "NIP-05 verified, founder of Bitcoin Atlantis, but no recent activity or notes."
+      },
+      {
+        "pubkey": "02a11d1545114ab63c29958093c91b9f88618e56fee037b9d2fabcff32f62ea9",
+        "name": "Nour",
+        "disposition": "borderline",
+        "petname": "nour",
+        "reason": "NIP-05 verified but only one note ('Wankers') with no topic signal; verified identity prevents purge, but weak content."
+      },
+      {
+        "pubkey": "6fb266012c3008303e54ae55140b46957e9978098401dda34f4d921a275bf8bb",
+        "name": "Leito",
+        "disposition": "borderline",
+        "petname": "leito",
+        "reason": "NIP-05 verified with minimal off-topic notes; low signal but verified, so not purged."
+      },
+      {
+        "pubkey": "7b849efa5604b58d50c419637b9873847dbf957081d526136c3a49b7357cd617",
+        "name": "Zaza",
+        "disposition": "borderline",
+        "petname": "zaza",
+        "reason": "NIP-05 verified with Bitcoin/Nostr in bio; no notes but identity and topic tags justify borderline."
+      },
+      {
+        "pubkey": "408f636bd26fcc5f29889033b447cb2411f60ab1b8a5fc8cb3842dab758fdeb5",
+        "name": "elnosh",
+        "disposition": "borderline",
+        "petname": "elnosh",
+        "reason": "NIP-05 verified (getalby.com) but no profile or notes; verified so not purged, but no signal."
+      },
+      {
+        "pubkey": "5082984480f3b27891840a2037512739149678efc2ac981ca8cd016d02304efd",
+        "name": "M Ʌ R C",
+        "disposition": "borderline",
+        "petname": "marc",
+        "reason": "No NIP-05 or notes, but bio mentions Bitcoin; minimal signal but not spam; borderline."
+      },
+      {
+        "pubkey": "53a91e3a64d1f658e983ac1e4f9e0c697f8f33e01d8debe439f4c1a92113f592",
+        "name": "Joel 🇨🇭",
+        "disposition": "borderline",
+        "petname": "joel",
+        "reason": "NIP-05 verified but no profile or notes; verified identity keeps it from purge despite no signal."
+      },
+      {
+        "pubkey": "c88f94f0a391b9aaa1ffefd645253b1a968b0a422a876ea48920a95d45c33f47",
+        "name": "Leonardo",
+        "disposition": "borderline",
+        "petname": "leonardo",
+        "reason": "No profile or notes; no NIP-05; anonymous and inactive but not spam; borderline due to lack of negative signals."
+      },
+      {
+        "pubkey": "d15baf16eae236584647abb51da7c0f72f7375ca0c5af754fe175a4df90b2bf0",
+        "name": "Manuel ₿",
+        "disposition": "borderline",
+        "petname": "manuel",
+        "reason": "No profile or notes; no NIP-05; inactive but not spam; borderline."
+      },
+      {
+        "pubkey": "1bbd7fdf68eaf5c19446c3aaf63b39dd4a8e33548bc96f6bd239a4124d8f229e",
+        "name": "sebas",
+        "disposition": "borderline",
+        "petname": "sebas",
+        "reason": "NIP-05 verified but only 'Learning so much' in bio; minimal signal but verified, so not purged."
+      },
+      {
+        "pubkey": "1634b87b5fcfd4a6c4ff2f2de17450ccce46f9abe0b02a71876c596ec165bfed",
+        "name": "k0sh",
+        "disposition": "borderline",
+        "petname": "k0sh",
+        "reason": "NIP-05 verified; no profile or notes; verified so not purged, but no signal."
+      },
+      {
+        "pubkey": "24480686b56234a240fd9827209b584847f3d4f9657f0d9a97aec5320a264acb",
+        "name": "卄乇几尺讠Ɋㄩ乇",
+        "disposition": "borderline",
+        "petname": "shen",
+        "reason": "No NIP-05, but bio says 'Bitcoin enthusiast' and 'Flutter/Full-stack dev'; weak signal but not spam."
+      },
+      {
+        "pubkey": "990c8f060750cfae3d1c9c03099f87e7216bea1c5fbcbe7f00fcb99f0c7edeae",
+        "name": "Alan",
+        "disposition": "borderline",
+        "petname": "alan",
+        "reason": "No profile or notes; no NIP-05; anonymous and inactive but not spam; borderline."
+      },
+      {
+        "pubkey": "5fef2136ff8584533376e2798febf192eb320647051aa6e29e572e22d664c916",
+        "name": "",
+        "disposition": "borderline",
+        "petname": "anon5fef",
+        "reason": "Empty name and bio; no NIP-05 or notes; anonymous but not spam; borderline due to neutrality."
+      },
+      {
+        "pubkey": "366e02683c44dca65e4073faab0caa138e9da4e8f24a4e70039d8eb96d84ebc4",
+        "name": "Mariana Ungaretti",
+        "disposition": "borderline",
+        "petname": "mariana",
+        "reason": "No profile or notes, but name suggests possible mutual; insufficient signal to keep confidently."
+      },
+      {
+        "pubkey": "abd277d90caba20aee0f1f05a68d24cd117badc1205d0d1b1a0451357d32b92f",
+        "name": "Margaret",
+        "disposition": "borderline",
+        "petname": "margaret",
+        "reason": "No profile or notes, 'Relaybor' may hint at Nostr relay, but too weak to confirm; verified identity missing."
+      },
+      {
+        "pubkey": "642e65ed1060df0f37b49abd014eb0654193a5820063f0ebdbd7471d6948ce04",
+        "name": "matevz",
+        "disposition": "borderline",
+        "petname": "matevz",
+        "reason": "No profile or notes, no signal; name only, so borderline due to lack of data."
+      },
+      {
+        "pubkey": "abf061054090f78d47bc687a46ee5d7f361fff046c6815043bb35db038aaf500",
+        "name": "ruben",
+        "disposition": "borderline",
+        "petname": "ruben",
+        "reason": "NIP-05 verified, but no profile or notes; identity confirmed but no topic signal."
+      },
+      {
+        "pubkey": "b22b06b051fd5232966a9344a634d956c3dc33a7f5ecdcad9ed11ddc4120a7f2",
+        "name": "Russell",
+        "disposition": "borderline",
+        "petname": "russell",
+        "reason": "NIP-05 verified and active, but question about Unifiedpush app lacks strong Bitcoin/Nostr signal; borderline due to identity and activity."
+      },
+      {
+        "pubkey": "05972259ec683e9843ce12fae6cedda06e65062cfb014799e2abd52b2932bae6",
+        "name": "M0053",
+        "disposition": "borderline",
+        "petname": "m0053",
+        "reason": "NIP-05 verified and active with commentary on Bitcoin ecosystem (e.g., Coinkite), but mixed signal quality."
+      },
+      {
+        "pubkey": "f240be2b684f85cc81566f2081386af81d7427ea86250c8bde6b7a8500c761ba",
+        "name": "markusturm",
+        "disposition": "borderline",
+        "petname": "markusturm",
+        "reason": "NIP-05 verified and Bitcoin-focused, but many notes are in German and include tangential content like football; still relevant enough to keep as borderline."
+      },
+      {
+        "pubkey": "99d9c5e4a61403ece4e967f455633d053ef4ad9c913d37c3b30f4efe857713ba",
+        "name": "chill-bill",
+        "disposition": "borderline",
+        "petname": "chillbill",
+        "reason": "NIP-05 verified and self-described sovereign individual, but no recent notes; borderline due to identity but low activity."
+      }
+    ],
+    "spammy": [
+      {
+        "pubkey": "09545a0ab768f0015a2a33b571fc855affbce9017b76823b48830144748f9a3f",
+        "name": "Squirrel",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Profile only says 'Spreading stickers and love' — no topic signal, likely spam."
+      },
+      {
+        "pubkey": "d60bdad03468f5f8c85b1b10db977e310a5aafab33750dfadb37488b02bfc8d7",
+        "name": "yo",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No profile, no notes — anonymous and inactive, meets purge criteria."
+      },
+      {
+        "pubkey": "5239740673f3de26bd524be8a261f828662f4bad993b04e75082950c01e4c196",
+        "name": "Wingman: Yolo Mode",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No notes, profile only for a demo — not active or relevant."
+      },
+      {
+        "pubkey": "af5e5c0f30b23459fc6cdbc75c41ab2b3a37bcd8e6905205c5224857278f3cf3",
+        "name": "A9",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts repetitive GM/greeting spam with images, no substantive content or topic signal."
+      },
+      {
+        "pubkey": "d3be7046d4a2efe35f2d05bd1d3d77015935e0851c022e3be96476479859446d",
+        "name": "Wasted Potential",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts inflammatory political content with no Bitcoin/Nostr/tech focus, off-topic and low-signal."
+      },
+      {
+        "pubkey": "8054d32f6d7b94972dca90b057339f4b309fffc3e2f9fdb6534dcfd402380968",
+        "name": "codrus",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts conspiracy theories, anti-science claims, and YouTube links; off-topic and spammy."
+      },
+      {
+        "pubkey": "d9dba0e072bdb353dfb0020de159126af47e69e133ea91bbd48e8bede37320e2",
+        "name": "CensorThis",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts racist, inflammatory content; clearly off-topic and violates avoid criteria."
+      },
+      {
+        "pubkey": "9557955355f5f11d64dc1c2d7d136d5811904fdc592a950cb4091d05417ffba1",
+        "name": "⭐️ CosmicWhispers",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Astrology spam with daily horoscopes and monetization prompts; pure off-topic spam."
+      },
+      {
+        "pubkey": "3ffac3a6c859eaaa8cdddb2c7002a6e10b33efeb92d025b14ead6f8a2d656657",
+        "name": "Girino Vey!",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Recent notes are video/image dumps with no Bitcoin/Nostr/AI content — pure off-topic spam."
+      },
+      {
+        "pubkey": "6e468422dfb74a5738702a8823b9b28168abab8655faacb6853cd0ee15deee93",
+        "name": "Gigi",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Mostly image posts and single-word notes ('GM', '👀') — very low signal, spammy behavior."
+      },
+      {
+        "pubkey": "fba1bbd8ab57f258673157defd5afc9ceda004c6845f99db3169fe4b61ba7416",
+        "name": "2140.wtf NOSTR APP",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts YouTube links and generic wellness content — off-topic spam."
+      }
+    ],
+    "ai-ml-tech": [
+      {
+        "pubkey": "3f770d65d3a764a9c5cb503ae123e62ec7598ad035d836e2a810f3877a745b24",
+        "name": "Derek Ross",
+        "disposition": "keep",
+        "petname": "derekross",
+        "reason": "Active commentator on GLM 5.2 and AI tools like ShakespeareDIY; clearly engaged in AI/ML space with recent notes."
+      }
+    ],
+    "privacy-sovereignty": [
+      {
+        "pubkey": "167e7fe01a76b6bec9d2a9b196b18c72e150e985fbeb46ee651869e7b4032785",
+        "name": "dzdidi",
+        "disposition": "borderline",
+        "petname": "dzdidi",
+        "reason": "No profile or NIP-05, but known in community for privacy tooling; weak signal but not spam; borderline."
+      },
+      {
+        "pubkey": "717ff238f888273f5d5ee477097f2b398921503769303a0c518d06a952f2a75e",
+        "name": "leo",
+        "disposition": "keep",
+        "petname": "leo-sovereign",
+        "reason": "NIP-05 verified, focuses on rights, authoritarianism, and free states, aligned with sovereignty themes."
+      },
+      {
+        "pubkey": "d30ea98ea65e953f91ab93f6b30ea51eb33c506f87d49f600a139aef00aa9511",
+        "name": "Dr. Hax",
+        "disposition": "keep",
+        "petname": "drhax",
+        "reason": "NIP-05 verified cypherpunk and infosec veteran, maintainer of signet, deeply on-topic for privacy and sovereignty tech."
+      }
+    ],
+    "word-game-spam": [
+      {
+        "pubkey": "010df0c948fe9ab54d2cb7ea420ffa08d57958981b6ea68e83aaa7eb2dd3f05a",
+        "name": "Bill Cypher",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "Posts only Word5 puzzles — pure word-game spam, no topic relevance."
+      }
+    ],
+    "no-profile-anonymous": [
+      {
+        "pubkey": "3d19329302e9ee2a2f68b71ba6a2ff9c64552bec9be923256be175417a77ff68",
+        "name": "unknown",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes; anonymous with no signal, meets purge criteria."
+      },
+      {
+        "pubkey": "4d5bb8836f3087845a3ed8dfb4d7856563210c71f8ed2d9d5631482917df369c",
+        "name": "",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes; fully anonymous and inactive, meets purge criteria."
+      },
+      {
+        "pubkey": "af36c1c7eb14b8a2a990e86aeb8331fca798bc74e8474e2ad84e14520b3856d0",
+        "name": "",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes; anonymous and inactive, meets purge criteria."
+      },
+      {
+        "pubkey": "90533de9da8a0e61d63362860e036ca057b3a226cfecd857154cac9ad3c0b2b4",
+        "name": "",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes; anonymous and inactive, meets purge criteria."
+      },
+      {
+        "pubkey": "4a739de44bb60bf9ebfbb5b026404426ce6b6315f5194a4a0e372abab26e75cd",
+        "name": "",
+        "disposition": "purge",
+        "petname": "",
+        "reason": "No name, no profile, no notes; anonymous and inactive, meets purge criteria."
+      }
+    ],
+    "bitcoin-analysts": [
+      {
+        "pubkey": "273b61ada7d89eebac2599a2896dd9de76b86744a4ee33f09e12909ae3d740ff",
+        "name": "Mempool Radar",
+        "disposition": "keep",
+        "petname": "mempoolradar",
+        "reason": "NIP-05 verified bot detecting non-standard Bitcoin transactions, highly relevant for on-chain analysis."
+      },
+      {
+        "pubkey": "7c5f24e1c95f6f1f75555498f0019be1259a65c75ae851c235f7b15c9f88e0ee",
+        "name": "Moscow Time",
+        "disposition": "keep",
+        "petname": "moscowtime",
+        "reason": "Automated Bitcoin block time and price updates, on-topic signal for Bitcoin."
+      },
+      {
+        "pubkey": "0c29b0aae3855c72fa3835a679a586070039eb3b8566bb216e5dddb165391742",
+        "name": "zoomoutpls",
+        "disposition": "borderline",
+        "petname": "zoomoutpls",
+        "reason": "NIP-05 verified and Bitcoin-aligned, but recent note on gold reserves is off-topic; tolerable due to verified identity."
+      }
+    ]
+  }
+}

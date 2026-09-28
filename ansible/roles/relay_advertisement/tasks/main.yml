@@ -1,0 +1,109 @@
+---
+- name: Check for relay advertisement keypair in .env
+  slurp:
+    src: "{{ playbook_dir }}/../../.env"
+  register: env_file
+  failed_when: false
+  delegate_to: localhost
+
+- name: Check if RELAY_AD_NSEC exists
+  set_fact:
+    relay_ad_nsec_exists: "{{ env_file.content is defined and 'RELAY_AD_NSEC' in (env_file.content | b64decode) }}"
+
+- name: Generate relay advertisement Nostr keypair
+  shell: |
+    python3 -c "
+    import secrets, hashlib, json
+    from coincurve import PrivateKey
+    from bech32 import bech32_encode, convertbits
+    sk_bytes = secrets.token_bytes(32)
+    nsec = bech32_encode('nsec', convertbits(sk_bytes, 8, 5))
+    pk = PrivateKey(sk_bytes).public_key.format(compressed=True)
+    npub = bech32_encode('npub', convertbits(pk, 8, 5))
+    print(json.dumps({'nsec': nsec, 'npub': npub, 'hex_sk': sk_bytes.hex()}))
+    "
+  register: relay_keypair
+  when: not relay_ad_nsec_exists
+  delegate_to: localhost
+
+- name: Store relay advertisement keypair in .env
+  shell: |
+    echo "RELAY_AD_NSEC=$(echo '{{ relay_keypair.stdout }}' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"nsec\"])')" >> {{ playbook_dir }}/../../.env
+    echo "RELAY_AD_NPUB=$(echo '{{ relay_keypair.stdout }}' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"npub\"])')" >> {{ playbook_dir }}/../../.env
+  when: not relay_ad_nsec_exists
+  delegate_to: localhost
+
+- name: Read relay advertisement nsec
+  shell: "grep RELAY_AD_NSEC {{ playbook_dir }}/../../.env | cut -d= -f2"
+  register: relay_ad_nsec
+  changed_when: false
+  delegate_to: localhost
+
+- name: Publish kind 10002 relay list event
+  shell: |
+    python3 << 'PYEOF'
+    import json, time, hashlib, secrets, asyncio, websockets, ssl
+    from coincurve import PrivateKey
+    from bech32 import bech32_decode, convertbits
+
+    nsec_bech32 = "{{ relay_ad_nsec.stdout | trim }}"
+    _, sk_bits = bech32_decode(nsec_bech32)
+    sk_bytes = bytes(convertbits(sk_bits, 5, 8, pad=False))
+    privkey = PrivateKey(sk_bytes)
+    pubkey_hex = privkey.public_key.format(compressed=True).hex()
+
+    relay_list = {{ relay_ad_relay_list | to_json }}
+    tags = [["r", r["url"], ""] for r in relay_list]
+
+    event = {
+        "kind": 10002,
+        "created_at": int(time.time()),
+        "tags": tags,
+        "content": "",
+        "pubkey": pubkey_hex,
+    }
+
+    serialized = json.dumps([0, event["pubkey"], event["kind"], event["tags"], event["content"]], separators=(',', ':'))
+    event_id = hashlib.sha256(serialized.encode()).hexdigest()
+    event["id"] = event_id
+    sig = privkey.sign_schnorr(event_id.encode())
+    event["sig"] = sig.hex()
+
+    relays = {{ relay_ad_relays | to_json }}
+
+    async def publish(event, relay_url):
+        try:
+            ssl_ctx = ssl.create_default_context()
+            async with websockets.connect(relay_url, ssl=ssl_ctx) as ws:
+                await ws.send(json.dumps(["EVENT", event]))
+                resp = await asyncio.wait_for(ws.recv(), timeout=10)
+                print(f"{relay_url}: {resp}")
+        except Exception as e:
+            print(f"{relay_url}: ERROR {e}")
+
+    async def main():
+        tasks = [publish(event, r) for r in relays]
+        await asyncio.gather(*tasks)
+
+    asyncio.run(main())
+    PYEOF
+  register: relay_publish
+  delegate_to: localhost
+  ignore_errors: yes
+
+- name: Show relay advertisement result
+  debug:
+    msg: "{{ relay_publish.stdout_lines | default(['skipped']) }}"
+
+- name: Advertise GRASP git repos via ngit
+  shell: |
+    ngit -n "{{ relay_ad_nsec.stdout | trim }}" -d sync 2>&1 || true
+  delegate_to: localhost
+  ignore_errors: yes
+  register: ngit_sync
+  when: false
+
+- name: Show ngit advertisement result
+  debug:
+    msg: "{{ ngit_sync.stdout_lines | default(['ngit advertisement deferred - run manually with: ngit -n <nsec> init']) }}"
+  when: false

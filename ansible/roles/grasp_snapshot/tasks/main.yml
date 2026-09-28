@@ -1,0 +1,44 @@
+---
+- name: Install lmdb-utils for mdb_copy
+  apt:
+    name: lmdb-utils
+    state: present
+
+- name: Create snapshot directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /opt/tollgate/snapshots
+    - /opt/tollgate/snapshots/grasp
+    - /opt/tollgate/snapshots/grasp/relay
+    - /opt/tollgate/snapshots/grasp/git
+
+- name: Deploy GRASP snapshot script
+  template:
+    src: tollgate-grasp-snapshot.sh.j2
+    dest: /usr/local/bin/tollgate-grasp-snapshot.sh
+    mode: '0755'
+
+- name: Deploy GRASP snapshot systemd service
+  template:
+    src: tollgate-grasp-snapshot.service.j2
+    dest: /etc/systemd/system/tollgate-grasp-snapshot.service
+    mode: '0644'
+
+- name: Deploy GRASP snapshot systemd timer
+  template:
+    src: tollgate-grasp-snapshot.timer.j2
+    dest: /etc/systemd/system/tollgate-grasp-snapshot.timer
+    mode: '0644'
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start GRASP snapshot timer
+  systemd:
+    name: tollgate-grasp-snapshot.timer
+    state: started
+    enabled: yes

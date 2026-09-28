@@ -1,0 +1,24 @@
+[Unit]
+Description=SSD VPS Dual-Vantage Probe
+Documentation=https://github.com/felixfelix-bot/tollgate-infrastructure-kit
+
+[Service]
+Type=oneshot
+ExecStart={{ ssd_vps_probe_install_dir }}/ssd-vps-probe.sh probe
+User=root
+Group=root
+Environment="PROBE_STATE_DIR={{ ssd_vps_probe_state_dir }}"
+Environment="PROBE_LOG={{ ssd_vps_probe_log_dir }}/ssd-vps-probe.log"
+Environment="VANTAGE_ID=%H"
+Environment="V2_11_TASK_ID={{ ssd_vps_probe_v2_11_task_id }}"
+Environment="KANBAN_DB={{ ssd_vps_probe_kanban_db }}"
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ ssd_vps_probe_state_dir }} {{ ssd_vps_probe_log_dir }}
+ReadOnlyPaths={{ ssd_vps_probe_install_dir }}
+
+[Install]
+WantedBy=multi-user.target

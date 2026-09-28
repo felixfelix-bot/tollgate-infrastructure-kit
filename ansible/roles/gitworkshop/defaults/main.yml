@@ -1,0 +1,5 @@
+---
+gitworkshop_repo_url: "nostr://npub1543u4xsk6aztnreelappadcq9282yy2qm8q5ll9gkeza9t5dwxxqxncfg6/relay.primal.net/gitworkshop"
+gitworkshop_src_dir: "/tmp/gitworkshop"
+gitworkshop_static_dir: "{{ tollgate_static_dir }}/gitworkshop"
+gitworkshop_subdomain: "workshop"

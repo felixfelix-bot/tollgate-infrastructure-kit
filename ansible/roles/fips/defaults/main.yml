@@ -1,0 +1,49 @@
+---
+fips_version: "0.4.1"
+fips_ethernet_interface: ""
+fips_ethernet_auto_detect: true
+fips_lan_discovery: true
+fips_mesh_ssh_port: 22
+fips_advertise_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://offchain.pub"
+  - "wss://relay.orangesync.tech"
+  - "wss://ngit.orangesync.tech"
+fips_dm_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://offchain.pub"
+  - "wss://relay.orangesync.tech"
+  - "wss://ngit.orangesync.tech"
+fips_stun_servers:
+  - "stun:stun.l.google.com:19302"
+  - "stun:stun.cloudflare.com:3478"
+  - "stun:global.stun.twilio.com:3478"
+fips_peers:
+  # Bootstrap peer: VPS2 hub (public IP, accepts inbound)
+  - npub: "npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82"
+    alias: "vps2"
+    addresses:
+      - transport: udp
+        addr: "23.182.128.51:2121"
+      - transport: tcp
+        addr: "23.182.128.51:8443"
+    connect_policy: auto_connect
+fips_mesh_hosts:
+  vps2: "npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82"
+  dq05: "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
+  t470: "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
+  t14gen5: "npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh"
+fips_extra_hosts: {}
+fips_external_addr: ""
+fips_deb_arch_map:
+  x86_64: amd64
+  aarch64: arm64
+
+# UDP socket buffer sizes. Set both max and default so FIPS can request 2 MiB
+# recv/send buffers without kernel clamping (default Debian is 212992 bytes).
+fips_rmem_max: 2097152
+fips_wmem_max: 2097152
+fips_rmem_default: 2097152
+fips_wmem_default: 2097152

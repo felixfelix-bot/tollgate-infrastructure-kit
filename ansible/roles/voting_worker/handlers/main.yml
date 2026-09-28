@@ -1,0 +1,6 @@
+---
+- name: restart voting worker
+  systemd:
+    name: tollgate-voting-worker
+    state: restarted
+    daemon_reload: yes

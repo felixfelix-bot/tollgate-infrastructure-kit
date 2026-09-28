@@ -1,0 +1,10 @@
+services:
+  {{ ngit_relay_container_name }}:
+    image: {{ ngit_relay_image }}
+    container_name: {{ ngit_relay_container_name }}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:{{ ngit_relay_port }}:{{ ngit_relay_port }}"
+    volumes:
+      - {{ tollgate_base_dir }}/ngit-relay/strfry.conf:/etc/strfry.conf:ro
+      - {{ tollgate_base_dir }}/ngit-relay/db:/strfry-db

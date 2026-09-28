@@ -1,0 +1,9 @@
+---
+- name: Deploy GitWorkshop
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  roles:
+    - gitworkshop
+  tags:
+    - gitworkshop

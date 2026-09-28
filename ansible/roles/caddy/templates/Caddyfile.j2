@@ -1,0 +1,61 @@
+{% for sub in ['relay', 'chat', 'blossom', 'nsite', 'releases', 'ci', 'git'] %}
+{{ sub }}.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+{% if sub == 'relay' %}
+    reverse_proxy localhost:{{ strfry_port }}
+{% elif sub == 'chat' %}
+    reverse_proxy localhost:{{ obelisk_port }}
+{% elif sub == 'blossom' %}
+    reverse_proxy localhost:{{ blossom_port }}
+{% elif sub == 'nsite' %}
+    reverse_proxy localhost:{{ nsite_gateway_port }}
+{% elif sub == 'releases' %}
+    root * {{ tollgate_static_dir }}/releases
+    file_server
+    try_files {path} /index.html
+{% elif sub == 'ci' %}
+    root * {{ tollgate_static_dir }}/hive-ci
+    file_server
+    try_files {path} /index.html
+{% elif sub == 'git' %}
+    reverse_proxy localhost:{{ grasp_port }}
+{% endif %}
+}
+
+{% endfor %}
+dashboard.{{ mint_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+    root * {{ tollgate_base_dir }}/mints-dashboard
+    file_server
+}
+
+print.{{ mint_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+    handle /api/* {
+        reverse_proxy localhost:3000
+    }
+    handle {
+        root * {{ tollgate_static_dir }}/cashu-brrr
+        file_server
+        try_files {path} /index.html
+    }
+}
+
+*.{{ mint_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+    handle {
+        respond "Mint not found - deploy with ./scripts/deploy-mint.sh" 404
+    }
+}
+
+:80 {
+    respond "Use HTTPS" 301
+}

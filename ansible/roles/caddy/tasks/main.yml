@@ -1,0 +1,83 @@
+---
+- name: Create Caddy directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ tollgate_base_dir }}/caddy"
+    - "{{ tollgate_base_dir }}/caddy/data"
+    - "{{ tollgate_base_dir }}/caddy/config"
+
+- name: Copy Caddy Dockerfile
+  copy:
+    src: Dockerfile
+    dest: "{{ tollgate_base_dir }}/caddy/Dockerfile"
+    mode: '0644'
+
+- name: Create Caddy env file with CF API token
+  copy:
+    content: "CF_API_TOKEN={{ cloudflare_api_token }}\n"
+    dest: "{{ tollgate_base_dir }}/caddy/caddy.env"
+    mode: '0644'
+
+- name: Create services status page directory
+  file:
+    path: "{{ tollgate_static_dir }}/services"
+    state: directory
+    mode: '0755'
+
+- name: Deploy services status page
+  template:
+    src: "{{ playbook_dir }}/../../static/services/index.html"
+    dest: "{{ tollgate_static_dir }}/services/index.html"
+    mode: '0644'
+
+- name: Deploy Caddyfile
+  template:
+    src: Caddyfile.http.j2
+    dest: "{{ tollgate_base_dir }}/caddy/Caddyfile"
+    mode: '0644'
+
+- name: Deploy Caddy docker-compose
+  copy:
+    dest: "{{ tollgate_base_dir }}/caddy/docker-compose.yml"
+    content: |
+      services:
+        caddy:
+          build:
+            context: /opt/tollgate/caddy
+            dockerfile: Dockerfile
+          container_name: tollgate-caddy
+          network_mode: host
+          restart: unless-stopped
+          env_file:
+            - /opt/tollgate/caddy/caddy.env
+          volumes:
+            - /opt/tollgate/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+            - /opt/tollgate/caddy/data:/data
+            - /opt/tollgate/caddy/config:/config
+            - {{ tollgate_static_dir }}:{{ tollgate_static_dir }}:ro
+            - {{ tollgate_base_dir }}/mints-dashboard:{{ tollgate_base_dir }}/mints-dashboard:ro
+          cap_add:
+            - NET_BIND_SERVICE
+    mode: '0644'
+
+- name: Kill orphan caddy processes holding port 2019
+  shell: |
+    fuser -k 2019/tcp 2>/dev/null || true
+    sleep 1
+  changed_when: false
+
+- name: Build and start Caddy
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/caddy"
+    build: always
+    state: present
+
+- name: Wait for Caddy to be ready
+  wait_for:
+    port: 80
+    host: localhost
+    delay: 5
+    timeout: 60

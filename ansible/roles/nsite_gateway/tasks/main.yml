@@ -1,0 +1,53 @@
+---
+- name: Create nsite-gateway directory
+  file:
+    path: "{{ tollgate_base_dir }}/nsite-gateway"
+    state: directory
+    mode: '0755'
+
+- name: Deploy nsite-gateway docker-compose
+  copy:
+    dest: "{{ tollgate_base_dir }}/nsite-gateway/docker-compose.yml"
+    content: |
+      services:
+        nsite:
+          build:
+            context: https://github.com/hzrd149/nsite-gateway.git
+            dockerfile: Dockerfile
+          container_name: tollgate-nsite-gateway
+          restart: unless-stopped
+          ports:
+            - "127.0.0.1:{{ nsite_gateway_port }}:3000"
+          volumes:
+            - nsite-cache:/cache
+          environment:
+            - NSITE_PORT=3000
+            - NSITE_HOST=0.0.0.0
+            - LOOKUP_RELAYS=wss://user.kindpag.es,wss://purplepag.es
+            - NOSTR_RELAYS=wss://relay.damus.io,wss://relay.primal.net,wss://nos.lol
+            - BLOSSOM_SERVERS=https://blossom.{{ base_domain }}
+            - PUBLIC_DOMAIN=nsite.{{ base_domain }}
+            - MAX_FILE_SIZE=128 MB
+          networks:
+            - {{ docker_network_name }}
+
+      volumes:
+        nsite-cache:
+
+      networks:
+        {{ docker_network_name }}:
+          external: true
+    mode: '0644'
+
+- name: Build and start nsite-gateway
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/nsite-gateway"
+    build: always
+    state: present
+
+- name: Wait for nsite-gateway
+  wait_for:
+    port: "{{ nsite_gateway_port }}"
+    host: localhost
+    delay: 5
+    timeout: 120

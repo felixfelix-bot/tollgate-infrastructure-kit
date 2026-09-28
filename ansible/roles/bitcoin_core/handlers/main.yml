@@ -1,0 +1,11 @@
+---
+- name: Reload systemd for bitcoin
+  systemd:
+    daemon_reload: yes
+  listen: restart bitcoind
+
+- name: Restart bitcoind
+  systemd:
+    name: bitcoind
+    state: restarted
+  listen: restart bitcoind

@@ -1,0 +1,9 @@
+[Unit]
+Description=Strfry NIP-29 sync timer
+
+[Timer]
+OnCalendar=*-*-* *:0/{{ nip29_sync_interval_min }}:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

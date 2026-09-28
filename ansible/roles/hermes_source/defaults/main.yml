@@ -1,0 +1,11 @@
+---
+# hermes_source — reproducibly checks out the patched hermes-agent source
+# from the felixfelix-bot fork at a pinned commit SHA.
+#
+# Replaces the previous manual "git clone it yourself" step.
+# The Dockerfile.slim (COPY . .) expects the source at this path.
+
+hermes_source_repo: "https://github.com/felixfelix-bot/hermes-agent.git"
+hermes_source_version: "170f8c79130c3f6329df21d26d3aeb3f3ed905d3"
+hermes_source_branch: "feat/compression-task-tagging"
+hermes_source_dest: "{{ ansible_facts['env']['HOME'] }}/.hermes/hermes-agent"

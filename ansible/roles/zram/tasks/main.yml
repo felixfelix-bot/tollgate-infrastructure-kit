@@ -1,0 +1,60 @@
+---
+- name: Install zram-tools
+  apt:
+    name: zram-tools
+    state: present
+  tags: zram
+
+- name: Load zram kernel module
+  modprobe:
+    name: zram
+    state: present
+  tags: zram
+
+- name: Ensure zram module loads at boot
+  copy:
+    content: "zram\n"
+    dest: /etc/modules-load.d/zram.conf
+    mode: '0644'
+  tags: zram
+
+- name: Configure zram size (50% of RAM)
+  template:
+    src: zram-config.j2
+    dest: /etc/default/zramswap
+    mode: '0644'
+  notify: restart zramswap
+  tags: zram
+
+- name: Set vm.swappiness for zram
+  sysctl:
+    name: vm.swappiness
+    value: "{{ zram_swappiness }}"
+    state: present
+    sysctl_set: yes
+    reload: yes
+  tags: zram
+
+- name: Ensure zramswap service is enabled and started
+  systemd:
+    name: zramswap
+    state: started
+    enabled: yes
+  tags: zram
+
+- name: Verify zram devices exist
+  command: cat /proc/swaps
+  register: swaps_check
+  changed_when: false
+  tags: zram
+
+- name: Show zram status
+  command: zramctl
+  register: zram_status
+  changed_when: false
+  tags: zram
+
+- name: Display zram info
+  debug:
+    msg: "{{ zram_status.stdout_lines }}"
+  tags: zram

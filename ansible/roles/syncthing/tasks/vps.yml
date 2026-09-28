@@ -1,0 +1,135 @@
+---
+- name: Install Syncthing
+  apt:
+    name: syncthing
+    state: present
+    update_cache: yes
+
+- name: Stop syncthing running under debian user if present
+  systemd:
+    name: syncthing@debian
+    state: stopped
+    enabled: no
+  ignore_errors: yes
+
+- name: Create syncthing user
+  user:
+    name: "{{ syncthing_user }}"
+    system: yes
+    home: "{{ syncthing_home }}"
+    create_home: yes
+    shell: /usr/sbin/nologin
+    groups: docker
+    append: yes
+
+- name: Ensure syncthing config and state directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ syncthing_user }}"
+    group: "{{ syncthing_user }}"
+    mode: '0700'
+  loop:
+    - "{{ syncthing_config_dir }}"
+    - "{{ syncthing_state_dir }}"
+
+- name: Generate initial Syncthing config
+  command: "syncthing --generate='{{ syncthing_config_dir }}'"
+  args:
+    creates: "{{ syncthing_config_dir }}/config.xml"
+  environment:
+    HOME: "{{ syncthing_home }}"
+
+- name: Fix ownership of syncthing config
+  file:
+    path: "{{ syncthing_config_dir }}"
+    owner: "{{ syncthing_user }}"
+    group: "{{ syncthing_user }}"
+    recurse: yes
+
+- name: Install lxml for xml module
+  apt:
+    name: python3-lxml
+    state: present
+
+- name: Configure syncthing via XML
+  xml:
+    path: "{{ syncthing_config_dir }}/config.xml"
+    xpath: "{{ item.xpath }}"
+    value: "{{ item.value }}"
+  loop:
+    - xpath: /configuration/gui/address
+      value: "127.0.0.1:{{ syncthing_gui_port }}"
+    - xpath: /configuration/options/globalAnnounceEnabled
+      value: "false"
+    - xpath: /configuration/options/localAnnounceEnabled
+      value: "true"
+  loop_control:
+    label: "{{ item.xpath }}"
+
+- name: Remove default folder
+  xml:
+    path: "{{ syncthing_config_dir }}/config.xml"
+    xpath: /configuration/folder[@id='default']
+    state: absent
+
+- name: Deploy syncthing systemd service template
+  copy:
+    dest: /etc/systemd/system/syncthing@.service
+    content: |
+      [Unit]
+      Description=Syncthing - %i
+      After=network.target
+
+      [Service]
+      User=%i
+      ExecStart=/usr/bin/syncthing -no-browser -no-restart -logflags=0
+      Restart=on-failure
+      RestartSec=5
+      SuccessExitStatus=3 4 5
+      Environment=STNODEFAULTFOLDER=1
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+
+- name: Enable and start syncthing
+  systemd:
+    name: "syncthing@{{ syncthing_user }}"
+    state: started
+    enabled: yes
+    daemon_reload: yes
+
+- name: Wait for syncthing API
+  wait_for:
+    port: "{{ syncthing_gui_port }}"
+    host: 127.0.0.1
+    delay: 3
+    timeout: 30
+
+- name: Get VPS syncthing device ID
+  shell: "syncthing --device-id --home={{ syncthing_config_dir }}"
+  register: vps_device_id_raw
+  changed_when: false
+
+- name: Set VPS device ID fact
+  set_fact:
+    vps_syncthing_id: "{{ vps_device_id_raw.stdout | trim }}"
+
+- name: Get VPS syncthing API key
+  command: "grep -oP '(?<=<apikey>)[^<]+' {{ syncthing_config_dir }}/config.xml"
+  register: vps_api_key_raw
+  changed_when: false
+
+- name: Set VPS API key fact
+  set_fact:
+    vps_syncthing_api_key: "{{ vps_api_key_raw.stdout | trim }}"
+
+- name: Open Syncthing port in firewall
+  ufw:
+    rule: allow
+    port: "{{ syncthing_listen_port | string }}"
+    proto: tcp
+    comment: 'Syncthing sync'
+  when: manage_firewall | default(false)
+  ignore_errors: yes

@@ -1,0 +1,6 @@
+watchdog_check_interval: 120
+watchdog_cooldown: 600
+watchdog_ssh_timeout: 10
+watchdog_http_timeout: 10
+watchdog_script_dir: "{{ playbook_dir }}/../../scripts"
+watchdog_service_name: tollgate-watchdog

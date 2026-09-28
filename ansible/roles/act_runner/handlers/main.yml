@@ -1,0 +1,5 @@
+- name: restart act-runner
+  systemd:
+    name: tollgate-act-runner
+    state: restarted
+    daemon_reload: yes

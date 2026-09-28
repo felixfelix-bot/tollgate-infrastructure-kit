@@ -1,0 +1,42 @@
+---
+- name: Install Node.js 22
+  shell: |
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y nodejs
+  args:
+    creates: /usr/bin/node
+
+- name: Clone tollgate-release-explorer
+  git:
+    repo: "https://github.com/OpenTollGate/tollgate-release-explorer-site.git"
+    dest: "{{ tollgate_base_dir }}/src/release-explorer"
+    depth: 1
+    force: yes
+
+- name: Install release explorer dependencies
+  command: npm install --legacy-peer-deps
+  args:
+    chdir: "{{ tollgate_base_dir }}/src/release-explorer"
+    creates: "{{ tollgate_base_dir }}/src/release-explorer/node_modules/.package-lock.json"
+
+- name: Build release explorer
+  shell: |
+    export PATH="$PATH:$(npm bin -g)"
+    npx react-scripts build
+  args:
+    chdir: "{{ tollgate_base_dir }}/src/release-explorer"
+    creates: "{{ tollgate_base_dir }}/src/release-explorer/build/index.html"
+  environment:
+    NPM_CONFIG_LEGACY_PEER_DEPS: "true"
+    PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+
+- name: Ensure static files directory exists
+  file:
+    path: "{{ tollgate_static_dir }}/releases"
+    state: directory
+    mode: '0755'
+
+- name: Deploy release explorer static files
+  shell: rsync -a --delete "{{ tollgate_base_dir }}/src/release-explorer/build/" "{{ tollgate_static_dir }}/releases/"
+  args:
+    creates: "{{ tollgate_static_dir }}/releases/index.html"

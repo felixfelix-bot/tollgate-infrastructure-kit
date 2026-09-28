@@ -1,0 +1,24 @@
+[Unit]
+Description=ngit-grasp GRASP server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ngit-grasp
+Environment=NGIT_DOMAIN={{ grasp_domain }}
+Environment=NGIT_BIND_ADDRESS=127.0.0.1:{{ grasp_port }}
+Environment=NGIT_DATABASE_BACKEND=lmdb
+Environment=NGIT_GIT_DATA_PATH={{ tollgate_base_dir }}/grasp/data/git
+Environment=NGIT_RELAY_DATA_PATH={{ tollgate_base_dir }}/grasp/data/relay
+Environment=NGIT_ARCHIVE_ALL={{ 'true' if grasp_archive_all else 'false' }}
+{% if not grasp_archive_all %}
+Environment=NGIT_ARCHIVE_READ_ONLY={{ 'true' if grasp_archive_read_only else 'false' }}
+{% endif %}
+Environment=NGIT_SYNC_BOOTSTRAP_RELAY_URL={{ grasp_bootstrap_relay_url }}
+Environment=RUST_LOG=info
+WorkingDirectory={{ tollgate_base_dir }}/grasp
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

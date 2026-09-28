@@ -1,0 +1,244 @@
+---
+- name: Check if this is a teardown run
+  set_fact:
+    plebeian_teardown: "{{ ansible_run_tags | select('match', '^teardown$') | list | length > 0 }}"
+  tags: [always]
+
+- name: === DEPLOY BLOCK ===
+  block:
+    - name: Create plebeian market test directory
+      file:
+        path: "{{ plebeian_market_test_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Deploy docker-compose for plebeian market test
+      template:
+        src: docker-compose.yml.j2
+        dest: "{{ plebeian_market_test_dir }}/docker-compose.yml"
+        mode: '0644'
+
+    - name: Start plebeian market test containers
+      community.docker.docker_compose_v2:
+        project_src: "{{ plebeian_market_test_dir }}"
+        state: present
+        build: never
+
+    - name: Wait for test relay to start
+      wait_for:
+        port: "{{ plebeian_market_test_relay_port }}"
+        host: localhost
+        delay: 5
+        timeout: 120
+
+    - name: Wait for test market app to start
+      uri:
+        url: "http://localhost:{{ plebeian_market_test_port }}"
+        return_content: no
+        status_code: [200, 301, 302]
+      register: market_health
+      until: market_health.status in [200, 301, 302]
+      retries: 60
+      delay: 10
+
+    - name: Create DNS A record for test-market subdomain
+      uri:
+        url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id_resolved | default(cloudflare_zone_id) }}/dns_records"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ cloudflare_api_token }}"
+          Content-Type: "application/json"
+        body:
+          type: A
+          name: "{{ plebeian_market_test_domain }}"
+          content: "{{ vps_ip }}"
+          ttl: 300
+          proxied: false
+        body_format: json
+        status_code: [200, 400]
+      register: dns_market
+      changed_when: dns_market.json.success is defined and dns_market.json.success
+
+    - name: Create DNS A record for test-relay subdomain
+      uri:
+        url: "https://api.cloudflare.com/client/v4/zones/{{ cloudflare_zone_id_resolved | default(cloudflare_zone_id) }}/dns_records"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ cloudflare_api_token }}"
+          Content-Type: "application/json"
+        body:
+          type: A
+          name: "{{ plebeian_market_test_relay_domain }}"
+          content: "{{ vps_ip }}"
+          ttl: 300
+          proxied: false
+        body_format: json
+        status_code: [200, 400]
+      register: dns_relay
+      changed_when: dns_relay.json.success is defined and dns_relay.json.success
+
+    - name: Get Cloudflare zone ID for Caddy DNS
+      block:
+        - name: Fetch zone ID
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones?name={{ cloudflare_zone_name }}"
+            headers:
+              Authorization: "Bearer {{ cloudflare_api_token }}"
+            return_content: yes
+          register: cf_zone
+          when: cloudflare_zone_id_resolved is not defined
+
+        - name: Set zone ID fact
+          set_fact:
+            cloudflare_zone_id_resolved: "{{ cloudflare_zone_id if cloudflare_zone_id != '' else (cf_zone.json.result[0].id) }}"
+          when: cloudflare_zone_id_resolved is not defined
+
+    - name: Deploy Caddy route for plebeian market test
+      block:
+        - name: Generate Caddy route snippet
+          set_fact:
+            caddy_route_snippet: |
+              test-market.{{ base_domain }} {
+                  tls {
+                      dns cloudflare {env.CF_API_TOKEN}
+                  }
+                  reverse_proxy localhost:{{ plebeian_market_test_port }}
+              }
+
+              test-relay.{{ base_domain }} {
+                  tls {
+                      dns cloudflare {env.CF_API_TOKEN}
+                  }
+
+                  @websocket header Connection *Upgrade*
+                  @websocket header Upgrade websocket
+
+                  handle @websocket {
+                      reverse_proxy localhost:{{ plebeian_market_test_relay_port }}
+                  }
+
+                  handle {
+                      reverse_proxy localhost:{{ plebeian_market_test_relay_port }}
+                  }
+              }
+
+        - name: Check if test-market route already exists in Caddyfile
+          shell: "grep -c 'test-market.{{ base_domain }}' {{ tollgate_base_dir }}/caddy/Caddyfile || true"
+          register: caddy_route_check
+          changed_when: false
+
+        - name: Append route to Caddyfile
+          shell: "echo '{{ caddy_route_snippet }}' >> {{ tollgate_base_dir }}/caddy/Caddyfile"
+          when: caddy_route_check.stdout == '0'
+
+        - name: Reload Caddy
+          shell: docker exec tollgate-caddy caddy reload --config /etc/caddy/Caddyfile 2>&1
+          register: caddy_reload
+          changed_when: true
+          when: caddy_route_check.stdout == '0'
+
+    - name: Wait for DNS propagation
+      pause:
+        seconds: 10
+
+    - name: Verify test market is accessible via HTTPS
+      uri:
+        url: "https://{{ plebeian_market_test_domain }}"
+        return_content: no
+        validate_certs: no
+        status_code: [200, 301, 302]
+      register: https_check
+      until: https_check.status in [200, 301, 302]
+      retries: 10
+      delay: 5
+
+    - name: Display deployment info
+      debug:
+        msg: |
+          Plebeian Market test instance deployed!
+          Market URL: https://{{ plebeian_market_test_domain }}
+          Test Relay: wss://{{ plebeian_market_test_relay_domain }}
+          Local Relay: ws://localhost:{{ plebeian_market_test_relay_port }}
+          Teardown: ansible-playbook ... --tags teardown
+  when: not plebeian_teardown
+  tags: [always]
+
+- name: === TEARDOWN BLOCK ===
+  block:
+    - name: Stop and remove plebeian market test containers
+      community.docker.docker_compose_v2:
+        project_src: "{{ plebeian_market_test_dir }}"
+        state: absent
+
+    - name: Remove test-market Caddy route from Caddyfile
+      shell: |
+        sed -i '/^test-market\.{{ base_domain }}$/,/^}$/d' {{ tollgate_base_dir }}/caddy/Caddyfile
+        sed -i '/^test-relay\.{{ base_domain }}$/,/^}$/d' {{ tollgate_base_dir }}/caddy/Caddyfile
+      ignore_errors: yes
+
+    - name: Restart Caddy to pick up Caddyfile changes
+      shell: docker restart tollgate-caddy 2>&1
+      ignore_errors: yes
+
+    - name: Remove DNS A record for test-market
+      block:
+        - name: Get Cloudflare zone ID
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones?name={{ cloudflare_zone_name }}"
+            headers:
+              Authorization: "Bearer {{ cloudflare_api_token }}"
+            return_content: yes
+          register: cf_zone_teardown
+
+        - name: Set zone ID
+          set_fact:
+            teardown_zone_id: "{{ cloudflare_zone_id if cloudflare_zone_id != '' else (cf_zone_teardown.json.result[0].id) }}"
+
+        - name: Find DNS record for test-market
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones/{{ teardown_zone_id }}/dns_records?type=A&name={{ plebeian_market_test_domain }}"
+            headers:
+              Authorization: "Bearer {{ cloudflare_api_token }}"
+            return_content: yes
+          register: dns_records_market
+
+        - name: Delete DNS record for test-market
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones/{{ teardown_zone_id }}/dns_records/{{ item }}"
+            method: DELETE
+            headers:
+              Authorization: "Bearer {{ cloudflare_api_token }}"
+            status_code: [200, 404]
+          loop: "{{ dns_records_market.json.result | map(attribute='id') | list }}"
+          when: dns_records_market.json.result | length > 0
+
+        - name: Find DNS record for test-relay
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones/{{ teardown_zone_id }}/dns_records?type=A&name={{ plebeian_market_test_relay_domain }}"
+            headers:
+              Authorization: "Bearer {{ cloudflare_api_token }}"
+            return_content: yes
+          register: dns_records_relay
+
+        - name: Delete DNS record for test-relay
+          uri:
+            url: "https://api.cloudflare.com/client/v4/zones/{{ teardown_zone_id }}/dns_records/{{ item }}"
+            method: DELETE
+            headers:
+              Authorization: "Bearer {{ cloudflare_api_token }}"
+            status_code: [200, 404]
+          loop: "{{ dns_records_relay.json.result | map(attribute='id') | list }}"
+          when: dns_records_relay.json.result | length > 0
+      ignore_errors: yes
+
+    - name: Remove plebeian market test directory
+      file:
+        path: "{{ plebeian_market_test_dir }}"
+        state: absent
+      ignore_errors: yes
+
+    - name: Display teardown info
+      debug:
+        msg: "Plebeian Market test instance removed. Containers stopped, DNS records deleted, Caddy route removed."
+  when: plebeian_teardown
+  tags: [always]

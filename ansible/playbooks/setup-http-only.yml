@@ -1,0 +1,20 @@
+---
+- name: Deploy all Tollgate infrastructure (HTTP-only, no Cloudflare)
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  serial: 1
+  roles:
+    - system
+    - docker
+    - strfry
+    - obelisk_relay
+    - blossom
+    - nsite_gateway
+    - release_explorer
+    - hive_ci
+    - mint_orchestrator
+    - mptcp_server
+    - nsyte_cli

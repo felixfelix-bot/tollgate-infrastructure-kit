@@ -1,0 +1,25 @@
+---
+solix_nsite_repo: "nostr://npub12m5exm2uk3xa674cc5r0hlyvccs5xxn7qv83ezuteefv5972nquq4j4szl/relay.ngit.dev/contextvm-anker-solix"
+solix_nsite_branch: "master"
+solix_nsite_domain: "solix.{{ base_domain }}"
+solix_nsite_static_dir: "{{ tollgate_static_dir }}/solix"
+solix_nsite_src_dir: "/tmp/contextvm-anker-solix"
+solix_nsite_relays:
+  - "wss://relay.orangesync.tech"
+  - "wss://ngit.orangesync.tech"
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://relay.nostr.net"
+solix_nsite_servers:
+  - "https://blossom.orangesync.tech"
+  - "https://blossom.primal.net"
+  - "https://cdn.sovbit.host"
+
+solix_logger_user: "solix-logger"
+solix_logger_dir: "/opt/solix-logger"
+solix_logger_csv_dir: "/var/lib/solix-logger"
+solix_logger_csv_path: "/var/lib/solix-logger/solix_log.csv"
+solix_logger_interval: 30
+solix_logger_mac: "7C:E9:13:93:7F:8C"
+solix_logger_relays: "wss://relay.orangesync.tech,wss://ngit.orangesync.tech,wss://relay.damus.io"
+solix_daemon_npub: ""

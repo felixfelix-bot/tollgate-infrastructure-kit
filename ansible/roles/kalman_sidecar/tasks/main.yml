@@ -1,0 +1,44 @@
+---
+- name: Ensure venv exists
+  command: python3 -m venv {{ kalman_sidecar_venv }}
+  args:
+    creates: "{{ kalman_sidecar_venv }}/bin/python"
+  when: kalman_sidecar_enabled
+
+- name: Install dependencies
+  pip:
+    name: "{{ item }}"
+    virtualenv: "{{ kalman_sidecar_venv }}"
+  loop:
+    - numpy
+    - pyyaml
+  when: kalman_sidecar_enabled
+
+- name: Copy scripts
+  copy:
+    src: "{{ item }}"
+    dest: "{{ tollgate_base_dir }}/kalman-sidecar/{{ item | basename }}"
+    mode: "0755"
+  loop: "{{ kalman_sidecar_scripts }}"
+  when: kalman_sidecar_enabled
+
+- name: Configure exhaustion-gate cron
+  cron:
+    name: "exhaustion-gate"
+    minute: "{{ kalman_sidecar_cron_interval }}"
+    job: "{{ kalman_sidecar_venv }}/python {{ tollgate_base_dir }}/kalman-sidecar/exhaustion-gate.py >> {{ tollgate_base_dir }}/kalman-sidecar/exhaustion-gate.log 2>&1"
+  when: kalman_sidecar_enabled
+
+- name: Configure revenue digest cron (daily at 09:05 IST)
+  cron:
+    name: "daily-revenue-digest"
+    minute: "35"
+    hour: "3"
+    job: "{{ kalman_sidecar_venv }}/python {{ tollgate_base_dir }}/kalman-sidecar/routstr-revenue-digest.py >> {{ tollgate_base_dir }}/kalman-sidecar/revenue-digest.log 2>&1"
+  when: kalman_sidecar_enabled
+
+- name: Remove exhaustion-gate cron if disabled
+  cron:
+    name: "exhaustion-gate"
+    state: absent
+  when: not kalman_sidecar_enabled

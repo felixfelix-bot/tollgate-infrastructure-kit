@@ -1,0 +1,167 @@
+---
+- name: Create backup staging directories
+  file:
+    path: "{{ backup_staging_dir }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - strfry
+    - ngit-relay
+    - grasp
+    - mints
+    - routstr
+    - caddy
+    - blossom
+    - act-runner
+    - "{{ backup_hermes_staging_subdir }}"
+
+- name: Install restic for deduplicated incremental backups
+  package:
+    name: restic
+    state: present
+
+- name: Install rsync for remote backup sync
+  package:
+    name: rsync
+    state: present
+  when: backup_rsync_vps2_enabled | default(false) | bool
+
+- name: Ensure restic repo password in tollgate env
+  lineinfile:
+    path: /opt/tollgate/.env
+    regexp: "^BACKUP_RESTIC_PASSWORD="
+    line: "BACKUP_RESTIC_PASSWORD={{ backup_restic_password }}"
+    create: yes
+    mode: '0600'
+  no_log: yes
+
+- name: Initialise restic repository if absent
+  shell: |
+    RESTIC_REPOSITORY='{{ backup_restic_repo }}' RESTIC_PASSWORD='{{ backup_restic_password }}' \
+    restic snapshots >/dev/null 2>&1 || \
+    RESTIC_REPOSITORY='{{ backup_restic_repo }}' RESTIC_PASSWORD='{{ backup_restic_password }}' restic init
+  args:
+    creates: "{{ backup_restic_repo }}/config"
+  register: restic_init
+  changed_when: "'created restic repository' in (restic_init.stdout | default(''))"
+
+- name: Deploy backup status generator
+  copy:
+    src: gen-backup-status.py
+    dest: /usr/local/bin/gen-backup-status.py
+    mode: '0755'
+
+- name: Deploy backup script
+  template:
+    src: tollgate-backup.sh.j2
+    dest: /usr/local/bin/tollgate-backup.sh
+    mode: '0755'
+
+- name: Deploy backup systemd service
+  template:
+    src: tollgate-backup.service.j2
+    dest: /etc/systemd/system/tollgate-backup.service
+    mode: '0644'
+
+- name: Deploy backup systemd timer
+  template:
+    src: tollgate-backup.timer.j2
+    dest: /etc/systemd/system/tollgate-backup.timer
+    mode: '0644'
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start backup timer
+  systemd:
+    name: tollgate-backup.timer
+    state: started
+    enabled: yes
+
+- name: Deploy backup status systemd service
+  template:
+    src: tollgate-backup-status.service.j2
+    dest: /etc/systemd/system/tollgate-backup-status.service
+    mode: '0644'
+
+- name: Deploy backup status systemd timer
+  template:
+    src: tollgate-backup-status.timer.j2
+    dest: /etc/systemd/system/tollgate-backup-status.timer
+    mode: '0644'
+
+- name: Reload systemd for status timer
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start backup status timer
+  systemd:
+    name: tollgate-backup-status.timer
+    state: started
+    enabled: yes
+
+- name: Write machine ID file
+  copy:
+    content: "{{ machine_id | default('unknown') }}"
+    dest: /etc/tollgate-machine-id
+    mode: '0644'
+
+- name: Install Python deps for Nostr publishing
+  pip:
+    name:
+      - coincurve>=20.0.0
+      - bech32>=1.2.0
+      - websockets>=12.0
+    state: present
+    executable: pip3
+    extra_args: --break-system-packages
+
+- name: Ensure Nostr status env vars in tollgate env
+  lineinfile:
+    path: /opt/tollgate/.env
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+    create: yes
+  loop:
+    - { key: "TOLLGATE_STATUS_NSEC_HEX", value: "{{ tollgate_status_nsec_hex }}" }
+    - { key: "TOLLGATE_STATUS_NPUB", value: "{{ tollgate_status_npub }}" }
+  no_log: yes
+
+- name: Deploy VPS stats generator
+  copy:
+    src: gen-vps-stats.py
+    dest: /usr/local/bin/gen-vps-stats.py
+    mode: '0755'
+
+- name: Deploy VPS stats systemd service
+  template:
+    src: tollgate-vps-stats.service.j2
+    dest: /etc/systemd/system/tollgate-vps-stats.service
+    mode: '0644'
+
+- name: Deploy VPS stats systemd timer
+  template:
+    src: tollgate-vps-stats.timer.j2
+    dest: /etc/systemd/system/tollgate-vps-stats.timer
+    mode: '0644'
+
+- name: Reload systemd for VPS stats timer
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start VPS stats timer
+  systemd:
+    name: tollgate-vps-stats.timer
+    state: started
+    enabled: yes
+
+- name: Run initial backup
+  command: /usr/local/bin/tollgate-backup.sh
+  register: initial_backup
+  changed_when: "'Backup complete' in initial_backup.stdout"
+  failed_when: false
+
+- name: Show initial backup output
+  debug:
+    msg: "{{ initial_backup.stdout_lines | default(['backup did not run']) }}"

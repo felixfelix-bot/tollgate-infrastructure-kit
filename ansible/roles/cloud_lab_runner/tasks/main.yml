@@ -1,0 +1,146 @@
+---
+- name: Check if cloud lab runner is enabled
+  debug:
+    msg: "Cloud lab runner is disabled. Set cloud_lab_runner_enabled=true to install."
+  when: not cloud_lab_runner_enabled
+
+- name: Install QEMU and networking packages
+  block:
+    - name: Install QEMU/KVM and networking packages
+      apt:
+        name:
+          - qemu-system-x86
+          - qemu-utils
+          - iproute2
+          - bridge-utils
+          - iptables
+          - python3
+          - python3-venv
+          - python3-pip
+          - git
+          - curl
+          - sshpass
+          - jq
+        state: present
+      become: yes
+
+    - name: Check KVM support
+      command: grep -c '(vmx|svm)' /proc/cpuinfo
+      register: kvm_check
+      changed_when: false
+      failed_when: false
+
+    - name: Warn if no KVM support
+      debug:
+        msg: "WARNING: No hardware virtualization (vmx/svm) detected. QEMU will run without KVM acceleration (very slow)."
+      when: kvm_check.stdout == "0"
+
+    - name: Load KVM kernel modules
+      modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - kvm
+        - kvm_intel
+      ignore_errors: yes
+      become: yes
+  when: cloud_lab_runner_enabled
+
+- name: Create virtual lab directories
+  block:
+    - name: Create workdir structure
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ cloud_lab_workdir }}"
+        - "{{ cloud_lab_workdir }}/images"
+        - "{{ cloud_lab_workdir }}/overlays"
+        - "{{ cloud_lab_workdir }}/run"
+
+    - name: Create test checkout directory
+      file:
+        path: /opt/tollgate-test
+        state: directory
+        mode: '0755'
+      become: yes
+
+    - name: Create Python venv
+      command: python3 -m venv /opt/tollgate-venv
+      args:
+        creates: /opt/tollgate-venv/bin/python
+      become: yes
+  when: cloud_lab_runner_enabled
+
+- name: Download VM images
+  block:
+    - name: Download OpenWrt base image
+      get_url:
+        url: "{{ cloud_lab_openwrt_url }}"
+        dest: "{{ cloud_lab_workdir }}/images/{{ cloud_lab_openwrt_image }}"
+        mode: '0644'
+      register: openwrt_download
+
+    - name: Convert OpenWrt image to qcow2
+      shell: |
+        cd {{ cloud_lab_workdir }}/images
+        gunzip -k -f {{ cloud_lab_openwrt_image }} || true
+        IMG=$(echo {{ cloud_lab_openwrt_image }} | sed 's/.gz$//')
+        qemu-img convert -f raw -O qcow2 "$IMG" openwrt-base.qcow2
+        rm -f "$IMG"
+      args:
+        creates: "{{ cloud_lab_workdir }}/images/openwrt-base.qcow2"
+
+    - name: Download Debian nocloud image
+      get_url:
+        url: "{{ cloud_lab_debian_url }}"
+        dest: "{{ cloud_lab_workdir }}/images/{{ cloud_lab_debian_image }}"
+        mode: '0644'
+  when: cloud_lab_runner_enabled
+
+- name: Optionally bake Debian Playwright overlay
+  block:
+    - name: Create Debian overlay from base
+      command: >
+        qemu-img create -f qcow2 -F qcow2
+        -b {{ cloud_lab_workdir }}/images/{{ cloud_lab_debian_image }}
+        {{ cloud_lab_workdir }}/overlays/debian-client.qcow2
+      args:
+        creates: "{{ cloud_lab_workdir }}/overlays/debian-client.qcow2"
+
+    - name: Resize Debian overlay
+      command: >
+        qemu-img resize {{ cloud_lab_workdir }}/overlays/debian-client.qcow2 {{ cloud_lab_debian_disk_size }}
+      ignore_errors: yes
+  when: cloud_lab_runner_enabled
+
+- name: Checkout test suite
+  block:
+    - name: Clone test suite repo
+      git:
+        repo: https://github.com/OpenTollGate/physical-router-test-automation.git
+        dest: /opt/tollgate-test
+        depth: 50
+        force: yes
+      become: yes
+      ignore_errors: yes
+
+    - name: Install Python requirements
+      pip:
+        requirements: /opt/tollgate-test/requirements.txt
+        virtualenv: /opt/tollgate-venv
+      become: yes
+      ignore_errors: yes
+  when: cloud_lab_runner_enabled
+
+- name: Ensure log file location
+  block:
+    - name: Touch worker log
+      file:
+        path: /var/log/tollgate-run.log
+        state: touch
+        mode: '0644'
+        owner: "{{ ansible_user }}"
+      become: yes
+  when: cloud_lab_runner_enabled

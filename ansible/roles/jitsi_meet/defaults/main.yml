@@ -1,0 +1,4 @@
+jitsi_meet_port: 8443
+jitsi_meet_http_port: 8090
+jitsi_meet_dir: "{{ tollgate_base_dir }}/jitsi-meet"
+jitsi_meet_subdomain: meet

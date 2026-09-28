@@ -1,0 +1,47 @@
+---
+- name: Clone or update cashu-brrr repository
+  git:
+    repo: "{{ mint_operator_proxy_repo_url }}"
+    dest: "{{ tollgate_base_dir }}/src/cashu-brrr"
+    version: "{{ mint_operator_proxy_repo_branch }}"
+    force: yes
+
+- name: Install server dependencies
+  npm:
+    path: "{{ tollgate_base_dir }}/src/cashu-brrr/server"
+    production: yes
+
+- name: Install tsx for running TypeScript
+  npm:
+    name: tsx
+    global: no
+    path: "{{ tollgate_base_dir }}/src/cashu-brrr/server"
+  register: tsx_install
+
+- name: Create systemd unit for mint operator proxy
+  template:
+    src: mint-operator-proxy.service.j2
+    dest: /etc/systemd/system/mint-operator-proxy.service
+    mode: "0644"
+  notify: restart mint operator proxy
+
+- name: Enable and start mint operator proxy
+  systemd:
+    name: mint-operator-proxy
+    state: started
+    enabled: yes
+    daemon_reload: yes
+
+- name: Wait for proxy to be ready
+  uri:
+    url: "http://localhost:{{ mint_operator_proxy_port }}/api/health"
+    return_content: yes
+  register: proxy_health
+  until: proxy_health.status in [200, 401]
+  ignore_errors: yes
+  retries: 15
+  delay: 2
+
+- name: Display proxy info
+  debug:
+    msg: "Mint operator proxy running on port {{ mint_operator_proxy_port }}"

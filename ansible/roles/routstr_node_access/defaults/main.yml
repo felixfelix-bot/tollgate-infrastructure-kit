@@ -1,0 +1,21 @@
+---
+# routstr_node_access — programmatic access from the laptop to the VPS2
+# routstr friends node (loopback-bound 127.0.0.1:8009) plus the fixed
+# balance collector that the zai_proxy B1 wallet gate reads.
+#
+# Why: both VPS2 routstr containers bind their ports to VPS2-localhost
+# only; ROUTSTR_BASE must point at the local tunnel, and the collector
+# needs the current /v1/balance/info endpoint + the sats-vs-USD unit fix
+# (MRE src/balance_collectors.py is the source of truth; this deploys it
+# to ~/.hermes/bot/src/ where zai_proxy imports it from).
+routstr_node_access_vps2_ip: "23.182.128.51"
+routstr_node_access_ssh_user: "root"
+routstr_node_access_local_port: 8009
+routstr_node_access_remote_port: 8009
+routstr_node_access_unit_name: "routstr-tunnel.service"
+
+routstr_node_access_env_files:
+  - "{{ ansible_facts['env']['HOME'] }}/.hermes/.env"
+  - "{{ ansible_facts['env']['HOME'] }}/.hermes/profiles/manager/.env"
+
+routstr_node_access_bot_src_dir: "{{ ansible_facts['env']['HOME'] }}/.hermes/bot/src"

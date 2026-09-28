@@ -1,0 +1,138 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  tags: system
+
+- name: Upgrade system packages
+  apt:
+    upgrade: dist
+  when: system_upgrade | default(false)
+  tags: system
+
+- name: Install base packages
+  apt:
+    name:
+      - curl
+      - wget
+      - git
+      - jq
+      - htop
+      - tmux
+      - vim
+      - ufw
+      - ca-certificates
+      - gnupg
+      - lsb-release
+      - python3
+      - python3-pip
+      - python3-venv
+      - apt-transport-https
+      - fail2ban
+      - logrotate
+      - net-tools
+      - dnsutils
+      - unzip
+      - build-essential
+    state: present
+  tags: system
+
+- name: Set locale
+  locale_gen:
+    name: en_US.UTF-8
+    state: present
+  tags: system
+
+- name: Set default locale
+  command: update-locale LANG=en_US.UTF-8
+  changed_when: false
+  tags: system
+
+- name: Set timezone to UTC
+  timezone:
+    name: UTC
+  when: manage_timezone | default(false)
+  tags: system
+
+- name: Enable IP forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    sysctl_set: yes
+  tags: system
+
+- name: Enable MPTCP in kernel
+  sysctl:
+    name: "{{ item }}"
+    value: '1'
+    state: present
+    sysctl_set: yes
+  loop:
+    - net.mptcp.enabled
+    - net.mptcp.pm_type
+  tags: system
+
+- name: Set MPTCP max subflows
+  sysctl:
+    name: net.mptcp.add_addr_accepted
+    value: '{{ mptcp_max_subflows }}'
+    state: present
+    sysctl_set: yes
+  ignore_errors: yes
+  tags: system
+
+- name: Create tollgate directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ tollgate_base_dir }}"
+    - "{{ tollgate_static_dir }}"
+    - "{{ tollgate_static_dir }}/releases"
+    - "{{ tollgate_static_dir }}/hive-ci"
+    - "{{ tollgate_base_dir }}/caddy"
+    - "{{ tollgate_base_dir }}/strfry"
+    - "{{ tollgate_base_dir }}/obelisk"
+    - "{{ tollgate_base_dir }}/blossom"
+    - "{{ tollgate_base_dir }}/nsite-gateway"
+    - "{{ tollgate_base_dir }}/mints"
+    - "{{ tollgate_base_dir }}/mptcp"
+    - "{{ tollgate_base_dir }}/grasp"
+    - "{{ tollgate_base_dir }}/grasp/data"
+    - "{{ tollgate_base_dir }}/grasp/data/git"
+    - "{{ tollgate_base_dir }}/grasp/data/relay"
+  tags: system
+
+- name: Configure UFW firewall
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ firewall_allowed_ports + (firewall_extra_ports | default([])) }}"
+  when: manage_firewall | default(false)
+  tags: system
+
+- name: Allow UFW for Glorytun UDP
+  ufw:
+    rule: allow
+    port: "{{ glorytun_port }}"
+    proto: udp
+  when: manage_firewall | default(false) and glorytun_enabled
+  tags: system
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+    policy: deny
+  when: manage_firewall | default(false)
+  tags: system
+
+- name: Enable fail2ban
+  systemd:
+    name: fail2ban
+    state: started
+    enabled: yes
+  when: manage_fail2ban | default(false)
+  tags: system

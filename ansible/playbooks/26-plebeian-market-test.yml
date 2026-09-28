@@ -1,0 +1,9 @@
+---
+- name: Deploy/teardown Plebeian Market test instance
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - plebeian_market_test

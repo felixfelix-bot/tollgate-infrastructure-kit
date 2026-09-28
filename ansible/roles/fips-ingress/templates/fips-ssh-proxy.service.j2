@@ -1,0 +1,12 @@
+[Unit]
+Description=FIPS SSH Proxy ({{ fips_ingress_ssh_target_host }}:{{ fips_ingress_ssh_target_port }} via socat)
+After=network.target
+Wants=fips.service
+
+[Service]
+ExecStart={{ fips_ingress_socat_path }} TCP-LISTEN:{{ fips_ingress_ssh_proxy_port }},fork,reuseaddr TCP6:[{{ fips_ingress_ssh_target_host }}]:{{ fips_ingress_ssh_target_port }}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

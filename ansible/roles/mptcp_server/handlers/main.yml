@@ -1,0 +1,6 @@
+---
+- name: restart shadowsocks
+  systemd:
+    name: shadowsocks-libev
+    state: restarted
+    daemon_reload: yes

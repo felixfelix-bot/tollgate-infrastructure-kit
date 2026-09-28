@@ -1,0 +1,187 @@
+---
+- name: Generate or load Routstr Nostr keypair
+  block:
+    - name: Check for existing Routstr config
+      stat:
+        path: "{{ tollgate_base_dir }}/routstr/routstr.conf"
+      register: routstr_conf
+
+    - name: Load existing config
+      slurp:
+        src: "{{ tollgate_base_dir }}/routstr/routstr.conf"
+      register: existing_conf
+      when: routstr_conf.stat.exists
+
+    - name: Parse existing config
+      set_fact:
+        routstr_existing_config: "{{ (existing_conf.content | b64decode | from_json) if routstr_conf.stat.exists else {} }}"
+
+    - name: Set existing nsec if available
+      set_fact:
+        routstr_nsec: "{{ routstr_existing_config.nsec | default('') }}"
+
+    - name: Generate new Nostr keypair if needed
+      block:
+        - name: Install pynostr
+          pip:
+            name: pynostr
+            state: present
+            extra_args: "--break-system-packages"
+
+        - name: Generate Nostr key
+          shell: |
+            python3 -c "
+            from pynostr.key import PrivateKey
+            pk = PrivateKey()
+            print(pk.bech32())
+            "
+          register: nsec_output
+          changed_when: false
+
+        - name: Set generated nsec
+          set_fact:
+            routstr_nsec: "{{ nsec_output.stdout }}"
+      when: routstr_nsec | length == 0
+
+- name: Set Routstr facts from env
+  set_fact:
+    routstr_admin_password: "{{ lookup('env', 'ROUTSTR_ADMIN_PASSWORD') | default('changeme', true) }}"
+    routstr_upstream_base_url: "{{ lookup('env', 'ROUTSTR_UPSTREAM_BASE_URL') | default('https://api.z.ai/api/coding/paas/v4', true) }}"
+    routstr_upstream_api_key: "{{ lookup('env', 'ROUTSTR_UPSTREAM_API_KEY') | default('', true) }}"
+    routstr_node_name: "{{ lookup('env', 'ROUTSTR_NODE_NAME') | default('Tollgate AI Node', true) }}"
+    routstr_node_description: "{{ lookup('env', 'ROUTSTR_NODE_DESCRIPTION') | default('AI inference via Cashu micropayments', true) }}"
+    # routstr_ln_address intentionally removed (2026-08-22): RECEIVE_LN_ADDRESS
+    # is no longer set in the compose template — the admin-API/DB owns the
+    # payout address (see the Configure Routstr settings task).
+    # Anti-wipe invariant (2026-08-22): the node's receive_ln_address must
+    # NEVER be overwritten with an empty value by a deployment. Repo default
+    # = tollgate@coinos.io (what others running the public workflows get);
+    # private deployments override via ROUTSTR_RECEIVE_LN_ADDRESS in their
+    # gitignored .env. Empty-but-set also falls back to the default.
+    routstr_receive_ln_address: "{{ lookup('env', 'ROUTSTR_RECEIVE_LN_ADDRESS') | default('tollgate@coinos.io', true) }}"
+    routstr_relays: "ws://localhost:7777,wss://relay.damus.io,wss://nos.lol,wss://relay.primal.net"
+
+- name: Create Routstr directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ tollgate_base_dir }}/routstr"
+    - "{{ routstr_data_dir }}"
+    - "{{ routstr_log_dir }}"
+    - "{{ routstr_tor_dir }}"
+
+- name: Save Routstr config
+  copy:
+    content: "{{ { 'nsec': routstr_nsec, 'domain': routstr_domain, 'mint_url': routstr_mint_url } | to_nice_json }}"
+    dest: "{{ tollgate_base_dir }}/routstr/routstr.conf"
+    mode: '0600'
+
+- name: Deploy dedicated Routstr mint
+  include_role:
+    name: cashu_mint
+  vars:
+    mint_name: "{{ routstr_mint_subdomain }}"
+    mint_units: "{{ routstr_mint_units }}"
+    custom_port: "{{ routstr_mint_rest_port }}"
+    custom_grpc_port: "{{ routstr_mint_grpc_port }}"
+    npub: "{{ routstr_operator_npub }}"
+
+- name: Deploy Routstr docker-compose
+  template:
+    src: docker-compose.routstr.yml.j2
+    dest: "{{ tollgate_base_dir }}/routstr/docker-compose.yml"
+    mode: '0644'
+
+- name: Start Routstr containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/routstr"
+    state: present
+  register: routstr_deploy
+  when: machine_active | default(true)
+
+- name: Wait for Routstr to start
+  uri:
+    url: "http://localhost:{{ routstr_rest_port }}/v1/models"
+    return_content: yes
+  register: routstr_health
+  until: routstr_health.status == 200
+  retries: 30
+  delay: 3
+  when: machine_active | default(true)
+
+- name: Wait for Routstr container healthcheck to pass
+  ansible.builtin.command: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} {{ routstr_container_name }}"
+  register: routstr_health_status
+  until: routstr_health_status.stdout == "healthy"
+  retries: 30
+  delay: 5
+  changed_when: false
+  failed_when: false
+  when: machine_active | default(true)
+
+- name: Login to Routstr admin API
+  uri:
+    url: "http://localhost:{{ routstr_rest_port }}/admin/api/login"
+    method: POST
+    body:
+      password: "{{ routstr_admin_password }}"
+    body_format: json
+    return_content: yes
+  register: routstr_login
+  when: machine_active | default(true)
+
+- name: Configure Routstr settings via admin API
+  uri:
+    url: "http://localhost:{{ routstr_rest_port }}/admin/api/settings"
+    method: PATCH
+    headers:
+      Authorization: "Bearer {{ routstr_login.json.token }}"
+    # Anti-wipe invariant (2026-08-22): receive_ln_address is included ONLY
+    # when non-empty, so a deployment can never clear the node's existing
+    # payout address. The admin-API/DB is the single source of truth for it
+    # (the compose template no longer sets RECEIVE_LN_ADDRESS).
+    body: >-
+      {{ {'cashu_mints': [routstr_mint_url],
+          'upstream_provider_fee': routstr_upstream_fee | default(1.10),
+          'exchange_fee': routstr_exchange_fee | default(1.005),
+          'min_payout_sat': routstr_min_payout_sat | default(210),
+          'payout_interval_seconds': routstr_payout_interval | default(900),
+          'enable_analytics_sharing': true}
+         | combine({'receive_ln_address': routstr_receive_ln_address}
+                   if routstr_receive_ln_address | string | trim | length > 0
+                   else {}) }}
+    body_format: json
+    return_content: yes
+  register: routstr_settings_result
+  when: machine_active | default(true)
+
+- name: Verify Routstr is accessible via Caddy
+  uri:
+    url: "https://{{ routstr_domain }}/v1/info"
+    return_content: yes
+    validate_certs: no
+  register: routstr_caddy_health
+  until: routstr_caddy_health.status == 200
+  retries: 15
+  delay: 3
+  when: machine_active | default(true)
+
+- name: Get Tor onion address
+  shell: "cat {{ routstr_tor_dir }}/ROUTER/hostname 2>/dev/null || echo 'pending'"
+  register: tor_onion
+  changed_when: false
+
+- name: Display Routstr deployment info
+  debug:
+    msg: |
+      Routstr node deployed successfully!
+      URL: https://{{ routstr_domain }}
+      Admin: https://{{ routstr_domain }}/ (password-protected dashboard)
+      Dedicated Mint: {{ routstr_mint_url }}
+      Accepted Mints: {{ routstr_mint_url }}, https://mint.minibits.cash/Bitcoin
+      Lightning Payout: {{ routstr_receive_ln_address }}
+      Upstream: {{ routstr_upstream_base_url }}
+      Onion: {{ tor_onion.stdout }}
+      Nsec: saved to {{ tollgate_base_dir }}/routstr/routstr.conf

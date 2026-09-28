@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tollgate CI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--orange:#f7931a;--purple:#7c3aed;--bg:#0a0a0f;--card:#12121a;--border:#1e1e2e;--text:#e2e2e8;--dim:#6b6b7b;--up:#22c55e;--down:#ef4444;--pending:#eab308;--mono:'SF Mono',Monaco,'Cascadia Code','Fira Code',monospace}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh}
+.header{background:linear-gradient(135deg,rgba(247,147,26,0.08),rgba(124,58,237,0.08));border-bottom:1px solid var(--border);padding:2rem 1rem;text-align:center}
+.header h1{font-size:1.5rem;font-weight:700;background:linear-gradient(135deg,var(--orange),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header .subtitle{color:var(--dim);font-size:0.85rem;margin-top:0.25rem}
+.container{max-width:1100px;margin:0 auto;padding:1rem}
+.tabs{display:flex;gap:0; border-bottom:1px solid var(--border);margin-bottom:1rem}
+.tab{padding:0.6rem 1.2rem;cursor:pointer;color:var(--dim);border-bottom:2px solid transparent;font-size:0.85rem;transition:all 0.2s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--orange);border-bottom-color:var(--orange)}
+.repo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:0.5rem;margin-bottom:1.5rem}
+.repo-card{border:1px solid var(--border);border-radius:8px;padding:0.75rem;background:var(--card);transition:border-color 0.2s}
+.repo-card:hover{border-color:var(--purple)}
+.repo-card .repo-header{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem}
+.repo-card .repo-name{font-weight:600;font-size:0.9rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.repo-card .branch{font-size:0.7rem;color:var(--dim);background:var(--bg);padding:0.15rem 0.4rem;border-radius:3px}
+.builds-table{width:100%;border-collapse:collapse}
+.builds-table th{text-align:left;padding:0.5rem 0.75rem;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--dim);border-bottom:1px solid var(--border)}
+.builds-table td{padding:0.5rem 0.75rem;font-size:0.85rem;border-bottom:1px solid var(--border)}
+.builds-table tr{cursor:pointer;transition:background 0.2s}
+.builds-table tr:hover{background:var(--card)}
+.status-badge{display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:4px;font-weight:600}
+.status-badge.success{background:rgba(34,197,94,0.1);color:var(--up)}
+.status-badge.failure{background:rgba(239,68,68,0.1);color:var(--down)}
+.status-badge.running{background:rgba(234,179,8,0.1);color:var(--pending)}
+.status-badge.no_workflows,.status-badge.clone_failed,.status-badge.error,.status-badge.clone_timeout{background:rgba(107,107,123,0.1);color:var(--dim)}
+.status-badge .dot{width:6px;height:6px;border-radius:50%}
+.status-badge.success .dot{background:var(--up)}
+.status-badge.failure .dot{background:var(--down)}
+.status-badge.running .dot{background:var(--pending);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.log-viewer{background:#000;color:#0f0;font-family:var(--mono);font-size:0.75rem;padding:1rem;border-radius:8px;border:1px solid var(--border);max-height:500px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin-top:0.5rem;display:none}
+.log-viewer.visible{display:block}
+.build-detail{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;display:none}
+.build-detail.visible{display:block}
+.build-detail h3{font-size:1rem;margin-bottom:0.75rem}
+.detail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.5rem}
+.detail-item{font-size:0.8rem}
+.detail-item .label{color:var(--dim);font-size:0.7rem;text-transform:uppercase}
+.detail-item .value{margin-top:0.1rem}
+.empty{color:var(--dim);text-align:center;padding:3rem;font-size:0.9rem}
+.back-btn{background:none;border:1px solid var(--border);color:var(--dim);border-radius:4px;padding:0.3rem 0.6rem;font-size:0.75rem;cursor:pointer;margin-bottom:0.5rem;transition:all 0.2s}
+.back-btn:hover{border-color:var(--orange);color:var(--orange)}
+.loading{text-align:center;padding:2rem;color:var(--dim)}
+footer{text-align:center;padding:1rem;color:var(--dim);font-size:0.7rem;border-top:1px solid var(--border)}
+footer .refresh-info{color:var(--orange)}
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Tollgate CI</h1>
+<div class="subtitle">Build status for GRASP-hosted repositories on orangesync.tech</div>
+</div>
+<div class="container">
+<div class="tabs">
+<div class="tab active" onclick="showView('dashboard')">Dashboard</div>
+<div class="tab" onclick="showView('builds')">All Builds</div>
+</div>
+<div id="view-dashboard">
+<div class="repo-grid" id="repos"></div>
+</div>
+<div id="view-builds">
+<table class="builds-table">
+<thead><tr><th>#</th><th>Repo</th><th>Branch</th><th>Commit</th><th>Status</th><th>Duration</th><th>Time</th></tr></thead>
+<tbody id="builds-list"></tbody>
+</table>
+</div>
+<div id="view-detail" style="display:none">
+<button class="back-btn" onclick="showView(previousView)">&larr; Back</button>
+<div class="build-detail" id="build-detail"></div>
+<pre class="log-viewer" id="build-log"></pre>
+</div>
+</div>
+<footer>Auto-refreshes every 15s. <span class="refresh-info" id="last-refresh"></span></footer>
+<script>
+const API_BASE=window.location.origin+'/api';
+let previousView='dashboard';
+let refreshTimer=null;
+const VIEW_ELS={dashboard:document.getElementById('view-dashboard'),builds:document.getElementById('view-builds'),detail:document.getElementById('view-detail')};
+const TAB_ELS=document.querySelectorAll('.tab');
+
+function showView(name){
+  previousView=document.querySelector('.tab.active')?.textContent==='All Builds'?'builds':'dashboard';
+  if(name==='detail'){VIEW_ELS.dashboard.style.display='none';VIEW_ELS.builds.style.display='none';VIEW_ELS.detail.style.display='block';TAB_ELS.forEach(t=>t.classList.remove('active'));return}
+  Object.entries(VIEW_ELS).forEach(([k,el])=>{el.style.display=k===name?'block':'none'});
+  TAB_ELS.forEach((t,i)=>{if((name==='dashboard'&&i===0)||(name==='builds'&&i===1))t.classList.add('active');else t.classList.remove('active')});
+  VIEW_ELS.detail.style.display='none';
+  if(name==='dashboard')loadDashboard();
+  if(name==='builds')loadBuilds();
+}
+
+function statusBadge(status){
+  const labels={success:'Passed',failure:'Failed',running:'Running',pending:'Pending',no_workflows:'No Workflows',clone_failed:'Clone Failed',clone_timeout:'Timeout',error:'Error'};
+  const label=labels[status]||status;
+  return `<span class="status-badge ${status}"><span class="dot"></span>${label}</span>`;
+}
+
+function formatDuration(ms){
+  if(!ms)return'-';
+  if(ms<1000)return ms+'ms';
+  const s=Math.floor(ms/1000);
+  if(s<60)return s+'s';
+  const m=Math.floor(s/60);
+  return m+'m '+(s%60)+'s';
+}
+
+function timeAgo(iso){
+  if(!iso)return'-';
+  const d=new Date(iso);
+  const now=new Date();
+  const diff=Math.floor((now-d)/1000);
+  if(diff<60)return diff+'s ago';
+  if(diff<3600)return Math.floor(diff/60)+'m ago';
+  if(diff<86400)return Math.floor(diff/3600)+'h ago';
+  return d.toLocaleDateString();
+}
+
+function shortSha(sha){return sha?sha.substring(0,7):'-'}
+
+async function loadDashboard(){
+  try{
+    const resp=await fetch(API_BASE+'/repos');
+    const data=await resp.json();
+    const container=document.getElementById('repos');
+    if(!data.repos||data.repos.length===0){container.innerHTML='<div class="empty">No repositories configured</div>';return}
+    container.innerHTML=data.repos.map(r=>{
+      const last=r.last_build;
+      const statusHtml=last?statusBadge(last.status):'<span style="color:var(--dim);font-size:0.75rem">No builds yet</span>';
+      const sha=last?shortSha(last.commit_sha):'';
+      const time=last?timeAgo(last.finished_at):'';
+      const duration=last?formatDuration(last.duration_ms):'';
+      return `<div class="repo-card">
+        <div class="repo-header">
+          <span class="repo-name">${r.url.replace(/https?:\/\//,'').replace(/\.git$/,'')}</span>
+          <span class="branch">${r.branch}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.3rem">
+          ${statusHtml}
+          <span style="font-size:0.7rem;color:var(--dim)">${sha}${duration?' &middot; '+duration:''}${time?' &middot; '+time:''}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){console.error(e)}
+}
+
+async function loadBuilds(){
+  try{
+    const resp=await fetch(API_BASE+'/builds?limit=50');
+    const data=await resp.json();
+    const tbody=document.getElementById('builds-list');
+    if(!data.builds||data.builds.length===0){tbody.innerHTML='<tr><td colspan="7" class="empty">No builds yet</td></tr>';return}
+    tbody.innerHTML=data.builds.map(b=>`<tr onclick="showBuild(${b.id})">
+      <td>${b.id}</td>
+      <td style="font-size:0.8rem">${b.repo_name||b.repo_url.replace(/https?:\/\//,'').replace(/\.git$/,'')}</td>
+      <td><span class="branch">${b.branch}</span></td>
+      <td style="font-family:var(--mono);font-size:0.8rem">${shortSha(b.commit_sha)}</td>
+      <td>${statusBadge(b.status)}</td>
+      <td>${formatDuration(b.duration_ms)}</td>
+      <td style="font-size:0.75rem;color:var(--dim)">${timeAgo(b.finished_at||b.started_at)}</td>
+    </tr>`).join('');
+  }catch(e){console.error(e)}
+}
+
+async function showBuild(id){
+  try{
+    const resp=await fetch(API_BASE+'/builds/'+id);
+    const b=await resp.json();
+    if(b.error){alert(b.error);return}
+    showView('detail');
+    document.getElementById('build-detail').classList.add('visible');
+    document.getElementById('build-detail').innerHTML=`
+      <h3>Build #${b.id}</h3>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="label">Repository</div><div class="value">${b.repo_url}</div></div>
+        <div class="detail-item"><div class="label">Branch</div><div class="value">${b.branch}</div></div>
+        <div class="detail-item"><div class="label">Commit</div><div class="value" style="font-family:var(--mono)">${b.commit_sha}</div></div>
+        <div class="detail-item"><div class="label">Status</div><div class="value">${statusBadge(b.status)}</div></div>
+        <div class="detail-item"><div class="label">Duration</div><div class="value">${formatDuration(b.duration_ms)}</div></div>
+        <div class="detail-item"><div class="label">Exit Code</div><div class="value">${b.exit_code!=null?b.exit_code:'-'}</div></div>
+        <div class="detail-item"><div class="label">Started</div><div class="value">${b.started_at||'-'}</div></div>
+        <div class="detail-item"><div class="label">Finished</div><div class="value">${b.finished_at||'-'}</div></div>
+        ${b.error?`<div class="detail-item"><div class="label">Error</div><div class="value" style="color:var(--down)">${b.error}</div></div>`:''}
+      </div>`;
+    const logEl=document.getElementById('build-log');
+    if(b.log_available){
+      logEl.classList.add('visible');
+      try{
+        const logResp=await fetch(API_BASE+'/builds/'+id+'/log');
+        logEl.textContent=await logResp.text();
+      }catch(e){logEl.textContent='Failed to load log'}
+    }else{
+      logEl.classList.remove('visible');
+    }
+  }catch(e){console.error(e)}
+}
+
+function updateRefreshTime(){
+  document.getElementById('last-refresh').textContent='Last refresh: '+new Date().toLocaleTimeString();
+}
+
+async function refresh(){
+  const activeView=document.querySelector('.tab.active');
+  if(activeView&&activeView.textContent==='All Builds')await loadBuilds();
+  else await loadDashboard();
+  updateRefreshTime();
+}
+
+refresh();
+refreshTimer=setInterval(refresh,15000);
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+[Unit]
+Description=Forward SSH tunnel to VPS2 routstr node (localhost:{{ routstr_node_access_local_port }} -> 127.0.0.1:{{ routstr_node_access_remote_port }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -N -L 127.0.0.1:{{ routstr_node_access_local_port }}:127.0.0.1:{{ routstr_node_access_remote_port }} -o ExitOnForwardFailure=yes -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=accept-new {{ routstr_node_access_ssh_user }}@{{ routstr_node_access_vps2_ip }}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

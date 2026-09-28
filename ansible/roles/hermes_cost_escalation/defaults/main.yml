@@ -1,0 +1,18 @@
+---
+# hermes_cost_escalation — deploys the cost/performance escalation layer:
+#
+# 1. cost-escalation-check.py — rides the existing hermes internal cron
+#    "cost-performance-escalation" (every 15 min, delivers to Signal
+#    admin-setup group). Alerts: paid bleed, key death, inefficient
+#    routing, daily spend, operator gates, repeated crashes, quota
+#    recovery, EWMA spend outlier (state in
+#    ~/.hermes/bot/escalation_ewma_state.json), aux-audit surfacing.
+# 2. aux-model-audit.py — daily 06:00 crontab, report-only audit of
+#    auxiliary LLM calls (session_id IS NULL) landing on paid providers;
+#    writes ~/.hermes/bot/aux_model_audit_report.md.
+#
+# NOTE: the escalation script itself is executed by the hermes gateway
+# cron runner from ~/.hermes/profiles/manager/scripts/ — the unit of
+# deployment here is the file copy + the audit crontab line.
+hermes_cost_escalation_scripts_dir: "{{ ansible_facts['env']['HOME'] }}/.hermes/profiles/manager/scripts"
+hermes_cost_escalation_audit_cron: "0 6 * * * /usr/bin/python3 {{ ansible_facts['env']['HOME'] }}/.hermes/profiles/manager/scripts/aux-model-audit.py >> {{ ansible_facts['env']['HOME'] }}/.hermes/logs/aux-model-audit.log 2>&1 # aux-model-audit daily (report-only, surfaces paid-path aux traffic)"

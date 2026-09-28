@@ -1,0 +1,12 @@
+bitcoin_core_version: "v29.0"
+bitcoin_core_repo: "https://github.com/bitcoin/bitcoin.git"
+bitcoin_core_data_dir: "/opt/tollgate/bitcoin-core"
+bitcoin_core_port: 8333
+bitcoin_core_prune_mb: 10000
+bitcoin_core_dbcache_mb: 100
+bitcoin_core_max_connections: 15
+bitcoin_core_memory_high: "700M"
+bitcoin_core_memory_max: "800M"
+bitcoin_core_rpc_port: 8332
+bitcoin_core_rpc_user: "tollgate"
+bitcoin_core_rpc_password: "changeme-use-vault"

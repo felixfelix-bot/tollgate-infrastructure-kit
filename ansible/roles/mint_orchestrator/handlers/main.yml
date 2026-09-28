@@ -1,0 +1,9 @@
+---
+- name: restart mint orchestrator
+  systemd:
+    name: tollgate-mint-orchestrator
+    state: restarted
+    daemon_reload: yes
+
+- name: reload caddy
+  shell: docker exec tollgate-caddy caddy reload --config /etc/caddy/Caddyfile 2>&1

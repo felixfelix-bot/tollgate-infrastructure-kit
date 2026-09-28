@@ -1,0 +1,13 @@
+---
+- name: Restart sysstat collection
+  ansible.builtin.systemd:
+    name: sysstat-collect.timer
+    state: restarted
+    daemon_reload: true
+    enabled: true
+
+- name: Restart atop
+  ansible.builtin.systemd:
+    name: atop.service
+    state: restarted
+    enabled: true

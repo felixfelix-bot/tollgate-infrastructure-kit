@@ -1,0 +1,129 @@
+---
+- name: Install act dependencies
+  apt:
+    name:
+      - git
+      - curl
+      - python3-venv
+      - python3-pip
+    state: present
+
+- name: Create act-runner directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: debian
+    group: debian
+  loop:
+    - "{{ tollgate_base_dir }}/act-runner"
+    - "{{ tollgate_base_dir }}/act-runner/work"
+    - "{{ tollgate_base_dir }}/act-runner/logs"
+    - "{{ tollgate_base_dir }}/act-runner/artifacts"
+    - "{{ tollgate_base_dir }}/src/act-runner"
+
+- name: Install act binary
+  shell: |
+    set -e
+    ARCH=$(dpkg --print-architecture)
+    case "$ARCH" in
+      amd64) ACT_ARCH="x86_64" ;;
+      arm64) ACT_ARCH="arm64" ;;
+      *) echo "Unsupported arch: $ARCH"; exit 1 ;;
+    esac
+    ACT_VERSION="0.2.77"
+    curl -sL "https://github.com/nektos/act/releases/download/v${ACT_VERSION}/act_Linux_${ACT_ARCH}.tar.gz" | \
+      tar xz -C /tmp act
+    mv /tmp/act {{ act_runner_binary }}
+    chmod +x {{ act_runner_binary }}
+  args:
+    creates: "{{ act_runner_binary }}"
+
+- name: Copy act-runner package to VPS
+  synchronize:
+    src: "{{ inventory_dir | dirname | dirname }}/act-runner/"
+    dest: "{{ act_runner_pkg_dir }}/"
+    rsync_opts:
+      - "--exclude=.pytest_cache"
+      - "--exclude=__pycache__"
+      - "--exclude=*.egg-info"
+      - "--exclude=.coverage"
+
+- name: Create Python virtualenv
+  command: python3 -m venv {{ act_runner_venv }}
+  args:
+    creates: "{{ act_runner_venv }}/bin/python"
+
+- name: Install act-runner package
+  pip:
+    name: "file://{{ act_runner_pkg_dir }}"
+    virtualenv: "{{ act_runner_venv }}"
+    state: latest
+
+- name: Ensure runner static directory exists
+  file:
+    path: "{{ tollgate_static_dir }}/runner"
+    state: directory
+    mode: '0755'
+
+- name: Deploy runner dashboard static files
+  copy:
+    src: "{{ inventory_dir | dirname | dirname }}/static/runner/"
+    dest: "{{ tollgate_static_dir }}/runner/"
+    mode: '0644'
+  become: yes
+
+- name: Deploy act-runner config
+  template:
+    src: act-runner-config.yaml.j2
+    dest: "{{ tollgate_base_dir }}/act-runner/config.yaml"
+    mode: '0644'
+    owner: debian
+    group: debian
+  notify: restart act-runner
+
+- name: Deploy act-runner systemd unit
+  template:
+    src: act-runner.service.j2
+    dest: /etc/systemd/system/tollgate-act-runner.service
+    mode: '0644'
+  notify: restart act-runner
+
+- name: Enable and start act-runner
+  systemd:
+    name: tollgate-act-runner
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  when: machine_active | default(true)
+
+- name: Wait for act-runner API
+  uri:
+    url: "http://localhost:{{ act_runner_port }}/api/health"
+    return_content: yes
+  register: runner_health
+  until: runner_health.status == 200
+  retries: 30
+  delay: 3
+  when: machine_active | default(true)
+
+- name: Verify act-runner is accessible via Caddy
+  uri:
+    url: "https://{{ act_runner_domain }}/api/health"
+    return_content: yes
+    validate_certs: no
+  register: runner_caddy_health
+  until: runner_caddy_health.status == 200
+  retries: 15
+  delay: 3
+  when: machine_active | default(true)
+
+- name: Display act-runner deployment info
+  debug:
+    msg: |
+      act-runner deployed successfully!
+      API: https://{{ act_runner_domain }}/api/health
+      Dashboard: https://{{ act_runner_domain }}
+      Port: {{ act_runner_port }}
+      Repos: {{ act_runner_repos | length }}
+      Poll interval: {{ act_runner_poll_interval }}s

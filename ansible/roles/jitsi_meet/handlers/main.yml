@@ -1,0 +1,4 @@
+---
+- name: Reload systemd for jitsi
+  systemd:
+    daemon_reload: yes

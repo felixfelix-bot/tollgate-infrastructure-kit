@@ -1,0 +1,187 @@
+---
+- name: Install build dependencies
+  apt:
+    name:
+      - build-essential
+      - pkg-config
+      - libssl-dev
+    state: present
+
+- name: Check if Node.js is installed
+  command: node --version
+  register: node_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Node.js 22
+  shell: |
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y nodejs
+  when: node_check.rc != 0
+
+- name: Clone auditable-voting
+  git:
+    repo: "{{ auditable_voting_repo }}"
+    dest: "{{ auditable_voting_src_dir }}"
+    depth: 1
+    force: yes
+    version: "{{ auditable_voting_branch }}"
+
+- name: Check for prebuilt WASM artifacts
+  stat:
+    path: "{{ auditable_voting_src_dir }}/web/src/wasm/auditable_voting_core/pkg/auditable_voting_rust_core.js"
+  register: wasm_core
+
+- name: Check for coordinator WASM artifacts
+  stat:
+    path: "{{ auditable_voting_src_dir }}/web/src/wasm/auditable_voting_coordinator_core/pkg/auditable_voting_core.js"
+  register: wasm_coord
+
+- name: Install rustup if WASM build needed
+  shell: |
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  args:
+    creates: /root/.cargo/bin/rustup
+  when: not (wasm_core.stat.exists and wasm_coord.stat.exists)
+
+- name: Install wasm32 target
+  command: /root/.cargo/bin/rustup target add wasm32-unknown-unknown
+  when: not (wasm_core.stat.exists and wasm_coord.stat.exists)
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/root/.cargo/bin"
+
+- name: Install wasm-pack
+  shell: |
+    /root/.cargo/bin/cargo install wasm-pack
+  args:
+    creates: /root/.cargo/bin/wasm-pack
+  when: not (wasm_core.stat.exists and wasm_coord.stat.exists)
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/root/.cargo/bin"
+
+- name: Build WASM core
+  command: >
+    /root/.cargo/bin/wasm-pack build
+    --target bundler
+    --out-dir {{ auditable_voting_src_dir }}/web/src/wasm/auditable_voting_core/pkg
+  args:
+    chdir: "{{ auditable_voting_src_dir }}/web/rust-core"
+    creates: "{{ auditable_voting_src_dir }}/web/src/wasm/auditable_voting_core/pkg/auditable_voting_rust_core.js"
+  when: not wasm_core.stat.exists
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/root/.cargo/bin"
+
+- name: Check for coordinator core crate
+  stat:
+    path: "{{ auditable_voting_src_dir }}/auditable-voting-core/Cargo.toml"
+  register: coord_crate
+
+- name: Build WASM coordinator core
+  command: >
+    /root/.cargo/bin/wasm-pack build
+    --target bundler
+    --out-dir {{ auditable_voting_src_dir }}/web/src/wasm/auditable_voting_coordinator_core/pkg
+    -- --features openmls-engine
+  args:
+    chdir: "{{ auditable_voting_src_dir }}/auditable-voting-core"
+    creates: "{{ auditable_voting_src_dir }}/web/src/wasm/auditable_voting_coordinator_core/pkg/auditable_voting_core.js"
+  when: not wasm_coord.stat.exists and coord_crate.stat.exists
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/root/.cargo/bin"
+
+- name: Install web dependencies
+  shell: npm install --ignore-scripts && npx vite --version
+  args:
+    chdir: "{{ auditable_voting_src_dir }}/web"
+    creates: "{{ auditable_voting_src_dir }}/web/node_modules/.package-lock.json"
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin:/root/.cargo/bin"
+
+- name: Build static site
+  shell: npm run build
+  args:
+    chdir: "{{ auditable_voting_src_dir }}/web"
+    creates: "{{ auditable_voting_src_dir }}/web/dist/index.html"
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin:/root/.cargo/bin"
+
+- name: Ensure static files directory exists
+  file:
+    path: "{{ auditable_voting_static_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Deploy static files
+  shell: |
+    rm -rf {{ auditable_voting_static_dir }}/*
+    cp -r {{ auditable_voting_src_dir }}/web/dist/* {{ auditable_voting_static_dir }}/
+    find {{ auditable_voting_static_dir }} -type d -exec chmod 0755 {} \;
+    find {{ auditable_voting_static_dir }} -type f -exec chmod 0644 {} \;
+
+- name: Deploy nsite config
+  template:
+    src: nsite.config.json.j2
+    dest: "{{ auditable_voting_src_dir }}/.nsite/config.json"
+    mode: '0644'
+
+- name: Check for existing voting keypair
+  slurp:
+    src: /opt/tollgate/.env
+  register: env_file
+  failed_when: false
+
+- name: Check if VOTING_NSEC already in .env
+  set_fact:
+    voting_nsec_exists: "{{ env_file.content is defined and 'VOTING_NSEC' in (env_file.content | b64decode) }}"
+
+- name: Generate nsite keypair
+  shell: |
+    set -o pipefail
+    python3 << 'PYEOF'
+    import secrets, json
+    from bech32 import bech32_encode, convertbits
+    from nacl.signing import SigningKey
+    sk = secrets.token_bytes(32)
+    nsec = bech32_encode('nsec', convertbits(sk, 8, 5))
+    signing_key = SigningKey(sk)
+    pk = bytes(signing_key.verify_key)
+    npub = bech32_encode('npub', convertbits(pk, 8, 5))
+    print(json.dumps({'nsec': nsec, 'npub': npub}))
+    PYEOF
+  register: voting_keypair
+  when: not voting_nsec_exists
+
+- name: Store voting keypair in .env
+  shell: |
+    echo "VOTING_NSEC=$(echo '{{ voting_keypair.stdout }}' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"nsec\"])')" >> /opt/tollgate/.env
+    echo "VOTING_NPUB=$(echo '{{ voting_keypair.stdout }}' | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"npub\"])')" >> /opt/tollgate/.env
+  when: not voting_nsec_exists
+
+- name: Read voting keypair from .env
+  shell: "grep VOTING_NPUB /opt/tollgate/.env | cut -d= -f2"
+  register: voting_npub
+  changed_when: false
+
+- name: Check nsyte is available
+  command: nsyte --version
+  register: nsyte_check
+  changed_when: false
+  failed_when: false
+
+- name: Deploy to nsite
+  shell: |
+    bash -c 'set -a && . /opt/tollgate/.env && set +a && cd {{ auditable_voting_src_dir }} && nsyte deploy web/dist --sec "$VOTING_NSEC" --publish-server-list --publish-relay-list --publish-profile --skip-secrets-scan --non-interactive --force --verbose'
+  when: nsyte_check.rc == 0
+  ignore_errors: yes
+  register: nsite_deploy
+
+- name: Display deployment info
+  debug:
+    msg: |
+      Auditable Voting deployed!
+      Static: https://{{ auditable_voting_domain }}
+      {% if nsite_deploy is succeeded %}
+      Nsite: accessible via nsite gateways for npub {{ voting_npub.stdout }}
+      {% else %}
+      Nsite: skipped or failed (nsyte rc={{ nsyte_check.rc }})
+      {% endif %}

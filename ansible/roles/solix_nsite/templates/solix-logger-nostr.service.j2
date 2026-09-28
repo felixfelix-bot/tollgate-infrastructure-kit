@@ -1,0 +1,23 @@
+[Unit]
+Description=Solix C1000 Telemetry Logger (nostr subscriber)
+After=network.target
+
+[Service]
+Type=simple
+User={{ solix_logger_user }}
+Group={{ solix_logger_user }}
+WorkingDirectory={{ solix_logger_dir }}
+ExecStart={{ solix_logger_dir }}/venv/bin/python3 {{ solix_logger_dir }}/scripts/solix_logger.py \
+    --source nostr \
+    --npub {{ _solix_daemon_npub }} \
+    --relays {{ solix_logger_relays }} \
+    --interval {{ solix_logger_interval }} \
+    --output {{ solix_logger_csv_path }}
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=solix-logger-nostr
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+---
+- name: Deploy strfry aggregation relay
+  hosts: "{{ target | default('vps2') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - strfry_agg

@@ -1,0 +1,13 @@
+---
+relay_ad_relays:
+  - "wss://relay.{{ base_domain }}"
+  - "wss://ngit.{{ base_domain }}"
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+relay_ad_relay_list:
+  - url: "wss://relay.{{ base_domain }}"
+    read: true
+    write: true
+  - url: "wss://ngit.{{ base_domain }}"
+    read: true
+    write: true

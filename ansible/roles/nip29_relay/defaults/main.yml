@@ -1,0 +1,14 @@
+---
+nip29_enabled: true
+nip29_port: 7780
+nip29_base_dir: "/opt/strfry-nip29"
+nip29_db_dir: "{{ nip29_base_dir }}/db"
+nip29_relay_nsec: "{{ lookup('env', 'NIP29_RELAY_NSEC') }}"
+nip29_bind: "0.0.0.0"
+nip29_domain: "{{ ansible_host | default('127.0.0.1', true) }}"
+nip29_sync_peers: []
+nip29_sync_interval_min: 5
+nip29_go_version: "1.24.4"
+nip29_strfry_repo_url: "https://github.com/hoytech/strfry.git"
+nip29_relay29_repo_url: "https://github.com/fiatjaf/relay29.git"
+nip29_repos_dir: "{{ lookup('env', 'HOME') }}/repos"

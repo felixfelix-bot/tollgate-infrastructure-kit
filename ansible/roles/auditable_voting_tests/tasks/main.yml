@@ -1,0 +1,83 @@
+---
+- name: Install test dependencies
+  apt:
+    name:
+      - libnss3
+      - libnspr4
+      - libatk1.0-0
+      - libatk-bridge2.0-0
+      - libcups2
+      - libdrm2
+      - libxkbcommon0
+      - libxcomposite1
+      - libxdamage1
+      - libxfixes3
+      - libxrandr2
+      - libgbm1
+      - libpango-1.0-0
+      - libcairo2
+      - libasound2
+    state: present
+
+- name: Check Node.js version
+  command: node --version
+  register: node_ver
+  changed_when: false
+  failed_when: false
+
+- name: Install Node.js 22
+  shell: |
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y nodejs
+  when: node_ver.rc != 0
+
+- name: Ensure test directory exists
+  file:
+    path: "{{ auditable_voting_tests_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Check if tests are staged at /tmp
+  stat:
+    path: /tmp/auditable-voting-tests-staging/package.json
+  register: staging_check
+
+- name: Copy tests from staging
+  shell: |
+    rm -rf {{ auditable_voting_tests_dir }}/*
+    cp -r /tmp/auditable-voting-tests-staging/* {{ auditable_voting_tests_dir }}/
+    cp -r /tmp/auditable-voting-tests-staging/.* {{ auditable_voting_tests_dir }}/ 2>/dev/null || true
+  when: staging_check.stat.exists
+
+- name: Install npm dependencies
+  command: npm ci
+  args:
+    chdir: "{{ auditable_voting_tests_dir }}"
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+
+- name: Install Playwright browsers
+  command: npx playwright install --with-deps chromium
+  args:
+    chdir: "{{ auditable_voting_tests_dir }}"
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+
+- name: Run E2E tests
+  command: npx playwright test --reporter=list
+  args:
+    chdir: "{{ auditable_voting_tests_dir }}"
+  environment:
+    BASE_URL: "{{ auditable_voting_tests_target }}"
+    PATH: "{{ ansible_env.PATH }}:/usr/bin:/usr/local/bin"
+  register: test_results
+  ignore_errors: yes
+
+- name: Display test results
+  debug:
+    msg: "{{ test_results.stdout_lines | default(['No output']) }}"
+
+- name: Fail if tests failed
+  fail:
+    msg: "E2E tests failed. See output above."
+  when: test_results.rc != 0

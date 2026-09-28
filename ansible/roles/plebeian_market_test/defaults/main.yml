@@ -1,0 +1,15 @@
+---
+plebeian_market_test_port: 34568
+plebeian_market_test_relay_port: 10548
+plebeian_market_test_relay_container_port: 8080
+plebeian_market_test_dir: "{{ tollgate_base_dir }}/plebeian-market-test"
+plebeian_market_test_subdomain: test-market
+plebeian_market_test_relay_subdomain: test-relay
+plebeian_market_test_domain: "{{ plebeian_market_test_subdomain }}.{{ base_domain }}"
+plebeian_market_test_relay_domain: "{{ plebeian_market_test_relay_subdomain }}.{{ base_domain }}"
+plebeian_market_test_container_name: tollgate-test-market
+plebeian_market_test_relay_container_name: tollgate-test-relay
+plebeian_market_repo_url: "https://github.com/PlebeianApp/market.git"
+plebeian_market_repo_branch: "auctions/p2pk-path-oracle-via-cvm-v1"
+plebeian_market_test_caddy_snippet: "{{ tollgate_base_dir }}/caddy/plebeian-market-test.conf"
+plebeian_market_test_private_key: "0000000000000000000000000000000000000000000000000000000000000001"

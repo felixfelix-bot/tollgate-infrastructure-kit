@@ -1,0 +1,58 @@
+---
+- name: Ensure static directory exists
+  file:
+    path: "{{ cashu_brrr_static_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Check if npm is available
+  command: which npm
+  register: npm_check
+  changed_when: false
+  failed_when: false
+
+- name: Install build dependencies
+  apt:
+    name:
+      - nodejs
+      - npm
+    state: present
+  when:
+    - cashu_brrr_local_repo | length == 0
+    - npm_check.rc != 0
+
+- name: Clone or update cashu-brrr repository
+  git:
+    repo: "{{ cashu_brrr_repo_url }}"
+    dest: "{{ tollgate_base_dir }}/src/cashu-brrr"
+    version: "{{ cashu_brrr_repo_branch }}"
+    force: yes
+  when: cashu_brrr_local_repo | length == 0
+
+- name: Build cashu-brrr frontend
+  shell: |
+    npm install
+    npm run build
+  args:
+    chdir: "{{ tollgate_base_dir }}/src/cashu-brrr"
+  when: cashu_brrr_local_repo | length == 0
+  register: cashu_build
+
+- name: Copy local build if provided
+  copy:
+    src: "{{ cashu_brrr_local_repo }}/dist/"
+    dest: "{{ cashu_brrr_static_dir }}/"
+    mode: "0644"
+  when: cashu_brrr_local_repo | length > 0
+
+- name: Copy built files to static dir
+  copy:
+    src: "{{ tollgate_base_dir }}/src/cashu-brrr/dist/"
+    dest: "{{ cashu_brrr_static_dir }}/"
+    remote_src: yes
+    mode: "0644"
+  when: cashu_brrr_local_repo | length == 0
+
+- name: Display cashu-brrr info
+  debug:
+    msg: "cashu-brrr deployed at https://{{ cashu_brrr_domain }}"

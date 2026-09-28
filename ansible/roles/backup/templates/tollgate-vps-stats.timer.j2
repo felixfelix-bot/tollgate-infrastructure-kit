@@ -1,0 +1,9 @@
+[Unit]
+Description=Tollgate VPS Stats Timer (every 10 seconds)
+
+[Timer]
+OnCalendar=*:*:0/10
+Persistent=true
+
+[Install]
+WantedBy=timers.target

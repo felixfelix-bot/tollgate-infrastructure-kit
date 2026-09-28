@@ -1,0 +1,91 @@
+---
+- name: Get backup machine syncthing API key
+  command: "grep -oP '(?<=<apikey>)[^<]+' /home/c03rad0r/.local/state/syncthing/config.xml"
+  register: backup_api_key_resolved
+  changed_when: false
+
+- name: Set backup API key
+  set_fact:
+    backup_syncthing_api_key: "{{ backup_api_key_resolved.stdout | trim }}"
+
+- name: Add VPS device to backup machine syncthing
+  uri:
+    url: "http://127.0.0.1:8386/rest/config/devices/{{ vps_syncthing_id }}"
+    method: PUT
+    headers:
+      X-API-Key: "{{ backup_syncthing_api_key }}"
+      Content-Type: application/json
+    body: |
+      {
+        "deviceID": "{{ vps_syncthing_id }}",
+        "name": "vps-orangesync",
+        "addresses": ["tcp://{{ hostvars['vps1'].ansible_host | default(hostvars['vps1'].inventory_hostname) }}:22000"]
+      }
+    body_format: raw
+  ignore_errors: yes
+
+- name: Create sendreceive folders on backup machine syncthing
+  uri:
+    url: "http://127.0.0.1:8386/rest/config/folders/{{ item.id }}"
+    method: PUT
+    headers:
+      X-API-Key: "{{ backup_syncthing_api_key }}"
+      Content-Type: application/json
+    body: |
+      {
+        "id": "{{ item.id }}",
+        "label": "{{ item.label }}",
+        "path": "{{ syncthing_backup_machine_backup_root }}/{{ item.label | lower | replace(' ', '-') }}",
+        "type": "sendreceive",
+        "devices": [{"deviceID": "{{ vps_syncthing_id }}"}],
+        "rescanIntervalS": 3600,
+        "fsWatcherEnabled": true,
+        "fsWatcherDelayS": 10,
+        "versioning": {"type": "staggered", "params": {"maxAge": "2592000", "cleanInterval": "3600"}}
+      }
+    body_format: raw
+  loop: "{{ syncthing_backup_dirs }}"
+  loop_control:
+    label: "{{ item.id }}"
+  ignore_errors: yes
+
+- name: Create backup directories on backup machine
+  file:
+    path: "{{ syncthing_backup_machine_backup_root }}/{{ item.label | lower | replace(' ', '-') }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ syncthing_backup_dirs }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Create .stfolder markers in backup directories
+  file:
+    path: "{{ syncthing_backup_machine_backup_root }}/{{ item.label | lower | replace(' ', '-') }}/.stfolder"
+    state: directory
+    mode: '0755'
+  loop: "{{ syncthing_backup_dirs }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Restart backup machine syncthing to apply config
+  systemd:
+    name: syncthing
+    scope: user
+    state: restarted
+  ignore_errors: yes
+
+- name: Wait for backup machine syncthing after restart
+  wait_for:
+    port: 8386
+    host: 127.0.0.1
+    delay: 3
+    timeout: 30
+  ignore_errors: yes
+
+- name: Show backup machine peering status
+  debug:
+    msg: |
+      Backup machine peering configured:
+        VPS device: {{ vps_syncthing_id }}
+        Folders: {{ syncthing_backup_dirs | map(attribute='id') | list | join(', ') }}
+        Backup root: {{ syncthing_backup_machine_backup_root }}

@@ -1,0 +1,20 @@
+dbParams {
+    path = "/strfry-db"
+    maxSize = {{ ngit_relay_db_size_gb }}
+}
+
+relay {
+    bind = "0.0.0.0"
+    port = {{ ngit_relay_port }}
+    maxConnections = {{ ngit_relay_max_connections }}
+    maxSubsPerConn = {{ ngit_relay_max_subs_per_conn }}
+    maxEventSize = {{ ngit_relay_max_event_size }}
+    maxWsFrameSize = {{ ngit_relay_max_ws_frame_size }}
+
+    info {
+        name = "Tollgate ngit Relay"
+        description = "Open Nostr relay optimized for git (NIP-34) events. No rate limits on event size."
+        pubkey = ""
+        contact = ""
+    }
+}

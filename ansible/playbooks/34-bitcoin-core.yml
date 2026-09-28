@@ -1,0 +1,8 @@
+---
+- name: Deploy Bitcoin Core node
+  hosts: vps1
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - bitcoin_core

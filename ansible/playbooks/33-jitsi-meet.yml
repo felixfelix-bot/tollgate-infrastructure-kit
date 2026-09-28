@@ -1,0 +1,9 @@
+---
+- name: Deploy Jitsi Meet
+  hosts: vps
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
+  roles:
+    - jitsi_meet

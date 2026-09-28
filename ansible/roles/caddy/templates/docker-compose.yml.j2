@@ -1,0 +1,20 @@
+services:
+  caddy:
+    build:
+      context: /opt/tollgate/caddy
+      dockerfile: Dockerfile
+    container_name: tollgate-caddy
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - BASE_DOMAIN={{ base_domain }}
+      - MINT_DOMAIN={{ mint_domain }}
+      - CF_API_TOKEN={{ cloudflare_api_token }}
+      - ACME_EMAIL={{ acme_email }}
+    volumes:
+      - /opt/tollgate/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/tollgate/caddy/data:/data
+      - /opt/tollgate/caddy/config:/config
+      - {{ tollgate_static_dir }}:{{ tollgate_static_dir }}:ro
+    cap_add:
+      - NET_BIND_SERVICE

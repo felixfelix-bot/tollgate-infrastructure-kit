@@ -1,0 +1,15 @@
+[Unit]
+Description=Strfry NIP-29 Relay
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={{ nip29_base_dir }}
+ExecStart={{ nip29_base_dir }}/strfry --config {{ nip29_base_dir }}/strfry.conf relay
+Restart=always
+RestartSec=5
+User=root
+LimitNOFILE=2000000
+
+[Install]
+WantedBy=multi-user.target

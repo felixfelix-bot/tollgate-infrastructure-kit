@@ -1,0 +1,26 @@
+---
+- name: Install Deno
+  shell: |
+    curl -fsSL https://deno.land/install.sh | sh
+  args:
+    creates: /root/.deno/bin/deno
+
+- name: Link deno to /usr/local/bin
+  file:
+    src: /root/.deno/bin/deno
+    dest: /usr/local/bin/deno
+    state: link
+  ignore_errors: yes
+
+- name: Install nsyte via Deno
+  shell: |
+    /root/.deno/bin/deno install -A -f -g -n nsyte jsr:@nsyte/cli
+  args:
+    creates: /root/.deno/bin/nsyte
+  environment:
+    DENO_INSTALL_ROOT: /usr/local
+
+- name: Verify nsyte installation
+  command: /usr/local/bin/nsyte --version
+  changed_when: false
+  ignore_errors: yes

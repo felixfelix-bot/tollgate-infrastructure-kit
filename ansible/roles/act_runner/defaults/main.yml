@@ -1,0 +1,18 @@
+act_runner_port: 8095
+act_runner_domain: "runner.{{ base_domain }}"
+act_runner_poll_interval: 30
+act_runner_db_path: "{{ tollgate_base_dir }}/act-runner/builds.db"
+act_runner_work_dir: "{{ tollgate_base_dir }}/act-runner/work"
+act_runner_log_dir: "{{ tollgate_base_dir }}/act-runner/logs"
+act_runner_binary: "/usr/local/bin/act"
+act_runner_relays:
+  - "wss://ngit.{{ base_domain }}"
+  - "wss://relay.{{ base_domain }}"
+act_runner_nsec: "{{ lookup('env', 'ACT_RUNNER_NSEC') | default('', true) }}"
+act_runner_npub: "{{ lookup('env', 'ACT_RUNNER_NPUB') | default('', true) }}"
+act_runner_log_level: "info"
+act_runner_repos: []
+act_runner_venv: "{{ tollgate_base_dir }}/act-runner/venv"
+act_runner_pkg_dir: "{{ tollgate_base_dir }}/src/act-runner"
+act_runner_artifact_dir: "{{ tollgate_base_dir }}/act-runner/artifacts"
+tollgate_module_nsec_hex: "{{ lookup('env', 'TOLLGATE_MODULE_NSEC_HEX') | default('', true) }}"

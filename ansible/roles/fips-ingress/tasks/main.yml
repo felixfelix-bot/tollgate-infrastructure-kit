@@ -1,0 +1,53 @@
+---
+- name: Install socat
+  apt:
+    name: socat
+    state: present
+    update_cache: yes
+
+- name: Deploy fips-ssh-proxy systemd service
+  template:
+    src: fips-ssh-proxy.service.j2
+    dest: "/etc/systemd/system/{{ fips_ingress_service_name }}.service"
+    mode: '0644'
+  notify:
+    - reload systemd fips-ingress
+    - restart fips-ssh-proxy
+
+- name: Allow SSH proxy port through UFW
+  ufw:
+    rule: allow
+    port: "{{ fips_ingress_ssh_proxy_port }}"
+    proto: tcp
+    comment: "FIPS SSH proxy"
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Flush handlers
+  meta: flush_handlers
+
+- name: Enable and start fips-ssh-proxy
+  systemd:
+    name: "{{ fips_ingress_service_name }}"
+    state: started
+    enabled: yes
+    daemon_reload: yes
+
+- name: Verify socat is listening on proxy port
+  wait_for:
+    port: "{{ fips_ingress_ssh_proxy_port }}"
+    host: "0.0.0.0"
+    timeout: 10
+
+- name: Show service status
+  systemd:
+    name: "{{ fips_ingress_service_name }}"
+  register: fips_ingress_svc
+
+- name: Display fips-ingress status
+  debug:
+    msg: |
+      FIPS SSH Proxy deployed!
+      Listen: 0.0.0.0:{{ fips_ingress_ssh_proxy_port }}
+      Target: [{{ fips_ingress_ssh_target_host }}]:{{ fips_ingress_ssh_target_port }}
+      Service: {{ fips_ingress_service_name }} ({{ fips_ingress_svc.status.ActiveState }})
+      Connect: ssh -p {{ fips_ingress_ssh_proxy_port }} <user>@{{ ansible_host }}

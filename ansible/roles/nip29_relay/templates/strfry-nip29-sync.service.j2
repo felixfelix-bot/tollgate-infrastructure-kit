@@ -1,0 +1,7 @@
+[Unit]
+Description=Strfry NIP-29 negentropy peer sync
+
+[Service]
+Type=oneshot
+ExecStart={{ nip29_base_dir }}/sync-peers.sh
+User=root

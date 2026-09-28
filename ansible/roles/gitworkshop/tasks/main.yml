@@ -1,0 +1,62 @@
+---
+- name: Check if gitworkshop is already built
+  stat:
+    path: "{{ gitworkshop_src_dir }}/dist/index.html"
+  register: gitworkshop_built
+  delegate_to: localhost
+  run_once: yes
+  become: no
+
+- name: Clone gitworkshop from nostr
+  git:
+    repo: "{{ gitworkshop_repo_url }}"
+    dest: "{{ gitworkshop_src_dir }}"
+    depth: 1
+    force: yes
+  delegate_to: localhost
+  run_once: yes
+  become: no
+  when: not gitworkshop_built.stat.exists
+
+- name: Install gitworkshop dependencies
+  command: pnpm install --frozen-lockfile
+  args:
+    chdir: "{{ gitworkshop_src_dir }}"
+  delegate_to: localhost
+  run_once: yes
+  become: no
+  when: not gitworkshop_built.stat.exists
+
+- name: Build gitworkshop
+  shell: "pnpm build"
+  args:
+    chdir: "{{ gitworkshop_src_dir }}"
+  delegate_to: localhost
+  run_once: yes
+  become: no
+  when: not gitworkshop_built.stat.exists
+
+- name: Ensure static directory exists on VPS
+  file:
+    path: "{{ gitworkshop_static_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Clean old deployment
+  shell: "rm -rf {{ gitworkshop_static_dir }}/*"
+
+- name: Copy built files to VPS
+  synchronize:
+    src: "{{ gitworkshop_src_dir }}/dist/"
+    dest: "{{ gitworkshop_static_dir }}/"
+    delete: yes
+    rsync_opts:
+      - "--chmod=D0755,F0644"
+
+- name: Fix permissions
+  file:
+    path: "{{ gitworkshop_static_dir }}"
+    state: directory
+    owner: root
+    group: root
+    recurse: yes

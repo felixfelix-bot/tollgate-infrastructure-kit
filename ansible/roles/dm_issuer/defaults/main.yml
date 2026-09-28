@@ -1,0 +1,48 @@
+---
+dm_issuer_enabled: false
+
+dm_issuer_data_dir: /var/lib/dm-issuer
+dm_issuer_config_dir: /etc/dm-issuer
+dm_issuer_db_path: "{{ dm_issuer_data_dir }}/dm-issuer.db"
+dm_issuer_config_path: "{{ dm_issuer_config_dir }}/config.json"
+
+dm_issuer_container_name: dm-issuer
+dm_issuer_ops_port: 8095
+
+dm_issuer_issuer_npub: "npub1ac2r0qy6hws6fxn7eulewnnlesacertzuq4v9mhyywcu7phslcrsdrvykw"
+dm_issuer_issuer_nsec_env: ISSUER_NSEC
+dm_issuer_issuer_nsec: ""
+
+dm_issuer_relays:
+  - "wss://relay.damus.io"
+  - "wss://nos.lol"
+  - "wss://relay.primal.net"
+  - "ws://127.0.0.1:7777"
+
+dm_issuer_mint_url: "https://mint.orangesync.tech"
+dm_issuer_mint_grpc_host: "127.0.0.1"
+dm_issuer_mint_grpc_port: 50055
+dm_issuer_approve_fallback_url: "http://127.0.0.1:50057/approve"
+
+dm_issuer_whitelist: []
+dm_issuer_defaults:
+  daily_cap_sats: 2000
+  max_request_sats: 2000
+
+dm_issuer_min_request_sats: 100
+dm_issuer_max_requests_per_hour: 6
+dm_issuer_global_daily_cap_sats: 600000
+dm_issuer_registry_max_single_issuance: 10000
+
+dm_issuer_poll_seconds: 20
+dm_issuer_stale_request_secs: 600
+dm_issuer_dm_lookback_default_secs: 43200
+dm_issuer_dm_retries: 5
+dm_issuer_dm_backoff_base_secs: 30
+dm_issuer_grpc_retries: 4
+dm_issuer_grpc_backoff_base_secs: 2
+dm_issuer_quote_ttl_secs: 900
+dm_issuer_verify_before_send: false
+
+dm_issuer_docker_network: host
+dm_issuer_restart_policy: unless-stopped

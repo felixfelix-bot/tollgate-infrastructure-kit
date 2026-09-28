@@ -1,0 +1,9 @@
+---
+- name: Deploy NIP-29 relay with negentropy sync
+  hosts: "{{ target | default('nip29_relays') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - role: nip29_relay
+      when: nip29_enabled | default(true)

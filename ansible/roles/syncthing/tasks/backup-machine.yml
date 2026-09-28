@@ -1,0 +1,119 @@
+---
+- name: Check if Syncthing is installed on backup machine
+  command: which syncthing
+  register: backup_syncthing_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Syncthing on backup machine (Debian/Ubuntu)
+  apt:
+    name: syncthing
+    state: present
+  become: yes
+  when: backup_syncthing_check.rc != 0
+
+- name: Create backup directories on backup machine
+  file:
+    path: "{{ syncthing_backup_machine_backup_root }}/{{ item.label | lower | replace(' ', '-') }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ syncthing_backup_dirs }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Ensure syncthing config directory exists
+  file:
+    path: "{{ syncthing_backup_machine_config_dir }}"
+    state: directory
+    mode: '0700'
+
+- name: Generate syncthing config if needed
+  command: "syncthing --generate={{ syncthing_backup_machine_config_dir }}"
+  args:
+    creates: "{{ syncthing_backup_machine_config_dir }}/config.xml"
+
+- name: Check if lxml is installed
+  command: dpkg -l python3-lxml
+  register: lxml_check
+  changed_when: false
+  failed_when: false
+
+- name: Install lxml for xml module
+  apt:
+    name: python3-lxml
+    state: present
+  become: yes
+  when: lxml_check.rc != 0
+
+- name: Configure syncthing listen port
+  xml:
+    path: "{{ syncthing_backup_machine_config_dir }}/config.xml"
+    xpath: /configuration/options/listenAddress
+    value: "tcp://0.0.0.0:{{ syncthing_backup_machine_listen_port }}"
+
+- name: Configure syncthing GUI address
+  xml:
+    path: "{{ syncthing_backup_machine_config_dir }}/config.xml"
+    xpath: /configuration/gui/address
+    value: "127.0.0.1:{{ syncthing_backup_machine_gui_port }}"
+
+- name: Disable global announce
+  xml:
+    path: "{{ syncthing_backup_machine_config_dir }}/config.xml"
+    xpath: /configuration/options/globalAnnounceEnabled
+    value: "false"
+
+- name: Enable local announce
+  xml:
+    path: "{{ syncthing_backup_machine_config_dir }}/config.xml"
+    xpath: /configuration/options/localAnnounceEnabled
+    value: "true"
+
+- name: Remove default folder
+  xml:
+    path: "{{ syncthing_backup_machine_config_dir }}/config.xml"
+    xpath: /configuration/folder[@id='default']
+    state: absent
+
+- name: Check if lingering is already enabled
+  stat:
+    path: "/var/lib/systemd/linger/{{ ansible_user_id }}"
+  register: linger_check
+
+- name: Enable lingering for current user
+  command: "loginctl enable-linger {{ ansible_user_id }}"
+  when:
+    - ansible_user_id != 'root'
+    - not linger_check.stat.exists
+
+- name: Enable and start syncthing user service
+  systemd:
+    name: syncthing
+    scope: user
+    state: started
+    enabled: yes
+
+- name: Wait for syncthing API
+  wait_for:
+    port: "{{ syncthing_backup_machine_gui_port }}"
+    host: 127.0.0.1
+    delay: 3
+    timeout: 30
+
+- name: Get backup machine syncthing device ID
+  command: syncthing --device-id
+  register: backup_device_id_raw
+  changed_when: false
+
+- name: Set backup machine device ID fact
+  set_fact:
+    backup_syncthing_id: "{{ backup_device_id_raw.stdout | trim }}"
+
+- name: Get backup machine syncthing API key
+  command: "grep -oP '(?<=<apikey>)[^<]+' {{ syncthing_backup_machine_config_dir }}/config.xml"
+  register: backup_api_key_raw
+  changed_when: false
+
+- name: Set backup machine API key fact
+  set_fact:
+    backup_syncthing_api_key: "{{ backup_api_key_raw.stdout | trim }}"

@@ -1,0 +1,9 @@
+---
+- name: restart routstr
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/routstr"
+    state: present
+    recreate: always
+
+- name: reload caddy
+  shell: docker exec tollgate-caddy caddy reload --config /etc/caddy/Caddyfile 2>&1

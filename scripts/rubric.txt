@@ -1,0 +1,18 @@
+SEEK: anyone genuinely on-topic for Bitcoin/Lightning, Nostr infrastructure,
+Cashu/ecash, AI/ML, or privacy/sovereignty tech. This includes builders AND
+curators/commentators who add signal. Topic relevance outweighs recency —
+keep relevant builders even if they are dormant or post elsewhere. NIP-05
+verified accounts must NEVER be auto-purged (route to keep or borderline).
+
+AVOID: (1) anonymous accounts with no profile AND no recent notes AND no topic
+signal; (2) pure spam such as word-game spam, astrology, or video dumps;
+(3) accounts that are BOTH off-topic AND low-signal. Tolerate occasional
+politics or off-topic posting IF the account also posts real on-topic work.
+
+DISPOSITION: keep = clearly on-topic; purge = clearly avoid; borderline =
+verified identity or active but weak topic signal. If the keep set exceeds
+~115, rank by (NIP-05 verified, then activity, then depth-of-work) and mark
+the weakest on-topic ones "borderline" rather than "keep".
+
+PETNAME: lowercase, <=20 chars, derived from display name / handle / project.
+Omit petnames for purges.

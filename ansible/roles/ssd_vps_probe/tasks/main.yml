@@ -1,0 +1,57 @@
+---
+# SSD VPS Dual-Vantage Probe Role
+# Deploys probe cron for monitoring 64.188.7.38 + 66.92.204.38
+
+- name: Ensure probe directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ ssd_vps_probe_install_dir }}"
+    - "{{ ssd_vps_probe_state_dir }}"
+    - "{{ ssd_vps_probe_log_dir }}"
+
+- name: Deploy probe script
+  ansible.builtin.template:
+    src: ssd-vps-probe.sh.j2
+    dest: "{{ ssd_vps_probe_install_dir }}/ssd-vps-probe.sh"
+    owner: root
+    group: root
+    mode: '0755'
+  notify: restart ssd-vps-probe
+
+- name: Deploy systemd service
+  ansible.builtin.template:
+    src: ssd-vps-probe.service.j2
+    dest: /etc/systemd/system/ssd-vps-probe.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload systemd
+
+- name: Deploy systemd timer
+  ansible.builtin.template:
+    src: ssd-vps-probe.timer.j2
+    dest: /etc/systemd/system/ssd-vps-probe.timer
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload systemd
+
+- name: Enable and start timer
+  ansible.builtin.systemd:
+    name: ssd-vps-probe.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Ensure log file exists with proper permissions
+  ansible.builtin.file:
+    path: "{{ ssd_vps_probe_log_dir }}/ssd-vps-probe.log"
+    state: touch
+    owner: root
+    group: root
+    mode: '0644'

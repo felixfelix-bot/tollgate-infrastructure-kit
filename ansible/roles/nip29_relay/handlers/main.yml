@@ -1,0 +1,14 @@
+---
+- name: wipe strfry nip29 db
+  file:
+    path: "{{ nip29_db_dir }}/{{ item }}"
+    state: absent
+  loop:
+    - data.mdb
+    - lock.mdb
+
+- name: restart strfry nip29
+  systemd:
+    name: strfry-nip29
+    state: restarted
+    daemon_reload: yes

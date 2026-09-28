@@ -1,0 +1,57 @@
+---
+- name: Create tollgate mint directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ tollgate_base_dir }}/mints"
+    - "{{ tollgate_base_dir }}/mints-dashboard"
+    - "{{ tollgate_base_dir }}/src/mint-orchestrator"
+    - "/var/log/tollgate"
+
+- name: Create empty registry if not exists
+  copy:
+    dest: "{{ tollgate_base_dir }}/mints/registry.json"
+    content: '{"mints":[]}'
+    force: no
+    mode: "0644"
+
+- name: Set repo root path
+  set_fact:
+    repo_root: "{{ inventory_dir | dirname | dirname }}"
+
+- name: Copy dashboard files
+  synchronize:
+    src: "{{ repo_root }}/mint-dashboard/"
+    dest: "{{ tollgate_base_dir }}/mints-dashboard/"
+    delete: yes
+  ignore_errors: yes
+
+- name: Copy mint-orchestrator source
+  synchronize:
+    src: "{{ repo_root }}/mint-orchestrator/"
+    dest: "{{ tollgate_base_dir }}/src/mint-orchestrator/"
+    delete: yes
+  ignore_errors: yes
+
+- name: Install Python venv and dependencies
+  pip:
+    name: "file://{{ tollgate_base_dir }}/src/mint-orchestrator"
+    virtualenv: "{{ tollgate_base_dir }}/mint-orchestrator-venv"
+    virtualenv_command: python3 -m venv
+
+- name: Create orchestrator systemd unit
+  template:
+    src: tollgate-mint-orchestrator.service.j2
+    dest: /etc/systemd/system/tollgate-mint-orchestrator.service
+    mode: "0644"
+  notify: restart mint orchestrator
+
+- name: Enable and start orchestrator
+  systemd:
+    name: tollgate-mint-orchestrator
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  when: machine_active | default(true)

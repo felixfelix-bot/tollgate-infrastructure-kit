@@ -1,0 +1,12 @@
+[Unit]
+Description=SSD VPS Dual-Vantage Probe Timer
+Documentation=https://github.com/felixfelix-bot/tollgate-infrastructure-kit
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

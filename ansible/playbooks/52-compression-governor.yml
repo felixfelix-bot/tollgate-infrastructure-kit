@@ -1,0 +1,16 @@
+---
+# 52-compression-governor.yml
+# Deploys the compression cost governor + model router + patched hermes-agent source.
+# Run after provisioning to ensure the 80/20 compression cost ratio is enforced.
+
+- name: Deploy patched hermes-agent source from fork
+  hosts: localhost
+  become: false
+  roles:
+    - hermes_source
+
+- name: Deploy compression cost governor + model router + timer
+  hosts: localhost
+  become: false
+  roles:
+    - hermes_compression_governor

@@ -1,0 +1,76 @@
+---
+- name: Install shadowsocks-libev
+  apt:
+    name: shadowsocks-libev
+    state: present
+
+- name: Deploy shadowsocks config
+  template:
+    src: shadowsocks.json.j2
+    dest: /etc/shadowsocks-libev/config.json
+    mode: '0600'
+  notify: restart shadowsocks
+
+- name: Create systemd override directory
+  file:
+    path: /etc/systemd/system/shadowsocks-libev.service.d
+    state: directory
+    mode: '0755'
+
+- name: Deploy shadowsocks systemd override for MPTCP
+  copy:
+    dest: /etc/systemd/system/shadowsocks-libev.service.d/override.conf
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/ss-server -c /etc/shadowsocks-libev/config.json --mptcp
+    mode: '0644'
+  notify: restart shadowsocks
+
+- name: Enable and start shadowsocks
+  systemd:
+    name: shadowsocks-libev
+    state: started
+    enabled: yes
+    daemon_reload: yes
+
+- name: Wait for shadowsocks
+  wait_for:
+    port: "{{ shadowsocks_port }}"
+    host: localhost
+    delay: 3
+    timeout: 30
+  ignore_errors: yes
+
+- name: Install glorytun
+  shell: |
+    curl -L https://github.com/byteunity/glorytun/releases/download/v0.3.4/glorytun-0.3.4-x86_64-linux-musl -o /usr/local/bin/glorytun
+    chmod +x /usr/local/bin/glorytun
+  args:
+    creates: /usr/local/bin/glorytun
+  when: glorytun_enabled
+  ignore_errors: yes
+
+- name: Generate glorytun key
+  command: glorytun keygen
+  register: glorytun_key
+  changed_when: false
+  when: glorytun_enabled
+  ignore_errors: yes
+
+- name: Save server config
+  copy:
+    dest: "{{ tollgate_base_dir }}/mptcp/server-config.txt"
+    content: |
+      Tollgate MPTCP Server Configuration
+      ====================================
+      Shadowsocks:
+        Server: {{ vps_ip }}:{{ shadowsocks_port }}
+        Password: {{ shadowsocks_password }}
+        Method: {{ shadowsocks_method }}
+        MPTCP: enabled
+
+      Glorytun:
+        Port: {{ glorytun_port }}
+        Key: {{ glorytun_key.stdout | default('N/A') }}
+    mode: '0600'

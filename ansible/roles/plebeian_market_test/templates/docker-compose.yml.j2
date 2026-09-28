@@ -1,0 +1,33 @@
+services:
+  relay:
+    image: scsibug/nostr-rs-relay:latest
+    container_name: {{ plebeian_market_test_relay_container_name }}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:{{ plebeian_market_test_relay_port }}:8080"
+
+  market:
+    image: oven/bun:latest
+    container_name: {{ plebeian_market_test_container_name }}
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      bash -c "
+        apt-get update && apt-get install -y git &&
+        rm -rf /tmp/market &&
+        git clone --branch {{ plebeian_market_repo_branch }} --depth 1 {{ plebeian_market_repo_url }} /tmp/market &&
+        cp -r /tmp/market/. /app/ &&
+        bun install &&
+        NODE_ENV=test bun dev --port {{ plebeian_market_test_port }} --host 0.0.0.0
+      "
+    ports:
+      - "127.0.0.1:{{ plebeian_market_test_port }}:{{ plebeian_market_test_port }}"
+    environment:
+      - NODE_ENV=test
+      - PORT={{ plebeian_market_test_port }}
+      - APP_RELAY_URL=ws://relay:{{ plebeian_market_test_relay_container_port }}
+      - APP_PRIVATE_KEY={{ plebeian_market_test_private_key }}
+      - LOCAL_RELAY_ONLY=true
+      - NIP46_RELAY_URL=ws://relay:{{ plebeian_market_test_relay_container_port }}
+    depends_on:
+      - relay

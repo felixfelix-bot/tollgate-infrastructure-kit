@@ -1,0 +1,9 @@
+---
+- name: Deploy ACT Runner (CI/CD for GRASP repos)
+  hosts: vps
+  ignore_unreachable: true
+  serial: 1
+  become: yes
+  gather_facts: yes
+  roles:
+    - role: ../../roles/act_runner

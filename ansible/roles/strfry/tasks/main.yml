@@ -1,0 +1,79 @@
+---
+- name: Create strfry directory
+  file:
+    path: "{{ tollgate_base_dir }}/strfry"
+    state: directory
+    mode: '0755'
+
+- name: Deploy strfry docker-compose
+  copy:
+    dest: "{{ tollgate_base_dir }}/strfry/docker-compose.yml"
+    content: |
+      services:
+        strfry:
+          image: ghcr.io/hoytech/strfry:latest
+          container_name: tollgate-strfry
+          restart: unless-stopped
+          ports:
+            - "127.0.0.1:{{ strfry_port }}:7777"
+          volumes:
+            - ./strfry.conf:/etc/strfry.conf:ro
+            - strfry-data:/strfry-db
+          networks:
+            - {{ docker_network_name }}
+
+      volumes:
+        strfry-data:
+
+      networks:
+        {{ docker_network_name }}:
+          external: true
+    mode: '0644'
+
+- name: Deploy strfry config
+  copy:
+    dest: "{{ tollgate_base_dir }}/strfry/strfry.conf"
+    content: |
+      ##
+      ## Strfry configuration
+      ##
+
+      dbParams {
+          ## Directory for storing the LMDB database
+          path = "/strfry-db"
+
+          ## Maximum database size (in GB)
+          maxSize = 10
+      }
+
+      relay {
+          ## Interface to bind to
+          bind = "0.0.0.0"
+
+          ## Port to listen on
+          port = 7777
+
+          ## Max number of connected clients
+          maxConnections = 1000
+
+          ## NIP-11 relay info
+          info {
+              name = "Tollgate Infrastructure Relay"
+              description = "General-purpose Nostr relay operated by Tollgate Infrastructure Kit"
+              pubkey = ""
+              contact = ""
+          }
+      }
+    mode: '0644'
+
+- name: Start strfry
+  community.docker.docker_compose_v2:
+    project_src: "{{ tollgate_base_dir }}/strfry"
+    state: present
+
+- name: Wait for strfry
+  wait_for:
+    port: "{{ strfry_port }}"
+    host: localhost
+    delay: 5
+    timeout: 60
