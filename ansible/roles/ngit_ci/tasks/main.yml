@@ -130,6 +130,22 @@
     - ngit_ci_force_identity | bool
     - ngit_ci_coordinator_nsec | length == 0
 
+# The coordinator image runs as a non-root user, so the named volume must be
+# owned by it or the coordinator crash-loops with "Permission denied" creating
+# /data/event-cache (and cannot read a root-owned imported key). `docker volume
+# create` initialises the volume root-owned, so fix ownership after creation.
+- name: Ensure the coordinator data volume exists
+  command: "docker volume create {{ ngit_ci_data_volume }}"
+  changed_when: false
+
+- name: Ensure the coordinator data volume is owned by the deploy owner
+  file:
+    path: "/var/lib/docker/volumes/{{ ngit_ci_data_volume }}/_data"
+    state: directory
+    owner: "{{ ngit_ci_owner }}"
+    group: "{{ ngit_ci_owner }}"
+    recurse: true
+
 - name: Start the coordinator and its docker-in-docker sidecar
   community.docker.docker_compose_v2:
     project_src: "{{ ngit_ci_base_dir }}"
