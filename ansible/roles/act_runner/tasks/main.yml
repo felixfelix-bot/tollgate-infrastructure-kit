@@ -22,6 +22,13 @@
     - "{{ tollgate_base_dir }}/act-runner/artifacts"
     - "{{ tollgate_base_dir }}/src/act-runner"
 
+- name: Check the installed act version
+  command: "{{ act_runner_binary }} --version"
+  register: act_runner_act_version_check
+  changed_when: false
+  failed_when: false
+  check_mode: no
+
 - name: Install act binary
   shell: |
     set -e
@@ -31,13 +38,30 @@
       arm64) ACT_ARCH="arm64" ;;
       *) echo "Unsupported arch: $ARCH"; exit 1 ;;
     esac
-    ACT_VERSION="0.2.77"
+    ACT_VERSION="{{ act_runner_act_version }}"
     curl -sL "https://github.com/nektos/act/releases/download/v${ACT_VERSION}/act_Linux_${ACT_ARCH}.tar.gz" | \
       tar xz -C /tmp act
     mv /tmp/act {{ act_runner_binary }}
     chmod +x {{ act_runner_binary }}
-  args:
-    creates: "{{ act_runner_binary }}"
+  when: >-
+    act_runner_act_version not in
+    (act_runner_act_version_check.stdout | default(''))
+
+- name: Ensure the act config directory exists
+  file:
+    path: "{{ act_runner_actrc_path | dirname }}"
+    state: directory
+    owner: debian
+    group: debian
+    mode: '0755'
+
+- name: Deploy actrc (runner image + container architecture)
+  template:
+    src: actrc.j2
+    dest: "{{ act_runner_actrc_path }}"
+    owner: debian
+    group: debian
+    mode: '0644'
 
 - name: Copy act-runner package to VPS
   synchronize:
@@ -89,13 +113,20 @@
     mode: '0644'
   notify: restart act-runner
 
-- name: Enable and start act-runner
+- name: Stop and disable act-runner on the standby host
+  systemd:
+    name: tollgate-act-runner
+    state: stopped
+    enabled: no
+  when: not (act_runner_is_active | bool)
+
+- name: Enable and start act-runner on the authoritative host
   systemd:
     name: tollgate-act-runner
     state: started
     enabled: yes
     daemon_reload: yes
-  when: machine_active | default(true)
+  when: act_runner_is_active | bool
 
 - name: Wait for act-runner API
   uri:
@@ -105,7 +136,7 @@
   until: runner_health.status == 200
   retries: 30
   delay: 3
-  when: machine_active | default(true)
+  when: act_runner_is_active | bool
 
 - name: Verify act-runner is accessible via Caddy
   uri:
@@ -116,7 +147,7 @@
   until: runner_caddy_health.status == 200
   retries: 15
   delay: 3
-  when: machine_active | default(true)
+  when: act_runner_is_active | bool
 
 - name: Display act-runner deployment info
   debug:

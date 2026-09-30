@@ -1,0 +1,7 @@
+---
+# VPS2's Caddy is a systemd unit (ExecReload: caddy reload --config ... --force).
+# Never `docker restart tollgate-caddy` here — that container does not exist and
+# the reload would silently do nothing (skill pitfall #23).
+- name: reload caddy
+  shell: "systemctl reload {{ ngit_ci_dashboard_caddy_service }}"
+  changed_when: true

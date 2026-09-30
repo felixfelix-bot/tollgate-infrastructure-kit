@@ -1,0 +1,27 @@
+---
+# 54-ngit-ci.yml — deploy the ngit-ci coordinator on the CI hosts.
+#
+# The coordinator and its docker-in-docker sidecar run only on `ci_active_host`
+# (the VPS primary, hermes-nvme). Every other ci_runners host is a warm standby:
+# source, environment, compose file and identity volume are present, containers
+# stopped. See PLAN-ci-authority.md.
+#
+#   ansible-playbook ansible/playbooks/54-ngit-ci.yml -l hermes-nvme
+#   ansible-playbook ansible/playbooks/54-ngit-ci.yml -l ci_runners -e ci_active_host=vps2
+#   ansible-playbook ansible/playbooks/54-ngit-ci.yml -l hermes-nvme -e ngit_ci_force_identity=true
+#
+# The compose project name is pinned (ngit_ci_project_name), so the existing
+# ngit-ci-deploy_coordinator-data volume — and the coordinator signing identity
+# it holds — is reused, never recreated. `ngit_ci_force_identity=true` imports
+# the anchor key from ngit_ci_coordinator_nsec once (the DQ05 cutover). The play
+# FAILS if the coordinator cannot publish its advertisement, if the identity is
+# missing, or if the live advertisement is not authored by the anchor.
+
+- name: Deploy the ngit-ci coordinator (authoritative host + warm standby)
+  hosts: "{{ ngit_ci_target | default('ci_runners') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  serial: 1
+  roles:
+    - ngit_ci

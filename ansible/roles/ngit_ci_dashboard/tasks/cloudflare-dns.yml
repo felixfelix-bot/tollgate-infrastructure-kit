@@ -1,0 +1,101 @@
+---
+# Publish the dashboard's A record in Cloudflare. DNS-only (proxied:false) —
+# Caddy terminates TLS itself, and the Cloudflare proxy would break the
+# HTTP-01/TLS-ALPN challenge (and cause redirect loops).
+#
+# The record is NOT optional here: a missing/wrong record means the dashboard
+# is invisible even though Caddy serves it locally. Creation is therefore
+# verified against the API afterwards and fails the play when it does not match.
+- name: Read the Cloudflare zone from the kit .env
+  set_fact:
+    ngit_ci_dashboard_cf_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
+    ngit_ci_dashboard_cf_zone: "{{ lookup('env', 'CLOUDFLARE_ZONE_ID') }}"
+
+- name: Fail when Cloudflare credentials are missing
+  fail:
+    msg: >-
+      CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID must be exported before running
+      this playbook (set -a; source .env; set +a). The dashboard A record is
+      created here, not by hand.
+  when: >-
+    ngit_ci_dashboard_cf_token | length == 0 or
+    ngit_ci_dashboard_cf_zone | length == 0
+
+- name: Look up existing DNS records for the dashboard name
+  uri:
+    url: >-
+      https://api.cloudflare.com/client/v4/zones/{{ ngit_ci_dashboard_cf_zone }}/dns_records?type=A&name={{ ngit_ci_dashboard_domain }}
+    headers:
+      Authorization: "Bearer {{ ngit_ci_dashboard_cf_token }}"
+    return_content: true
+  register: ngit_ci_dashboard_cf_lookup
+  no_log: true
+
+- name: Record the existing A records that need replacing
+  set_fact:
+    ngit_ci_dashboard_cf_stale_ids: >-
+      {{ ngit_ci_dashboard_cf_lookup.json.result | default([])
+         | selectattr('content', 'ne', ansible_host)
+         | map(attribute='id') | list }}
+    ngit_ci_dashboard_cf_correct: >-
+      {{ ngit_ci_dashboard_cf_lookup.json.result | default([])
+         | selectattr('content', 'eq', ansible_host)
+         | selectattr('proxied', 'eq', false) | list | length }}
+
+- name: Show the A records found
+  debug:
+    msg: >-
+      {{ ngit_ci_dashboard_domain }}: {{ ngit_ci_dashboard_cf_lookup.json.result | default([]) | length }}
+      record(s); {{ ngit_ci_dashboard_cf_stale_ids | length }} stale;
+      {{ ngit_ci_dashboard_cf_correct }} already correct.
+
+- name: Drop stale A records pointing somewhere else
+  uri:
+    url: "https://api.cloudflare.com/client/v4/zones/{{ ngit_ci_dashboard_cf_zone }}/dns_records/{{ item }}"
+    method: DELETE
+    headers:
+      Authorization: "Bearer {{ ngit_ci_dashboard_cf_token }}"
+    status_code: [200]
+  loop: "{{ ngit_ci_dashboard_cf_stale_ids }}"
+  no_log: true
+
+- name: Create the DNS-only A record for the dashboard
+  uri:
+    url: "https://api.cloudflare.com/client/v4/zones/{{ ngit_ci_dashboard_cf_zone }}/dns_records"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ ngit_ci_dashboard_cf_token }}"
+      Content-Type: application/json
+    body:
+      type: A
+      name: "{{ ngit_ci_dashboard_domain }}"
+      content: "{{ ansible_host }}"
+      ttl: 300
+      proxied: false
+    body_format: json
+    status_code: [200]
+  register: ngit_ci_dashboard_cf_create
+  when: ngit_ci_dashboard_cf_correct == 0
+  no_log: true
+
+- name: Verify the A record via the Cloudflare API (fatal on mismatch)
+  uri:
+    url: >-
+      https://api.cloudflare.com/client/v4/zones/{{ ngit_ci_dashboard_cf_zone }}/dns_records?type=A&name={{ ngit_ci_dashboard_domain }}
+    headers:
+      Authorization: "Bearer {{ ngit_ci_dashboard_cf_token }}"
+    return_content: true
+  register: ngit_ci_dashboard_cf_verify
+  no_log: true
+
+- name: Fail when the dashboard A record is not DNS-only and on this host
+  fail:
+    msg: >-
+      {{ ngit_ci_dashboard_domain }} must resolve to {{ ansible_host }} with
+      proxied:false. Cloudflare reports:
+      {{ ngit_ci_dashboard_cf_verify.json.result | default([]) | to_json }}
+  when: >-
+    ngit_ci_dashboard_cf_verify.json.result | default([]) | length == 0 or
+    (ngit_ci_dashboard_cf_verify.json.result
+      | selectattr('content', 'eq', ansible_host)
+      | selectattr('proxied', 'eq', false) | list | length) == 0

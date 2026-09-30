@@ -11,6 +11,12 @@ A single Ansible-based repository that deploys all Tollgate-related infrastructu
 - **Domain**: User brings their own (`BASE_DOMAIN` variable)
 - **Secrets**: `.env` file (not committed to git)
 
+## Related Plans
+
+- `PLAN-ci-authority.md` — one authoritative ngit-ci coordinator on the VPS
+  (`hermes-nvme` primary, `vps2` standby), single signer, lease/`ci_active_host` gated.
+- `docs/ngit-ci.md` — coordinator + dashboard deployment.
+
 ## Services (25 total)
 
 | # | Service | Subdomain | Internal Port | Install Method |

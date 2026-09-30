@@ -1,0 +1,32 @@
+---
+# 55-ci-failover.yml — move CI authority between the VPS primary and standby
+# without ever running two signers.
+#
+#   ansible-playbook ansible/playbooks/55-ci-failover.yml -e ci_active_host=vps2
+#   ansible-playbook ansible/playbooks/55-ci-failover.yml -e ci_active_host=hermes-nvme
+#
+# Phase 1 quiesces every ci_runners host (both coordinator stacks stopped), so
+# there is no window in which two coordinators hold the anchor identity. Phase 2
+# starts the coordinator and act-runner on the new active host only. See
+# PLAN-ci-authority.md.
+
+- name: Quiesce every CI host (single-signer guarantee during cutover)
+  hosts: ci_runners
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  tasks:
+    - name: Stop the coordinator stack on every CI host
+      include_role:
+        name: ngit_ci
+      vars:
+        ngit_ci_is_active: false
+
+- name: Start CI authority on the promoted host
+  hosts: "{{ ci_active_host | default(ci_primary_host | default('hermes-nvme')) }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - ngit_ci
+    - act_runner

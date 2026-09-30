@@ -1,0 +1,129 @@
+---
+# ngit-ci coordinator (NIP-C1 actions runner) + docker-in-docker sidecar.
+#
+# Mirrors the hand-deployed coordinator on DQ05 (~/ngit-ci-deploy) into the kit,
+# so the whole stack is reproducible from this repository alone:
+#   * the coordinator image is built from the ngit-ci source staged on the host
+#     at an exact commit (no hand-copied tree),
+#   * the docker-in-docker sidecar isolates untrusted job containers from the
+#     host daemon,
+#   * /data (coordinator identity + event cache + queue state) is a named
+#     volume, and the compose PROJECT NAME is pinned so the existing volume —
+#     and therefore the existing signing identity — is reused, never replaced.
+ngit_ci_enabled: true
+
+# The single authorized coordinator identity. Every Service Request from the
+# maintainer keys names this key; the role asserts it after start so a wrong or
+# freshly-generated key can never silently become the coordinator.
+ngit_ci_coordinator_hex: "765cd47badcbbc4a38c7d0c57d5607663b484c20cd59773f9f7064487f9431e8"
+# Imported once, from the fleet secret store (SOPS/age, ADR-014) or the env.
+# Never committed, never printed, never rotated on a normal run.
+ngit_ci_coordinator_nsec: "{{ lookup('env', 'NGIT_CI_COORDINATOR_NSEC') | default('', true) }}"
+# Opt-in one-shot: rewrite /data/.coordinator.nsec with ngit_ci_coordinator_nsec.
+ngit_ci_force_identity: false
+
+# Single active signer. The standby keeps the volume and config warm but the
+# coordinator and dind containers are stopped.
+ngit_ci_is_active: "{{ inventory_hostname == (ci_active_host | default(ngit_ci_primary_host | default('hermes-nvme'))) }}"
+
+ngit_ci_owner: "{{ lookup('env', 'NGIT_CI_OWNER') | default('debian', true) }}"
+# Compose project name is pinned: it decides the volume names
+# (ngit-ci-deploy_coordinator-data) that hold the coordinator's nsec, so the
+# existing identity volume is reused, never recreated under a new name.
+ngit_ci_project_name: ngit-ci-deploy
+ngit_ci_base_dir: "/home/{{ ngit_ci_owner }}/ngit-ci-deploy"
+ngit_ci_src_dir: "/home/{{ ngit_ci_owner }}/ngit-ci-src"
+ngit_ci_container_name: "{{ ngit_ci_project_name }}-coordinator-1"
+ngit_ci_data_volume: "{{ ngit_ci_project_name }}_coordinator-data"
+ngit_ci_dind_volume: "{{ ngit_ci_project_name }}_dind-storage"
+
+# Upstream source. HEAD 0580b27 == v0.1.1 == the revision the live coordinator
+# was built from (Dockerfile/Cargo.toml/docker-compose.yml md5-identical).
+ngit_ci_repo_url: "https://gitnostr.com/npub15qydau2hjma6ngxkl2cyar74wzyjshvl65za5k5rl69264ar2exs5cyejr/ngit-ci.git"
+ngit_ci_repo_version: "0580b27382b4fc9b6b3937d549a1cb2d125954fb"
+
+# Repositories watched for kind-30617 announcements (npub/identifier).
+# Union of the DQ05 anchor stack and the hermes-nvme stack, so moving CI off the
+# local network does not drop any repository's coverage. `#TMBG` keys the
+# tollgate-module-basic-go per-repo secrets.
+ngit_ci_repos:
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/balloon-fresh"
+  - "npub1xtzgnzzu88yfv9es3evykl3ympjz0gc3umy2e6rs3jazruhjyevqe63edh/asymmetric-vanity-npubs"
+  - "npub1xtzgnzzu88yfv9es3evykl3ympjz0gc3umy2e6rs3jazruhjyevqe63edh/bip39-dice-verify"
+  - "npub1xtzgnzzu88yfv9es3evykl3ympjz0gc3umy2e6rs3jazruhjyevqe63edh/kanban-boards"
+  - "npub1x677kgulh6lqaa8e658f9ts4s0x692wgrhcptw535877wfkuwnsqztaquc/feed"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/fips-design-session-2026-06-29"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/fips-exit-e2e"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/fips-exit-node"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/gh-ngit-ci-bridge"
+  - "npub1x677kgulh6lqaa8e658f9ts4s0x692wgrhcptw535877wfkuwnsqztaquc/market"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/merchant-routing-engine"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/microfips"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/physical-router-test-automation"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/tollgate-nostr-daemon"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/tollgate-rs"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/torii-continuum"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/OS-migration"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/axepool"
+  - "npub1x677kgulh6lqaa8e658f9ts4s0x692wgrhcptw535877wfkuwnsqztaquc/tollgate-infrastructure-kit"
+  - "npub1nng5mxkdh2mu593twukfr7j3fk5wxfy0v8ujf0e5g8nwwtzlphhqksqpew/tollgate-module-basic-go#TMBG"
+  - "npub1x677kgulh6lqaa8e658f9ts4s0x692wgrhcptw535877wfkuwnsqztaquc/packages"
+
+ngit_ci_index_relays: "wss://index.ngit.dev"
+ngit_ci_nostr_secret_relays: ""
+# DQ05 ran `automatic`; the authoritative coordinator waits for a maintainer
+# kind-9843 Service Request (the protocol's default-safe policy).
+ngit_ci_execution_policy: "request-required"
+ngit_ci_additional_requesters: ""
+
+# Concurrency. DQ05 has 4 cores / 10.9 GB RAM / 180 GB free.
+# Raised 1 -> 3 (operator instruction, 2026-09-11): the machine idles at load
+# ~1.0, and the per-job caps below are ceilings, not reservations. NOTE: three
+# jobs at the 4g cap is a 12 GB theoretical ceiling on a 10.9 GB host — the
+# kernels OOM/CPU throttling protects the host, but 3x3g is the safer cap if
+# sustained oversubscription is ever observed. Do not raise past 3 without
+# operator sign-off.
+ngit_ci_max_concurrent_jobs: 3
+ngit_ci_act_container_options: "--memory=4g --memory-swap=4g --cpus=2 --pids-limit=2048"
+ngit_ci_act_cache_enabled: true
+ngit_ci_act_cache_max_bytes: 10737418240
+ngit_ci_act_bind_workspace: false
+
+# Docker capability for job containers. act bind-mounts this daemon socket into
+# every job container (ngit-ci `--act-container-daemon-socket`, whose default
+# of '-' disables the mount). Enabled 2026-09-11 on operator approval so
+# docker-based builds work — FreedomTechFeed/packages' OpenWrt SDK step
+# (`openwrt/gh-action-sdk`, BuildKit) failed with "no container daemon".
+# The path is resolved by the *container daemon act talks to*, i.e. the dind
+# sidecar, so jobs get the dedicated dind daemon and never the host socket.
+# Trade-off: a job with daemon access can spawn sibling containers on dind and
+# so escape its own `--memory/--cpus/--pids-limit` caps (dind is privileged,
+# so that is a bigger blast radius than a job without it). Set to "" or "-" to
+# restore the no-daemon default.
+ngit_ci_act_container_daemon_socket: "unix:///var/run/docker.sock"
+
+ngit_ci_blossom_servers: ""
+ngit_ci_blossom_max_log_bytes: 4194304
+ngit_ci_blossom_max_artifact_bytes: 67108864
+ngit_ci_blossom_max_artifacts_per_job: 16
+ngit_ci_blossom_upload_timeout_secs: 60
+ngit_ci_blossom_upload_budget_secs: 120
+ngit_ci_blossom_artifact_server_addr: ""
+ngit_ci_blossom_public_url: ""
+
+ngit_ci_queue_recovery_window_secs: 600
+ngit_ci_log_level: info
+# 30m default job timeout + 2m Blossom budget + shutdown overhead.
+ngit_ci_stop_grace_period: "33m"
+
+# `docker compose up --build` on every role run. The .dockerignore excludes
+# .git/, so an unchanged revision is a build-cache hit.
+ngit_ci_build: always
+
+# Existing images are reused; only the coordinator is rebuilt from source.
+ngit_ci_dind_image: "docker:dind"
+
+# Post-start identity assertion: read the latest kind-19843 coordinator
+# advertisement from the relay and fail unless it is authored by the anchor.
+ngit_ci_verify_identity: true
+ngit_ci_verify_script: "{{ inventory_dir | dirname | dirname }}/scripts/verify-ngit-ci-identity.sh"

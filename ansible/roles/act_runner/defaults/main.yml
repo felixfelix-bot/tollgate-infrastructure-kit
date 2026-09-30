@@ -5,6 +5,12 @@ act_runner_db_path: "{{ tollgate_base_dir }}/act-runner/builds.db"
 act_runner_work_dir: "{{ tollgate_base_dir }}/act-runner/work"
 act_runner_log_dir: "{{ tollgate_base_dir }}/act-runner/logs"
 act_runner_binary: "/usr/local/bin/act"
+act_runner_act_version: "0.2.88"
+act_runner_act_image: "catthehacker/ubuntu:act-latest"
+act_runner_actrc_path: "/home/debian/.config/act/actrc"
+# Same single-active gate as the coordinator: act-runner builds on the CI
+# authority host, the other ci_runners host stays a warm standby.
+act_runner_is_active: "{{ inventory_hostname == (ci_active_host | default(ci_primary_host | default('hermes-nvme'))) }}"
 act_runner_relays:
   - "wss://ngit.{{ base_domain }}"
   - "wss://relay.{{ base_domain }}"

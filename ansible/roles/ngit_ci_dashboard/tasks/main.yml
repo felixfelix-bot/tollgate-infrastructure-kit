@@ -1,0 +1,180 @@
+---
+- name: Detect the Caddy deployment mode
+  shell: |
+    if systemctl is-active {{ ngit_ci_dashboard_caddy_service }} 2>/dev/null | grep -q '^active$'; then
+      echo systemd
+    elif docker ps 2>/dev/null | grep -qi caddy; then
+      echo docker
+    else
+      echo none
+    fi
+  register: ngit_ci_dashboard_caddy_mode
+  changed_when: false
+
+- name: Fail when no Caddy instance is running
+  fail:
+    msg: >-
+      No running Caddy found (systemd or Docker). The ngit-ci dashboard needs an
+      existing Caddy to serve {{ ngit_ci_dashboard_domain }}; install one first.
+  when: ngit_ci_dashboard_caddy_mode.stdout | trim == 'none'
+
+- name: Require the host/systemd Caddy (VPS2 has no Docker Caddy)
+  fail:
+    msg: >-
+      Caddy is running in '{{ ngit_ci_dashboard_caddy_mode.stdout | trim }}' mode.
+      This role injects into {{ ngit_ci_dashboard_caddyfile }} and reloads via
+      `systemctl reload {{ ngit_ci_dashboard_caddy_service }}`; a containerised
+      Caddy needs a different Caddyfile path and reload command.
+  when: ngit_ci_dashboard_caddy_mode.stdout | trim != 'systemd'
+
+- name: Check Node.js toolchain
+  shell: "command -v node npm"
+  register: ngit_ci_dashboard_node
+  changed_when: false
+  failed_when: false
+
+- name: Fail when Node.js/npm are missing
+  fail:
+    msg: >-
+      node and npm are required to build the dashboard (Vite needs
+      devDependencies). Install Node.js on {{ inventory_hostname }} first
+      (the release_explorer role installs Node 22 from NodeSource).
+  when: ngit_ci_dashboard_node.rc != 0
+
+- name: Show the Node.js version the build will use
+  shell: "node --version && npm --version"
+  register: ngit_ci_dashboard_node_version
+  changed_when: false
+
+- name: Create the source parent directory
+  file:
+    path: "{{ ngit_ci_dashboard_src_dir | dirname }}"
+    state: directory
+    mode: '0755'
+
+- name: Register the source tree as a git safe.directory
+  shell: "git config --global --add safe.directory {{ ngit_ci_dashboard_src_dir }}"
+  changed_when: false
+
+- name: Clone the ngit-ci dashboard source (pinned commit)
+  git:
+    repo: "{{ ngit_ci_dashboard_repo_url }}"
+    dest: "{{ ngit_ci_dashboard_src_dir }}"
+    version: "{{ ngit_ci_dashboard_repo_version }}"
+    force: true
+
+- name: Hand the source tree to the build user
+  file:
+    path: "{{ ngit_ci_dashboard_src_dir }}"
+    owner: "{{ ngit_ci_dashboard_owner }}"
+    group: "{{ ngit_ci_dashboard_owner }}"
+    recurse: true
+
+- name: Install build dependencies (npm ci)
+  shell: "cd {{ ngit_ci_dashboard_src_dir }} && sudo -u {{ ngit_ci_dashboard_owner }} npm ci"
+  args:
+    creates: "{{ ngit_ci_dashboard_src_dir }}/node_modules/.package-lock.json"
+
+- name: Build the dashboard (tsc --noEmit + vite build)
+  shell: "cd {{ ngit_ci_dashboard_src_dir }} && sudo -u {{ ngit_ci_dashboard_owner }} npm run build"
+  when: >-
+    ngit_ci_dashboard_force_build | bool or
+    not ((ngit_ci_dashboard_src_dir + '/dist/index.html') is exists)
+
+- name: Create the served directory
+  file:
+    path: "{{ ngit_ci_dashboard_dist_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Publish the built assets
+  shell: >-
+    rsync -a --delete {{ ngit_ci_dashboard_src_dir }}/dist/
+    {{ ngit_ci_dashboard_dist_dir }}/
+  changed_when: true
+
+# Caddy runs as the unprivileged `caddy` user: every directory on the path to
+# the assets must be world-traversable (pitfall #6) and the files readable.
+- name: Make the path chain traversable for the caddy user
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ ngit_ci_dashboard_src_dir | dirname }}"
+    - "{{ ngit_ci_dashboard_dist_dir | dirname }}"
+    - "{{ ngit_ci_dashboard_dist_dir }}"
+
+- name: Make the published assets world-readable
+  shell: "find {{ ngit_ci_dashboard_dist_dir }} -type d -exec chmod 0755 {} + && find {{ ngit_ci_dashboard_dist_dir }} -type f -exec chmod 0644 {} +"
+  changed_when: true
+
+- name: Publish the Cloudflare A record for the dashboard
+  include_tasks: cloudflare-dns.yml
+
+- name: Inject the Caddy route
+  blockinfile:
+    path: "{{ ngit_ci_dashboard_caddyfile }}"
+    marker: "# {mark} {{ ngit_ci_dashboard_caddy_marker }}"
+    block: |
+      # ngit-ci dashboard — static SPA built from {{ ngit_ci_dashboard_repo_version }}
+      {{ ngit_ci_dashboard_domain }} {
+          root * {{ ngit_ci_dashboard_dist_dir }}
+          encode gzip
+          try_files {path} /index.html
+          file_server
+      }
+    backup: true
+    validate: "caddy validate --config %s"
+  notify: reload caddy
+
+- name: Apply the Caddy route change now
+  meta: flush_handlers
+
+- name: Verify the dashboard answers over HTTPS with a valid certificate
+  uri:
+    url: "https://{{ ngit_ci_dashboard_domain }}/"
+    validate_certs: true
+    return_content: true
+    status_code: 200
+  register: ngit_ci_dashboard_https
+  until: ngit_ci_dashboard_https.status == 200
+  retries: 30
+  delay: 6
+  failed_when: false
+  changed_when: false
+
+- name: Fail when the dashboard is not reachable over valid HTTPS
+  fail:
+    msg: >-
+      https://{{ ngit_ci_dashboard_domain }}/ did not return HTTP 200 with a
+      valid certificate (got status
+      {{ ngit_ci_dashboard_https.status | default('000') }}:
+      {{ ngit_ci_dashboard_https.msg | default('no response') }}). Check the
+      Cloudflare A record (proxied:false), the Caddy route markers and
+      `systemctl status caddy`.
+  when: ngit_ci_dashboard_https.status | default(0) != 200
+
+- name: Confirm the served HTML is the dashboard shell
+  assert:
+    that:
+      - "'ngit-ci' in ngit_ci_dashboard_https.content"
+    fail_msg: >-
+      https://{{ ngit_ci_dashboard_domain }}/ returned 200 but the body is not
+      the ngit-ci dashboard (stale or missing index.html in
+      {{ ngit_ci_dashboard_dist_dir }}).
+
+- name: Render-check the deployed dashboard with Playwright
+  include_tasks: playwright-verify.yml
+  when: ngit_ci_dashboard_playwright_enabled
+
+- name: Dashboard deployment summary
+  debug:
+    msg: |
+      ngit-ci dashboard deployed
+        URL:        https://{{ ngit_ci_dashboard_domain }}/
+        Assets:     {{ ngit_ci_dashboard_dist_dir }} (from {{ ngit_ci_dashboard_src_dir }}/dist)
+        Commit:     {{ ngit_ci_dashboard_repo_version }}
+        Coordinator: {{ ngit_ci_dashboard_coordinator_pubkey }}
+        Caddy:      systemd ({{ ngit_ci_dashboard_caddyfile }}), reload = systemctl reload {{ ngit_ci_dashboard_caddy_service }}
+        Node:       {{ ngit_ci_dashboard_node_version.stdout_lines | join(' / ') }}

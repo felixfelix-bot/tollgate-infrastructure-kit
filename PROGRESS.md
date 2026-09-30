@@ -1,5 +1,16 @@
 # PROGRESS.md
 
+## CI Authority (`PLAN-ci-authority.md`)
+
+- [x] Relay-verified the two live coordinators: DQ05 = anchor `765cd47bad…`, hermes-nvme = `707aa557…`
+- [x] `ngit_ci` role: VPS primary + warm standby, `ci_active_host` gate, identity import + anchor assertion
+- [x] Union watch list + `request-required` policy codified in the role
+- [x] `act_runner`: `ci_active_host` gate, `act` version pin (0.2.88), templated `actrc`
+- [x] `55-ci-failover.yml` (quiesce-all, then promote) and `54-ngit-ci.yml` on `ci_runners`
+- [x] `scripts/verify-ngit-ci-identity.sh` asserts the advertised key is the anchor
+- [ ] Cut over: back up + stop DQ05, import the anchor key on hermes-nvme, verify single signer
+- [ ] Decommission DQ05 `~/ngit-ci-deploy` ad-hoc stack (after verification)
+
 ## Done
 
 ### Base Infrastructure

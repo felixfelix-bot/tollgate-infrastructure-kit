@@ -85,7 +85,19 @@ routstr_mint_grpc_port: 50055
 
 ngit_relay_port: 7778
 
+# CI authority: one authoritative coordinator identity on the VPS primary, with
+# a warm VPS standby. `ci_active_host` is what the coordinator, the act-runner
+# and the ci/runner DNS are gated on; a failover re-runs the roles with
+# `-e ci_active_host=<other>`. See PLAN-ci-authority.md.
+ci_primary_host: "{{ lookup('env', 'CI_PRIMARY_HOST') | default('hermes-nvme', true) }}"
+ci_standby_host: "{{ lookup('env', 'CI_STANDBY_HOST') | default('testserver2', true) }}"
+ci_active_host: "{{ lookup('env', 'CI_ACTIVE_HOST') | default(ci_primary_host, true) }}"
+ngit_ci_primary_host: "{{ ci_primary_host }}"
+ngit_ci_standby_host: "{{ ci_standby_host }}"
+ngit_ci_coordinator_hex: "765cd47badcbbc4a38c7d0c57d5607663b484c20cd59773f9f7064487f9431e8"
+
 act_runner_port: 8095
+act_runner_act_version: "0.2.88"
 act_runner_domain: "runner.{{ base_domain }}"
 act_runner_poll_interval: 30
 act_runner_relays:
