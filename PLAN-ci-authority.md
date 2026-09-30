@@ -67,6 +67,13 @@ backed up locally (`~/ngit-ci-anchor-backup-20260930.tgz`); the anchor
 coordinator now advertises as `765cd47bad…` (`restartcount=0`), DQ05 runs no
 coordinator, and `scripts/verify-ngit-ci-identity.sh` passes.
 
+**Standby warmed.** `testserver2` (vps2) holds the same anchor key, the union
+`.env`, the per-repo secrets, the pinned source (`0580b27`) and a pre-built
+coordinator image + `docker:dind`; its coordinator containers are stopped. It is
+reachable from `hermes-nvme` via `ssh -i ~/.ssh/id_fleet debian@23.182.128.51`
+(port 22); the kit inventory's default key/port for `vps2` does not reach it, so
+wire that connection (or a ProxyJump) before relying on `55-ci-failover.yml`.
+
 ## Cutover (one-time, one signer at a time)
 
 ```bash
