@@ -90,7 +90,7 @@ ngit_relay_port: 7778
 # and the ci/runner DNS are gated on; a failover re-runs the roles with
 # `-e ci_active_host=<other>`. See PLAN-ci-authority.md.
 ci_primary_host: "{{ lookup('env', 'CI_PRIMARY_HOST') | default('hermes-nvme', true) }}"
-ci_standby_host: "{{ lookup('env', 'CI_STANDBY_HOST') | default('vps2', true) }}"
+ci_standby_host: "{{ lookup('env', 'CI_STANDBY_HOST') | default('testserver2', true) }}"
 ci_active_host: "{{ lookup('env', 'CI_ACTIVE_HOST') | default(ci_primary_host, true) }}"
 ngit_ci_primary_host: "{{ ci_primary_host }}"
 ngit_ci_standby_host: "{{ ci_standby_host }}"

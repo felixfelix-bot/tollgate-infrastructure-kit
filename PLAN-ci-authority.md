@@ -70,9 +70,9 @@ coordinator, and `scripts/verify-ngit-ci-identity.sh` passes.
 **Standby warmed.** `testserver2` (vps2) holds the same anchor key, the union
 `.env`, the per-repo secrets, the pinned source (`0580b27`) and a pre-built
 coordinator image + `docker:dind`; its coordinator containers are stopped. It is
-reachable from `hermes-nvme` via `ssh -i ~/.ssh/id_fleet debian@23.182.128.51`
-(port 22); the kit inventory's default key/port for `vps2` does not reach it, so
-wire that connection (or a ProxyJump) before relying on `55-ci-failover.yml`.
+The kit inventory reaches it as `testserver2` (`ci_runners`) through a
+ProxyJump via `hermes-nvme` (`id_hermes_vps` for the jump, `id_fleet` for the
+target), so `55-ci-failover.yml` runs without extra flags.
 
 ## Cutover (one-time, one signer at a time)
 
