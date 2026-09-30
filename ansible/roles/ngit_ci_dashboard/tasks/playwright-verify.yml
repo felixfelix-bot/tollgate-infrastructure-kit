@@ -1,0 +1,116 @@
+---
+# Playwright render check. The dashboard is a client-rendered SPA, so the
+# acceptance test drives a real browser against the deployed URL.
+#
+# Chrome lives on the operator workstation, not on VPS2 (Debian has no
+# google-chrome package). The role runs the check when a Chrome/Chromium binary
+# is present; otherwise it records that the check was delegated and points at
+# scripts/verify-ngit-ci-dashboard.sh, which runs the same script from a machine
+# that has Chrome. Either way, zero run rows are REPORTED, and only fail the
+# play when ngit_ci_dashboard_require_run_rows is set.
+- name: Look for a Chrome/Chromium binary for the render check
+  shell: "command -v google-chrome google-chrome-stable chromium chromium-browser 2>/dev/null | head -1"
+  register: ngit_ci_dashboard_chrome
+  changed_when: false
+  failed_when: false
+
+- name: Skip the on-host render check when Chrome is unavailable
+  debug:
+    msg: >-
+      No Chrome/Chromium on {{ inventory_hostname }} — the Playwright render check
+      is delegated. Run scripts/verify-ngit-ci-dashboard.sh from a workstation
+      with Chrome to render-check https://{{ ngit_ci_dashboard_domain }}/.
+  when: ngit_ci_dashboard_chrome.stdout | trim == ''
+
+- name: Fail when the run-row gate is required but no browser can verify it
+  fail:
+    msg: >-
+      ngit_ci_dashboard_require_run_rows is true but no Chrome/Chromium is
+      available on {{ inventory_hostname }} to run the render check.
+  when:
+    - ngit_ci_dashboard_chrome.stdout | trim == ''
+    - ngit_ci_dashboard_require_run_rows | bool
+
+- name: Install the render-check script next to the built bundle
+  copy:
+    src: verify_dashboard.mjs
+    dest: "{{ ngit_ci_dashboard_src_dir }}/verify_dashboard.mjs"
+    mode: '0644'
+  when: ngit_ci_dashboard_chrome.stdout | trim != ''
+
+- name: Ensure the report directory exists
+  file:
+    path: "{{ ngit_ci_dashboard_report_dir }}"
+    state: directory
+    mode: '0755'
+  when: ngit_ci_dashboard_chrome.stdout | trim != ''
+
+- name: Render-check the deployed dashboard with Playwright
+  shell: >-
+    node verify_dashboard.mjs https://{{ ngit_ci_dashboard_domain }}/
+    {{ ngit_ci_dashboard_report_dir }}/verify-report.json 20000
+  args:
+    chdir: "{{ ngit_ci_dashboard_src_dir }}"
+  register: ngit_ci_dashboard_playwright
+  changed_when: false
+  failed_when: false
+  when: ngit_ci_dashboard_chrome.stdout | trim != ''
+
+- name: Show the render-check report
+  debug:
+    msg: "{{ ngit_ci_dashboard_playwright.stdout_lines | default([]) | last | default('(no report)') }}"
+  when: ngit_ci_dashboard_chrome.stdout | trim != ''
+
+- name: Fail when the render check could not drive the page
+  fail:
+    msg: >-
+      Playwright could not render https://{{ ngit_ci_dashboard_domain }}/:
+      {{ ngit_ci_dashboard_playwright.stderr | default('') | truncate(400) }}
+  when:
+    - ngit_ci_dashboard_chrome.stdout | trim != ''
+    - ngit_ci_dashboard_playwright.rc | default(0) != 0
+
+- name: Read the render-check report
+  slurp:
+    src: "{{ ngit_ci_dashboard_report_dir }}/verify-report.json"
+  register: ngit_ci_dashboard_report_raw
+  when: ngit_ci_dashboard_chrome.stdout | trim != ''
+
+- name: Parse the render-check report
+  set_fact:
+    ngit_ci_dashboard_report: >-
+      {{ (ngit_ci_dashboard_report_raw.content | b64decode | from_json) }}
+  when: ngit_ci_dashboard_chrome.stdout | trim != ''
+
+- name: Fail when the SPA shell did not render
+  fail:
+    msg: >-
+      https://{{ ngit_ci_dashboard_domain }}/ answered
+      {{ ngit_ci_dashboard_report.httpStatus | default('no response') }} but the
+      dashboard shell did not render (title={{ ngit_ci_dashboard_report.title | default('?') }},
+      header={{ ngit_ci_dashboard_report.headerText | default('?') }}).
+  when:
+    - ngit_ci_dashboard_chrome.stdout | trim != ''
+    - not (ngit_ci_dashboard_report.shellRendered | default(false))
+
+- name: Warn when the dashboard renders with no CI runs
+  debug:
+    msg: >-
+      NOTE: https://{{ ngit_ci_dashboard_domain }}/ renders
+      {{ ngit_ci_dashboard_report.runRows | default(0) }} run row(s). The
+      coordinator has published no workflow events yet — a request-required
+      coordinator stays closed until a maintainer publishes a kind-9843 Service
+      Request (or a kind-9840 Manual Trigger).
+  when:
+    - ngit_ci_dashboard_chrome.stdout | trim != ''
+    - (ngit_ci_dashboard_report.runRows | default(0)) < 1
+
+- name: Fail when the run-row gate is required and no run rows rendered
+  fail:
+    msg: >-
+      ngit_ci_dashboard_require_run_rows is set but the deployed dashboard
+      rendered {{ ngit_ci_dashboard_report.runRows | default(0) }} run row(s).
+  when:
+    - ngit_ci_dashboard_chrome.stdout | trim != ''
+    - ngit_ci_dashboard_require_run_rows | bool
+    - (ngit_ci_dashboard_report.runRows | default(0)) < 1

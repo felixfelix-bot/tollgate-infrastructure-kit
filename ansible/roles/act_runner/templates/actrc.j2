@@ -1,0 +1,4 @@
+-P ubuntu-latest={{ act_runner_act_image }}
+-P ubuntu-24.04={{ act_runner_act_image }}
+-P ubuntu-22.04={{ act_runner_act_image }}
+--container-architecture linux/{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}
