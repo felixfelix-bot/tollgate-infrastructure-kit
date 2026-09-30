@@ -16,7 +16,7 @@ for file in $STAGED; do
     while IFS= read -r pattern; do
         [ -z "$pattern" ] && continue
         [[ "$pattern" == \#* ]] && continue
-        MATCH=$(git diff --cached -- "$file" | grep -nP "$pattern" 2>/dev/null | head -3)
+        MATCH=$(git diff --cached -- "$file" | grep -nP -e "$pattern" 2>/dev/null | head -3)
         if [ -n "$MATCH" ]; then
             echo "SECRET DETECTED in $file (pattern: $pattern):"
             echo "$MATCH"
