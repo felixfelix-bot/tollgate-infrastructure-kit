@@ -58,6 +58,15 @@ hermes-nvme (23.182.128.219)            vps2 / testserver2 (23.182.128.51)
 7. **Decommission the ad-hoc path.** DQ05's `~/ngit-ci-deploy` compose and its
    untracked `.env` are removed; a cold tarball of the anchor volume is retained.
 
+## Cutover status
+
+**Executed 2026-09-30.** DQ05's anchor stack was stopped and its identity volume
+backed up locally (`~/ngit-ci-anchor-backup-20260930.tgz`); the anchor
+`.coordinator.nsec` and the anchor-decryptable per-repo secrets were imported to
+`hermes-nvme`; the stale `707aa557` encrypted secret state was removed. The VPS
+coordinator now advertises as `765cd47bad…` (`restartcount=0`), DQ05 runs no
+coordinator, and `scripts/verify-ngit-ci-identity.sh` passes.
+
 ## Cutover (one-time, one signer at a time)
 
 ```bash
