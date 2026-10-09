@@ -53,70 +53,8 @@ alert() {
 }
 
 # --- Config (overridable via env) ---
-# Resource gate policy (2026-10-09): per-CPU CPU pressure + PSI, with hard
-# memory/swap stops. The old absolute LOAD_THRESHOLD=3.4 meant something
-# different on every host and counted uninterruptible IO wait as "loaded".
-# Precedence: environment > committed policy file > built-in defaults.
-POLICY_FILE="${POLICY_FILE:-$(cd "$(dirname "$0")" && pwd)/dispatch_policy.json}"
-CPU_PER_CORE="${CPU_PER_CORE:-}"              # soft: load/cpu >= this -> 1 pass
-CPU_STORM_PER_CORE="${CPU_STORM_PER_CORE:-}"  # hard: load/cpu >= this -> stop
-RAM_MIN_MB="${RAM_MIN_MB:-}"                  # hard: MemAvailable floor (MB)
-SWAP_MAX_PCT="${SWAP_MAX_PCT:-}"              # hard: swap used ceiling (%)
-PSI_CPU_MAX="${PSI_CPU_MAX:-}"                # soft: cpu PSI full avg10 ceiling
-PSI_MEM_MAX="${PSI_MEM_MAX:-}"                # hard: mem PSI full avg10 ceiling
-NPROC="${NPROC:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || echo 1)}"
-LOADAVG_FILE="${LOADAVG_FILE:-/proc/loadavg}"
-MEMINFO_FILE="${MEMINFO_FILE:-/proc/meminfo}"
-PRESSURE_CPU_FILE="${PRESSURE_CPU_FILE:-/proc/pressure/cpu}"
-PRESSURE_MEM_FILE="${PRESSURE_MEM_FILE:-/proc/pressure/memory}"
-
-load_policy() {
-    [ -f "$POLICY_FILE" ] || return 0
-    local k v
-    while IFS='=' read -r k v; do
-        [ -z "$k" ] && continue
-        case "$k" in
-            cpu_per_core)        CPU_PER_CORE="${CPU_PER_CORE:-$v}" ;;
-            cpu_storm_per_core)  CPU_STORM_PER_CORE="${CPU_STORM_PER_CORE:-$v}" ;;
-            ram_min_mb)          RAM_MIN_MB="${RAM_MIN_MB:-$v}" ;;
-            swap_max_pct)        SWAP_MAX_PCT="${SWAP_MAX_PCT:-$v}" ;;
-            psi_cpu_max)         PSI_CPU_MAX="${PSI_CPU_MAX:-$v}" ;;
-            psi_mem_max)         PSI_MEM_MAX="${PSI_MEM_MAX:-$v}" ;;
-        esac
-    done < <(python3 - "$POLICY_FILE" <<'PY' 2>/dev/null || true
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-except Exception:
-    sys.exit(0)
-def g(*ks):
-    x = d
-    for k in ks:
-        if not isinstance(x, dict) or k not in x:
-            return None
-        x = x[k]
-    return x
-vals = {
-    "cpu_per_core": g("cpu", "per_core"),
-    "cpu_storm_per_core": g("cpu", "storm_per_core"),
-    "ram_min_mb": g("memory", "min_available_mb"),
-    "swap_max_pct": g("swap", "max_used_pct"),
-    "psi_cpu_max": g("psi", "cpu_avg10_max"),
-    "psi_mem_max": g("psi", "memory_avg10_max"),
-}
-for k, v in vals.items():
-    if v is not None:
-        print(f"{k}={v}")
-PY
-)
-}
-load_policy
-: "${CPU_PER_CORE:=0.8}"
-: "${CPU_STORM_PER_CORE:=2.0}"
-: "${RAM_MIN_MB:=1500}"                   # 1.5 GB
-: "${SWAP_MAX_PCT:=90}"
-: "${PSI_CPU_MAX:=2.0}"
-: "${PSI_MEM_MAX:=1.0}"
+LOAD_THRESHOLD="${LOAD_THRESHOLD:-3.4}"
+RAM_MIN_MB="${RAM_MIN_MB:-1500}"          # 1.5 GB
 SLEEP_BETWEEN="${SLEEP_BETWEEN:-30}"      # seconds between board passes
 FAILURE_LIMIT="${FAILURE_LIMIT:-5}"
 STATE_DIR="${STATE_DIR:-$HOME/.hermes/state}"
@@ -144,49 +82,19 @@ if ! flock -n 9; then
     exit 0
 fi
 
-# --- Resource gate: memory/swap hard stop, CPU soft (per-CPU + PSI) --------
-# Returns 0 = ok, 1 = degrade (CPU soft: ONE board pass only), 2 = stop.
-# Sets RESOURCE_REASON for logging.
-RESOURCE_REASON=""
-
-# PSI "full avg10" (0 when the file/key is absent).
-_psi_avg10() {  # $1=file $2=line-prefix (full|some)
-    [ -r "$1" ] || { echo 0; return 0; }
-    awk -v want="$2" '$1==want {for(i=1;i<=NF;i++) if($i ~ /^avg10=/){split($i,a,"="); print a[2]; exit}}' "$1"
-}
-
-resource_verdict() {  # $1=label
-    local label="$1" load load_pc avail swap_pct psi_cpu psi_mem stop="" degrade=""
-    local nproc="${NPROC:-1}"
-    case "$nproc" in ''|*[!0-9]*) nproc=1 ;; esac
-    [ "$nproc" -ge 1 ] || nproc=1
-
-    load=$(awk '{print $1}' "$LOADAVG_FILE" 2>/dev/null); [ -z "$load" ] && load=0
-    load_pc=$(awk -v l="$load" -v n="$nproc" 'BEGIN{printf "%.3f", l/n}')
-    avail=$(awk '/^MemAvailable:/{print int($2/1024)}' "$MEMINFO_FILE" 2>/dev/null)
-    [ -z "$avail" ] && avail=0
-    swap_pct=$(awk '/^SwapTotal:/{t=$2} /^SwapFree:/{f=$2} END{if(t>0) printf "%.1f",100*(t-f)/t; else print "0"}' "$MEMINFO_FILE" 2>/dev/null)
-    [ -z "$swap_pct" ] && swap_pct=0
-    psi_cpu=$(_psi_avg10 "$PRESSURE_CPU_FILE" full)
-    psi_mem=$(_psi_avg10 "$PRESSURE_MEM_FILE" full)
-    [ -z "$psi_cpu" ] && psi_cpu=0
-    [ -z "$psi_mem" ] && psi_mem=0
-
-    # Hard stops: the failure we actually observed was oomd on memory pressure.
-    awk -v a="$avail" -v m="$RAM_MIN_MB"    'BEGIN{exit !(a+0 < m+0)}' && stop="mem ${avail}MB<${RAM_MIN_MB}"
-    [ -z "$stop" ] && awk -v s="$swap_pct" -v m="$SWAP_MAX_PCT" 'BEGIN{exit !(s+0 > m+0)}' && stop="swap ${swap_pct}%>${SWAP_MAX_PCT}"
-    [ -z "$stop" ] && awk -v c="$load_pc" -v t="$CPU_STORM_PER_CORE" 'BEGIN{exit !(c+0 >= t+0)}' && stop="load/cpu ${load_pc}>=${CPU_STORM_PER_CORE}"
-    [ -z "$stop" ] && awk -v p="$psi_mem" -v t="$PSI_MEM_MAX" 'BEGIN{exit !(p+0 >= t+0)}' && stop="mem-pressure ${psi_mem}>=${PSI_MEM_MAX}"
-
-    # Soft signal: throttle to ONE board pass instead of stopping.
-    if [ -z "$stop" ]; then
-        awk -v c="$load_pc" -v t="$CPU_PER_CORE" 'BEGIN{exit !(c+0 >= t+0)}' && degrade="load/cpu ${load_pc}>=${CPU_PER_CORE}"
-        awk -v p="$psi_cpu" -v t="$PSI_CPU_MAX"  'BEGIN{exit !(p+0 >= t+0)}' && degrade="${degrade:+$degrade; }cpu-pressure ${psi_cpu}>=${PSI_CPU_MAX}"
+# --- Resource check helper (load + RAM) ---
+check_resources() {
+    local label="$1" load ram_avail load_ok ram_ok
+    load=$(awk '{print $1}' /proc/loadavg)
+    ram_avail=$(free -m | awk '/^Mem:/ {print $7}')
+    [ -z "${ram_avail:-}" ] && ram_avail=0
+    load_ok=$(awk -v l="$load" -v t="$LOAD_THRESHOLD" 'BEGIN{print (l+0 < t+0) ? 1 : 0}')
+    ram_ok=$(awk -v r="$ram_avail" -v m="$RAM_MIN_MB" 'BEGIN{print (r+0 > m+0) ? 1 : 0}')
+    log "resource check [$label]: load=$load ok=${load_ok}, avail_ram=${ram_avail}MB ok=${ram_ok}"
+    if [ "$load_ok" != "1" ] || [ "$ram_ok" != "1" ]; then
+        log "resource gate FAILED for [$label] (load=$load, ram=${ram_avail}MB) — stopping"
+        return 1
     fi
-    RESOURCE_REASON="${stop:-$degrade}"
-    log "resource [$label]: load=${load} (${load_pc}/cpu) avail=${avail}MB swap=${swap_pct}% psi_cpu=${psi_cpu} psi_mem=${psi_mem} -> ${stop:+STOP }${degrade:+DEGRADE }${RESOURCE_REASON:-ok}"
-    [ -n "$stop" ] && return 2
-    [ -n "$degrade" ] && return 1
     return 0
 }
 
@@ -454,16 +362,7 @@ if [ "$GATE_KNOWN" = "1" ]; then
 else
     log "gate state unknown (fail-open) — no marker removal, no sweep"
 fi
-MAX_PASSES=0
-resource_verdict "pre-flight"; RC=$?
-if [ "$RC" -eq 2 ]; then
-    log "resource gate STOP pre-flight (${RESOURCE_REASON}) — no dispatch"
-    exit 0
-fi
-if [ "$RC" -eq 1 ]; then
-    MAX_PASSES=1
-    log "resource gate DEGRADE pre-flight (${RESOURCE_REASON}) — one board pass"
-fi
+check_resources "pre-flight" || exit 0
 
 # Dispatch loop — one board per pass, re-check gate + resources before each spawn
 spawned=0
@@ -476,16 +375,7 @@ for board in $BOARDS; do
         fi
         break
     fi
-    resource_verdict "$board"; RC=$?
-    if [ "$RC" -eq 2 ]; then
-        log "resource gate STOP at board=$board (${RESOURCE_REASON}) — stopping"
-        break
-    fi
-    [ "$RC" -eq 1 ] && MAX_PASSES=1
-    if [ "$MAX_PASSES" -gt 0 ] && [ "$spawned" -ge "$MAX_PASSES" ]; then
-        log "resource gate degraded — stopping after $spawned board pass(es)"
-        break
-    fi
+    check_resources "$board" || break
     log "dispatching board=$board max=1 failure-limit=$FAILURE_LIMIT"
     if "$HERMES_BIN" kanban --board "$board" dispatch --max 1 --failure-limit "$FAILURE_LIMIT" 2>&1; then
         spawned=$((spawned + 1))
