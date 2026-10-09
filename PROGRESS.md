@@ -13,12 +13,6 @@
 
 ## Done
 
-### Dispatch resource gate (Oct 2026)
-- [x] Replaced absolute `LOAD_THRESHOLD=3.4` with a per-CPU + PSI gate (`resource_verdict`)
-- [x] Memory/swap are hard stops; CPU soft-breach degrades to one board pass
-- [x] Committed `dispatch_policy.json` (env > policy > defaults); metric sources injectable
-- [x] Tests `t16`–`t21` (injected `/proc` fixtures); `docs/dispatch-load-gate.md`
-
 ### Base Infrastructure
 - [x] PLAN.md — full implementation plan
 - [x] PROGRESS.md — this checklist
