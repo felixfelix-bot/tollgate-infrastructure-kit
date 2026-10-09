@@ -37,6 +37,20 @@ assert_file_absent() {
 }
 
 # ---------- fixture helpers ----------
+# Deterministic resource metrics. The dispatcher reads LOADAVG_FILE/MEMINFO_FILE/
+# PRESSURE_*_FILE, so tests inject fixtures instead of the host's real /proc.
+write_metrics() {  # load mem_avail_mb swap_used_pct [psi_cpu] [psi_mem]
+    local load="$1" memav="$2" swappct="$3" psi_cpu="${4:-0}" psi_mem="${5:-0}" swapfree
+    swapfree=$(python3 -c "print(int(4096*(100-float('$swappct'))/100))")
+    printf '%s 0.10 0.10 1/100 1\n' "$load" > "$FIXTURE_LOADAVG"
+    printf 'MemTotal: 16777216 kB\nMemAvailable: %d kB\nSwapTotal: 4194304 kB\nSwapFree: %d kB\n' \
+        $((memav * 1024)) $((swapfree * 1024)) > "$FIXTURE_MEMINFO"
+    printf 'some avg10=%s avg60=0.00 avg300=0.00 total=0\nfull avg10=%s avg60=0.00 avg300=0.00 total=0\n' \
+        "$psi_cpu" "$psi_cpu" > "$FIXTURE_PSI_CPU"
+    printf 'some avg10=%s avg60=0.00 avg300=0.00 total=0\nfull avg10=%s avg60=0.00 avg300=0.00 total=0\n' \
+        "$psi_mem" "$psi_mem" > "$FIXTURE_PSI_MEM"
+}
+
 new_env() {  # sets T (scratch root), STATE_DIR, BOARDS_ROOT, GATE_FILE, STUB, CALLS
     T="$(mktemp -d "$HERE/.sdscratch.XXXXXX")"
     SCRATCH_DIRS+=("$T")
@@ -45,6 +59,10 @@ new_env() {  # sets T (scratch root), STATE_DIR, BOARDS_ROOT, GATE_FILE, STUB, C
     GATE_FILE="$STATE_DIR/rate_limit_gate.json"
     STUB="$T/bin/hermes-stub"
     CALLS="$T/calls.log"
+    FIXTURE_LOADAVG="$T/loadavg"
+    FIXTURE_MEMINFO="$T/meminfo"
+    FIXTURE_PSI_CPU="$T/psi_cpu"
+    FIXTURE_PSI_MEM="$T/psi_memory"
     mkdir -p "$STATE_DIR" "$BOARDS_ROOT" "$T/bin"
     cat > "$STUB" <<EOF
 #!/bin/bash
@@ -52,6 +70,7 @@ printf '%s\n' "\$*" >> "$CALLS"
 exit 0
 EOF
     chmod +x "$STUB"
+    write_metrics 0.1 8000 0 0 0   # benign by default
 }
 
 write_gate() {  # paused resume_at reason
@@ -69,7 +88,18 @@ run_dispatch() {  # extra args; captures combined output in OUT, rc in RC
         KANBAN_BOARDS_ROOT="$BOARDS_ROOT" \
         HERMES_BIN="${TEST_HERMES_BIN:-$STUB}" \
         LOCK_FILE="$T/lock" SLEEP_BETWEEN=0 \
-        LOAD_THRESHOLD=99 RAM_MIN_MB=1 \
+        NPROC="${NPROC:-4}" \
+        CPU_PER_CORE="${CPU_PER_CORE:-99}" \
+        CPU_STORM_PER_CORE="${CPU_STORM_PER_CORE:-99}" \
+        RAM_MIN_MB="${RAM_MIN_MB:-1}" \
+        SWAP_MAX_PCT="${SWAP_MAX_PCT:-100}" \
+        PSI_CPU_MAX="${PSI_CPU_MAX:-99}" \
+        PSI_MEM_MAX="${PSI_MEM_MAX:-99}" \
+        POLICY_FILE="${POLICY_FILE:-$T/policy_absent.json}" \
+        LOADAVG_FILE="$FIXTURE_LOADAVG" \
+        MEMINFO_FILE="$FIXTURE_MEMINFO" \
+        PRESSURE_CPU_FILE="$FIXTURE_PSI_CPU" \
+        PRESSURE_MEM_FILE="$FIXTURE_PSI_MEM" \
         bash "$SCRIPT_UNDER_TEST" "$@" 2>&1)"
     RC=$?
 }
@@ -326,6 +356,53 @@ t15_tab_in_reason_does_not_shift_fields() {
     assert_file_exists "$(marker_for alpha)" "t15: marker written despite tab in reason"
     assert_eq "$(marker_field alpha reason)" "$expected" "t15: full tabbed reason preserved"
     assert_eq "$(marker_field alpha resume_at)" "2026-08-15T12:00:00+00:00" "t15: resume_at not shifted by tab"
+}
+
+# ---------- resource gate (per-CPU + PSI + hard mem/swap) ----------
+t16_cpu_soft_degrades_to_one_pass() {
+    new_env
+    write_metrics 4.0 8000 0 0 0            # 1.0/cpu on NPROC=4
+    CPU_PER_CORE=0.8 CPU_STORM_PER_CORE=5.0 run_dispatch
+    assert_eq "$(count_stub_calls 'dispatch')" "1" "t16: CPU soft breach -> exactly one board pass"
+    assert_contains "$OUT" "DEGRADE" "t16: logs degrade"
+}
+
+t17_cpu_storm_stops() {
+    new_env
+    write_metrics 12.0 8000 0 0 0           # 3.0/cpu on NPROC=4
+    CPU_PER_CORE=0.8 CPU_STORM_PER_CORE=2.0 run_dispatch
+    assert_eq "$(count_stub_calls 'dispatch')" "0" "t17: CPU storm -> no dispatch"
+    assert_contains "$OUT" "STOP" "t17: logs stop"
+}
+
+t18_memory_hard_stop() {
+    new_env
+    write_metrics 0.1 500 0 0 0
+    RAM_MIN_MB=1500 run_dispatch
+    assert_eq "$(count_stub_calls 'dispatch')" "0" "t18: low memory -> no dispatch"
+    assert_contains "$OUT" "STOP" "t18: logs memory stop"
+}
+
+t19_swap_hard_stop() {
+    new_env
+    write_metrics 0.1 8000 95 0 0
+    SWAP_MAX_PCT=90 run_dispatch
+    assert_eq "$(count_stub_calls 'dispatch')" "0" "t19: swap over ceiling -> no dispatch"
+    assert_contains "$OUT" "STOP" "t19: logs swap stop"
+}
+
+t20_psi_cpu_degrades() {
+    new_env
+    write_metrics 0.1 8000 0 5.0 0          # cpu PSI full avg10 high
+    CPU_PER_CORE=99 PSI_CPU_MAX=2.0 run_dispatch
+    assert_eq "$(count_stub_calls 'dispatch')" "1" "t20: cpu PSI breach -> one board pass"
+}
+
+t21_psi_mem_hard_stop() {
+    new_env
+    write_metrics 0.1 8000 0 0 3.0          # mem PSI full avg10 high
+    PSI_MEM_MAX=1.0 run_dispatch
+    assert_eq "$(count_stub_calls 'dispatch')" "0" "t21: mem PSI breach -> no dispatch"
 }
 
 # ---------- run ----------
