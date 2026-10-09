@@ -1,0 +1,17 @@
+{
+  "_comment": "staggered-dispatch.sh resource gate policy. Precedence: environment > this file > built-in defaults. CPU is per-core; memory is MemAvailable; swap is used percentage; PSI values are /proc/pressure full avg10.",
+  "cpu": {
+    "per_core": 0.8,
+    "storm_per_core": 2.0
+  },
+  "memory": {
+    "min_available_mb": 1536
+  },
+  "swap": {
+    "max_used_pct": 90
+  },
+  "psi": {
+    "cpu_avg10_max": 2.0,
+    "memory_avg10_max": 1.0
+  }
+}

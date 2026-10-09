@@ -112,12 +112,17 @@ marker management and dispatch) — safe to call manually.
 | `PAUSE_FAILSAFE_S` | `21600` | canary age threshold |
 | `CANARY_INTERVAL_S` | `21600` | min seconds between canaries (global) |
 | `HERMES_BIN` | venv `hermes` | binary for dispatch/unblock |
-| `LOAD_THRESHOLD`, `RAM_MIN_MB`, `SLEEP_BETWEEN`, `FAILURE_LIMIT`, `LOCK_FILE` | unchanged | pre-existing knobs |
+| `CPU_PER_CORE`, `CPU_STORM_PER_CORE`, `RAM_MIN_MB`, `SWAP_MAX_PCT`, `PSI_CPU_MAX`, `PSI_MEM_MAX` | see `dispatch_policy.json` | per-core CPU + PSI resource gate (2026-10-09) |
+| `NPROC`, `LOADAVG_FILE`, `MEMINFO_FILE`, `PRESSURE_CPU_FILE`, `PRESSURE_MEM_FILE` | host `/proc` | metric sources (overridable for tests) |
+| `POLICY_FILE` | `./dispatch_policy.json` | committed resource policy (env > policy > defaults) |
+| `SLEEP_BETWEEN`, `FAILURE_LIMIT`, `LOCK_FILE` | unchanged | pre-existing knobs |
 
 ## Tests
 
-`bash tests/test_staggered_dispatch.sh` — 14 integration legs, 51
-assertions: pause writes markers + skips dispatch (stub + real CLI), 429 /
+`bash tests/test_staggered_dispatch.sh` — 20 integration legs, 61
+assertions: resource gate (per-CPU soft-degrade, CPU storm stop, memory + swap
+hard stops, cpu PSI degrade, mem PSI stop) plus pause writes markers + skips
+dispatch (stub + real CLI), 429 /
 QUOTA-WINDOW / KALMAN classified, unknown reason → no markers, auto-resume
 removes markers, advisory + fail-open dispatch, `--sweep` re-queues a real
 quota-paused task via the real CLI with failures unchanged (control
