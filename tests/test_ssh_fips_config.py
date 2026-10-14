@@ -132,16 +132,19 @@ class TestWildcardDefaults(unittest.TestCase):
             text = f.read()
         # Insert per the template's documented extension method: ABOVE the
         # `Host *.fips` wildcard (ssh_config first-obtained-value semantics).
-        wildcard_pos = text.index("Host *.fips")
+        # Anchor on the directive at line start, not text.index() — the header
+        # comment also mentions `Host *.fips` and would match first.
+        wildcard_pos = re.search(r"(?m)^Host \*\.fips\s*$", text)
+        assert wildcard_pos, "wildcard block not found at line start"
         extended = (
-            text[:wildcard_pos]
+            text[: wildcard_pos.start()]
             + "# appended by test: future node with divergent settings\n"
             "Host divergent.fips\n"
             "    HostName fd00::dead:beef\n"
             "    User root\n"
             "    IdentityFile ~/.ssh/id_rsa_special\n"
             "    ProxyJump otherjump\n\n"
-            + text[wildcard_pos:]
+            + text[wildcard_pos.start():]
         )
         with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as tmp:
             tmp.write(extended)
@@ -204,6 +207,74 @@ class TestNoSecrets(unittest.TestCase):
     def test_no_todo_placeholders_left(self):
         with open(CONF) as f:
             self.assertIsNone(re.search(r"TODO:", f.read()), "unresolved TODO placeholder")
+
+
+class TestFipsHostsTemplate(unittest.TestCase):
+    """Lock in the ansible /etc/fips/hosts regression fix: renders purely
+    from the fips_mesh_hosts dict, with dq05 on its OWN npub (DQ05 got a
+    separate mesh identity ~2026-09; the old template hardcoded
+    `dq05 npub1eak…` = CobridorWave, which an ansible run would have
+    written over the live roster)."""
+
+    DEFAULTS = os.path.join(
+        REPO_ROOT, "ansible", "roles", "fips", "defaults", "main.yml"
+    )
+    J2 = os.path.join(
+        REPO_ROOT, "ansible", "roles", "fips", "templates", "fips-hosts.j2"
+    )
+
+    DQ05_NPUB = "npub1gglv3cfrypldzferwfeaye67e6afez09z93d7jqy3wfkjv9rxwnq86v86t"
+    T470_NPUB = "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import jinja2  # noqa: F401
+            import yaml  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("jinja2/pyyaml not installed — render test skipped")
+        with open(cls.DEFAULTS) as f:
+            data = yaml.safe_load(f)
+        cls.mesh_hosts = data["fips_mesh_hosts"]
+        cls.extra_hosts = data.get("fips_extra_hosts", {})
+        with open(cls.J2) as f:
+            cls.template_text = f.read()
+
+    def _render(self):
+        import jinja2
+
+        tpl = jinja2.Template(self.template_text)
+        return tpl.render(
+            fips_mesh_hosts=self.mesh_hosts, fips_extra_hosts=self.extra_hosts
+        )
+
+    def test_dq05_has_own_npub(self):
+        self.assertEqual(self.mesh_hosts["dq05"], self.DQ05_NPUB)
+        self.assertNotEqual(self.mesh_hosts["dq05"], self.mesh_hosts["t470"])
+
+    def test_rendered_hosts_file_lines(self):
+        rendered = self._render()
+        lines = [
+            l.strip() for l in rendered.splitlines()
+            if l.strip() and not l.strip().startswith("#")
+        ]
+        self.assertIn(f"dq05 {self.DQ05_NPUB}", lines)
+        self.assertIn(f"t470 {self.T470_NPUB}", lines)
+        self.assertIn(f"cobrador {self.T470_NPUB}", lines)
+        # every dict entry appears exactly once
+        for alias, npub in self.mesh_hosts.items():
+            self.assertEqual(lines.count(f"{alias} {npub}"), 1, f"duplicate/missing {alias}")
+
+    def test_no_hardcoded_stale_lines(self):
+        """The j2 must contain no bare `alias npub` line outside the loops."""
+        stripped = "\n".join(
+            l for l in self.template_text.splitlines()
+            if not l.strip().startswith(("{%", "#"))
+        )
+        self.assertNotRegex(stripped, r"(?m)^dq05\s+npub1")
+        self.assertNotRegex(stripped, r"(?m)^vps2\s+npub1")
+        # and the old stale hardcode specifically
+        self.assertNotIn(self.T470_NPUB + "\n", stripped)
 
 
 if __name__ == "__main__":

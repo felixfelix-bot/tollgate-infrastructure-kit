@@ -283,7 +283,7 @@ mesh latency (165-333ms RTT). Use `ConnectTimeout=30` in ssh config.
 | dq05.fips | `fdb0:bf34:d648:96ac:f65a:3fd6:358:710b` (DQ05, npub `npub1ggl…v86t`) |
 | t14gen5.fips | `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0` (npub `npub1srs…ufhh`) |
 | vps2 mesh addr | `fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149` |
-| RTT | 300–1500 ms → use `ConnectTimeout 30`, `ServerAliveInterval 15` |
+| RTT | 300–1500 ms → use `ConnectTimeout 30`, `ServerAliveInterval 30` |
 
 **Gotchas found while enabling this:**
 
