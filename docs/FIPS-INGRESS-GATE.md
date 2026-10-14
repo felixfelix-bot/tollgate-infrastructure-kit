@@ -87,21 +87,27 @@ VPS2 already has SSH on :22 and can route to fips0. Use SSH ProxyJump:
 
 ```ssh-config
 # ~/.ssh/config — full verified template in templates/ssh-config-fips.conf
+Host *.fips
+    User c03rad0r
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    ProxyJump vps2
+    ConnectTimeout 30
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+
 Host vps2
     HostName 23.182.128.51
     User root
 
-Host dq05.fips t470.fips
+Host dq05.fips
+    HostName fdb0:bf34:d648:96ac:f65a:3fd6:358:710b
+
+Host t470.fips
     HostName fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8
-    User c03rad0r
-    ProxyJump vps2
-    ConnectTimeout 30
 
 Host t14gen5.fips
     HostName fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0
-    User c03rad0r
-    ProxyJump vps2
-    ConnectTimeout 30
 ```
 
 Then: `ssh dq05.fips` — transparent SSH into any FIPS machine via VPS2.
@@ -142,7 +148,8 @@ FIPS addresses are derived from npub via `SHA-256(pubkey)[0:15]` prefixed with
 | Alias | npub | FIPS Address | Machine |
 |-------|------|-------------|---------|
 | vps2 | `npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82` | `fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149` | VPS2 (public IP hub) |
-| dq05 / t470 | `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72` | `fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8` | CobradorWave ("dq05" locally, "T470" on VPS2) |
+| dq05 | `npub1gglv3cfrypldzferwfeaye67e6afez09z93d7jqy3wfkjv9rxwnq86v86t` | `fdb0:bf34:d648:96ac:f65a:3fd6:358:710b` | DQ05 desktop (own mesh identity since ~2026-09) |
+| t470 / cobrador | `npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72` | `fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8` | CobridorWave T470 laptop |
 | t14gen5 | `npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh` | `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0` | T14Gen5 laptop |
 
 ### 4.2 FIPS URL Convention
@@ -253,12 +260,20 @@ mesh latency (165-333ms RTT). Use `ConnectTimeout=30` in ssh config.
 - [x] Commit ssh config template → `templates/ssh-config-fips.conf`
 - [x] Test: `ssh dq05.fips` connects through VPS2 into the mesh (returns `CobradorWave`)
 
-**Verified setup (2026-08-14):**
+**Verified setup (2026-08-14, addresses re-verified 2026-10-14):**
+
+> Correction (2026-10-14): DQ05 has since joined the mesh with its own FIPS
+> identity (`npub1ggl…v86t`). The 2026-08-14 rows below treated dq05 and t470
+> as one machine — stale. Current aliases: `dq05.fips` →
+> `fdb0:bf34:d648:96ac:f65a:3fd6:358:710b` (DQ05),
+> `t470.fips` → `fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8` (CobridorWave),
+> `t14gen5.fips` → `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0` (T14Gen5).
+> See `templates/ssh-config-fips.conf` (authoritative) and §4.1.
 
 | Item | Value |
 |------|-------|
 | Jump host | `root@23.182.128.51` (VPS2 / testserver2, Debian 13, OpenSSH 10.0) |
-| dq05.fips / t470.fips | `fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8` (CobradorWave, npub `npub1eak…kac72`) |
+| dq05.fips | `fdb0:bf34:d648:96ac:f65a:3fd6:358:710b` (DQ05, npub `npub1ggl…v86t`) |
 | t14gen5.fips | `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0` (npub `npub1srs…ufhh`) |
 | vps2 mesh addr | `fdfd:c0e5:3717:6cb1:bb60:de97:987e:7149` |
 | RTT | 300–1500 ms → use `ConnectTimeout 30`, `ServerAliveInterval 15` |
@@ -277,13 +292,21 @@ mesh latency (165-333ms RTT). Use `ConnectTimeout=30` in ssh config.
    with "must specify at least one address, or set via_nostr = true".
 4. **Home IP is DHCP** — static peer addresses go stale. `via_nostr: true`
    lets the peer resolve the current advertised endpoint from Nostr.
-5. **t470/dq05 naming**: npub `npub1eak…kac72` is CobradorWave — called "dq05"
-   in its own `/etc/fips/hosts`, "T470" on VPS2. Both ssh aliases point at the
-   same machine until the physical DQ05 desktop joins the mesh.
+5. **t470/dq05 naming (updated 2026-10-14)**: the aliases now point at
+   DIFFERENT machines. `t470.fips`/`cobrador.fips` → CobridorWave
+   (`npub1eak…kac72`, `fd97:77d4:…:dee8`). `dq05.fips` → the physical DQ05
+   desktop, which joined the mesh with its own identity `npub1ggl…v86t`
+   (`fdb0:bf34:…:710b`). The pre-2026-09 docs treated them as one machine.
 6. **Auth is end-to-end**: the jump host (VPS2) needs no key on the target —
    ProxyJump only relays TCP. The client key must be in the target's
    `authorized_keys` (id_ed25519 works for dq05; t14gen5 needs the operator's
    key added).
+7. **VPS2 :22 can be refused after an agent-key spill (observed 2026-10-14)**:
+   an ssh-agent holding many keys triggers "Too many authentication failures"
+   against VPS2 (MaxAuthTries), after which port 22 refused connections from
+   the same source for minutes (likely fail2ban). The template's
+   `IdentitiesOnly yes` + single `IdentityFile` avoids offering the whole
+   agent. If you hit a refusal, wait it out — do not hammer the port.
 
 **Status of the Phase-2 socat proxy (`:2222`)**: now works again too — it was
 silently broken by the missing tcp/22 mesh firewall rule on CobradorWave.
