@@ -32,8 +32,9 @@ fips_peers:
     connect_policy: auto_connect
 fips_mesh_hosts:
   vps2: "npub1sqg8fd4ea25gev2ppvra68lrg8qyhx3fup0awp7gsxwchph8634sewhu82"
-  dq05: "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
+  dq05: "npub1gglv3cfrypldzferwfeaye67e6afez09z93d7jqy3wfkjv9rxwnq86v86t"
   t470: "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
+  cobrador: "npub1eak909yyj7w94p6ct5yzqh3cn2ysq5w2u70cdat90uqxezcdkyus9kac72"
   t14gen5: "npub1srsllgfuxrmv7cwewu3yzak0gmth5ats989zv35t6sc9ctf4fr6syqufhh"
 fips_extra_hosts: {}
 fips_external_addr: ""

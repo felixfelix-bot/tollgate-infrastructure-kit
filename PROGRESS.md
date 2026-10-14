@@ -454,3 +454,11 @@
 - [ ] True custom unit support (MB, KB, GB, min in keyset) — requires gRPC payment processor or CDK upstream fix
 - [ ] Routstr AI inference via cashu Python lib — keyset ID format mismatch. Pre-built Docker image, needs upstream update or custom build
 - [ ] Install `websocat` for full Playwright WebSocket tests (low priority, HTTP checks sufficient)
+
+### FIPS SSH ProxyJump template refresh (t_c577c5c4, Oct 2026)
+- [x] **Addresses re-verified live** — `dig AAAA <alias>.fips @::1 -p 5354` + npub→fd00:: derivation (3/3 known pairs match): dq05 `fdb0:bf34:d648:96ac:f65a:3fd6:358:710b`, t470 `fd97:77d4:cd27:a6ae:1b29:e92e:fd96:dee8`, t14gen5 `fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0`
+- [x] **dq05/t470 split** — DQ05 got its own mesh identity (npub `npub1ggl…v86t`); old docs/template treated it as one machine with CobridorWave. `Host dq05.fips t470.fips` split into separate blocks; `cobrador.fips` alias added
+- [x] **`Host *.fips` wildcard defaults** — User/IdentityFile/IdentitiesOnly/ProxyJump/ConnectTimeout 30/keepalives 30×3 inherit to future nodes
+- [x] **Ansible regression fix** — `fips_mesh_hosts.dq05` + hardcoded line in `fips-hosts.j2` pointed at npub1eak (would overwrite live /etc/fips/hosts on next run); now keyed to npub1ggl, template rendered from the dict only
+- [x] **Tests** — `tests/test_ssh_fips_config.py` (13 cases, ssh -G real parser): RED 7F+1E → GREEN 13/13; full suite 64/64 OK
+- [x] **Live port check** — tcp/22 OPEN on dq05 + t14gen5 mesh addrs from CobridorWave; VPS2 :22 refused both paths during session (see docs gotcha note, likely fail2ban after agent-key spill — operator check advised)
