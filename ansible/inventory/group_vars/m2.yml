@@ -36,6 +36,11 @@ machine_roles:
   - micro_vpn
   - jitsi_meet
   - strfry_agg
+  # tollgate_portal: the stable public HTTPS origin for the TollGate PWA client wallet
+  # (portal.{{ base_domain }}). Present on BOTH machines so a failover does not take the
+  # wallet origin offline — an installed PWA whose origin disappears cannot update, and the
+  # client's ecash lives on that origin.
+  - tollgate_portal
 
 machine_cloudflare_subdomains:
   - relay2
@@ -55,3 +60,7 @@ machine_cloudflare_subdomains:
   - wot
   - vpn
   - meet
+  # portal: the TollGate wallet PWA origin. NOTE this record ALREADY EXISTS in Cloudflare
+  # (portal.orangesync.tech resolves to 23.182.128.51 and 64:ff9b::17b6:8033), so adding it
+  # here makes it declared/managed rather than undeclared drift.
+  - portal

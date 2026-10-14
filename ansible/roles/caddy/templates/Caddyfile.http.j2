@@ -206,6 +206,46 @@ vote.{{ base_domain }} {
 }
 {% endif %}
 
+{% if 'tollgate_portal' in machine_roles %}
+# TollGate PWA wallet — the stable public HTTPS origin for the captive-portal client wallet.
+#
+# WHY THIS ORIGIN EXISTS (not cosmetic): a captive portal is served as plain http on a bare
+# IP, which is NOT a secure context, so on the portal origin itself there is no service
+# worker, no install prompt, no Cache API and no crypto.subtle. Hosting the wallet client on
+# this public HTTPS origin is the only path to an installable PWA, and it is deliberately
+# STABLE so that one install serves every TollGate router a user ever visits.
+#
+# It must serve the wallet app; the per-router splash page on :2051 deep-links here with the
+# gateway identity in the query string.
+#
+# Cache policy: the app shell is served no-cache so an installed PWA always picks up a new
+# sw.js. The service worker's own precache is what provides offline behaviour — serving a
+# stale index.html from the CDN would pin users to an old shell.
+portal.{{ base_domain }} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+
+    header {
+        # The wallet handles bearer ecash, so tighten the defaults beyond Caddy's own.
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Do NOT set X-Frame-Options DENY here: a captive portal may need to frame the
+        # signpost page, and the wallet itself is not framable-sensitive.
+        -Server
+    }
+
+    # sw.js and the manifest must never be cached hard, or an install cannot update.
+    @nocache path /sw.js /manifest.webmanifest /index.html
+    header @nocache Cache-Control "no-cache, must-revalidate"
+
+    root * {{ tollgate_static_dir }}/tollgate-portal
+    file_server
+    # SPA fallback: the wallet routes client-side.
+    try_files {path} /index.html
+}
+{% endif %}
+
 {% if 'solix_nsite' in machine_roles %}
 solix.{{ base_domain }} {
     tls {
