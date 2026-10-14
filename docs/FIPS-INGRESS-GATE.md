@@ -87,18 +87,16 @@ VPS2 already has SSH on :22 and can route to fips0. Use SSH ProxyJump:
 
 ```ssh-config
 # ~/.ssh/config — full verified template in templates/ssh-config-fips.conf
-Host *.fips
-    User c03rad0r
-    IdentityFile ~/.ssh/id_ed25519
-    IdentitiesOnly yes
-    ProxyJump vps2
-    ConnectTimeout 30
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
-
+# (block order matters: ssh_config is first-obtained-value; the *.fips
+# wildcard MUST be last so specific blocks can override it)
 Host vps2
     HostName 23.182.128.51
     User root
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    ConnectTimeout 30
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
 
 Host dq05.fips
     HostName fdb0:bf34:d648:96ac:f65a:3fd6:358:710b
@@ -108,6 +106,15 @@ Host t470.fips
 
 Host t14gen5.fips
     HostName fd79:f451:67b1:8084:2b2a:5b1e:9110:26d0
+
+Host *.fips
+    User c03rad0r
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    ProxyJump vps2
+    ConnectTimeout 30
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
 ```
 
 Then: `ssh dq05.fips` — transparent SSH into any FIPS machine via VPS2.

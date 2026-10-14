@@ -23,6 +23,7 @@ Run:
 import os
 import re
 import subprocess
+import tempfile
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -121,6 +122,64 @@ class TestWildcardDefaults(unittest.TestCase):
 
     def test_specific_blocks_override_wildcard(self):
         self.assertEqual(ssh_g("dq05.fips")["hostname"], DQ05_MESH)
+
+    def test_future_node_can_override_wildcard_defaults(self):
+        """Regression (cold-review major): ssh_config first-obtained-value
+        semantics mean the `Host *.fips` block must come AFTER all specific
+        blocks, or a future node could never override User/IdentityFile/
+        ProxyJump. Simulates extending the template with a divergent node."""
+        with open(CONF) as f:
+            text = f.read()
+        # Insert per the template's documented extension method: ABOVE the
+        # `Host *.fips` wildcard (ssh_config first-obtained-value semantics).
+        wildcard_pos = text.index("Host *.fips")
+        extended = (
+            text[:wildcard_pos]
+            + "# appended by test: future node with divergent settings\n"
+            "Host divergent.fips\n"
+            "    HostName fd00::dead:beef\n"
+            "    User root\n"
+            "    IdentityFile ~/.ssh/id_rsa_special\n"
+            "    ProxyJump otherjump\n\n"
+            + text[wildcard_pos:]
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as tmp:
+            tmp.write(extended)
+            path = tmp.name
+        try:
+            proc = subprocess.run(
+                ["ssh", "-G", "-F", path, "divergent.fips"],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            opts = {}
+            for line in proc.stdout.splitlines():
+                key, _, value = line.partition(" ")
+                opts.setdefault(key.lower(), value.strip())
+            self.assertEqual(opts["user"], "root")
+            self.assertEqual(opts["identityfile"], "~/.ssh/id_rsa_special")
+            self.assertEqual(opts["proxyjump"], "otherjump")
+            self.assertEqual(opts["hostname"], "fd00::dead:beef")
+        finally:
+            os.unlink(path)
+
+    def test_wildcard_block_is_last(self):
+        """Structural guard: every specific Host block must precede `Host *.fips`
+        so it can never shadow future node overrides (first-obtained-value)."""
+        with open(CONF) as f:
+            lines = f.readlines()
+        host_lines = [
+            (i, l.strip()) for i, l in enumerate(lines)
+            if l.strip().lower().startswith("host ")
+        ]
+        wildcard_idx = [i for i, l in host_lines if l.split()[1] == "*.fips"]
+        self.assertEqual(len(wildcard_idx), 1, "exactly one wildcard block expected")
+        for i, l in host_lines:
+            if i != wildcard_idx[0]:
+                self.assertLess(
+                    i, wildcard_idx[0],
+                    f"specific block {l!r} must precede the *.fips wildcard",
+                )
 
 
 class TestNoSecrets(unittest.TestCase):
