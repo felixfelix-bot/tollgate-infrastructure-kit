@@ -16,7 +16,7 @@ model:
   default: "glm-5.2"
   provider: "custom"
   base_url: "http://routstr:8000/v1"
-  api_key: "<redacted>"
+  api_key: {{ hermes_tenants_routstr_api_key | default('') }}
 
 nostr:
   relays: [{{ hermes_tenants_nostr_relays.split(',') | map('trim') | select | join(', ') }}]
