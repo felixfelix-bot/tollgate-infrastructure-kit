@@ -170,17 +170,15 @@ RUN if [ -n "${HERMES_GIT_SHA}" ]; then \
     fi
 
 # ---------- BUILD-TIME HARD GATE ----------
-# Verify coincurve is importable and can sign (non-lazy verification)
-# This ensures the image fails to build if coincurve is missing or broken
-RUN /opt/hermes/.venv/bin/python -c "
-import coincurve
-from coincurve import PrivateKey
-# Test actual signing - this would fail if ABI is broken
-pk = PrivateKey(bytes(range(32)))
-sig = pk.sign(b'x')
-assert len(sig) > 0, 'Signing failed'
-print('coincurve gate: OK - import and sign working')
-"
+# Verify coincurve is importable and can sign (non-lazy verification).
+# This ensures the image fails to build if coincurve is missing or broken.
+#
+# The check MUST stay on one logical RUN line. A bare multi-line
+# `RUN python -c "` block is a Dockerfile PARSE error ("unknown instruction:
+# import") because only `\`-continued lines join the instruction — measured
+# 2026-10-16, main@5593005, so the image could never be built from that commit.
+RUN set -eu; \
+    /opt/hermes/.venv/bin/python -c "import coincurve; from coincurve import PrivateKey; pk = PrivateKey(bytes(range(32))); sig = pk.sign(b'x'); assert len(sig) > 0, 'Signing failed'; print('coincurve gate: OK - import and sign working')"
 
 ENTRYPOINT [ "/init", "/opt/hermes/docker/main-wrapper.sh" ]
 CMD [ ]
