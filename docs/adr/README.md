@@ -13,6 +13,7 @@
 | [ADR-009](ADR-009-fips-dns-required-for-dot-fips-resolution.md) | fips-dns required for .fips DNS resolution | Accepted |
 | [ADR-010](ADR-010-ssh-over-fips-standard-sshd.md) | SSH-over-FIPS uses standard sshd on [::]:22 | Accepted |
 | [ADR-011](ADR-011-fips-ingress-gate-for-home-services.md) | FIPS ingress gate for hosting services from home machines | Accepted |
+| [ADR-012](ADR-012-media-deletion-via-docker-network-sidecar.md) | Media deletion for the audio bridge via a docker-network sidecar | Accepted |
 
 ## Related Documents
 

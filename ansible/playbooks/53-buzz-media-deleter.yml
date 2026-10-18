@@ -1,0 +1,12 @@
+---
+# 53-buzz-media-deleter.yml — deploy the delete sidecar for the AB-2 audio bridge.
+# Runs on the relay host (VPS2). Prerequisites: buzz-relay (MinIO) deployed and
+# the target tenant created. See
+# docs/adr/ADR-012-media-deletion-via-docker-network-sidecar.md
+- name: Deploy buzz-media-deleter sidecar
+  hosts: "{{ target | default('vps2') }}"
+  become: yes
+  gather_facts: yes
+  ignore_unreachable: true
+  roles:
+    - buzz_media_deleter

@@ -1,0 +1,17 @@
+---
+# buzz_media_deleter — deploy the delete sidecar for the AB-2 audio bridge.
+# Runs on the relay host (VPS2) where buzz-relay-minio and the tenant networks
+# live. See docs/adr/ADR-012-media-deletion-via-docker-network-sidecar.md.
+buzz_media_deleter_install_dir: "/opt/buzz-media-deleter"
+buzz_media_deleter_relay_dir: "/opt/buzz-relay"
+buzz_media_deleter_minio_container: "buzz-relay-minio"
+buzz_media_deleter_tenant_container: "hermes-sitarani"
+buzz_media_deleter_tenant_network: "hermes-net-sitarani"
+buzz_media_deleter_tenant_env_path: "/opt/tollgate/hermes/sitarani/.env"
+buzz_media_deleter_image: "tollgate/buzz-media-deleter:1"
+buzz_media_deleter_port: 8099
+buzz_media_deleter_compose_project: "buzz-media-deleter"
+
+# Repo-relative source of truth for the shipped files (control node).
+# Resolved against the playbook dir so it works from any CWD.
+buzz_media_deleter_source_dir: "{{ playbook_dir }}/../../media-deleter"

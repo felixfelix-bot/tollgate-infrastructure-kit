@@ -1,0 +1,103 @@
+---
+# Deploy the buzz-media-deleter sidecar (AB-4 integration hook for the AB-2
+# audio bridge). Idempotent: re-running upgrades in place and reuses the
+# existing .env, so the generated MD_AUTH_TOKEN is stable across runs.
+#
+# The heavy lifting lives in media-deleter/install.sh so there is exactly ONE
+# implementation of the network detection + credential wiring. This role ships
+# those files and invokes that script. See
+# docs/adr/ADR-012-media-deletion-via-docker-network-sidecar.md.
+#
+# The role sources files from media-deleter/ in the repo (control node) rather
+# than a files/ copy, so the shipped artifact and the tested one cannot drift.
+
+- name: Verify docker is available on the relay host
+  ansible.builtin.command: docker info --format ok
+  register: buzz_media_deleter_docker
+  changed_when: false
+  failed_when: buzz_media_deleter_docker.rc != 0
+
+- name: Verify the MinIO container is running
+  ansible.builtin.command: >-
+    docker inspect --format 'state={{ "{{" }}.State.Status{{ "}}" }}'
+    {{ buzz_media_deleter_minio_container }}
+  register: buzz_media_deleter_minio
+  changed_when: false
+  failed_when: "'state=running' not in buzz_media_deleter_minio.stdout"
+
+- name: Verify the relay .env (MinIO credentials) is present
+  ansible.builtin.stat:
+    path: "{{ buzz_media_deleter_relay_dir }}/.env"
+  register: buzz_media_deleter_relay_env
+  failed_when: not buzz_media_deleter_relay_env.stat.exists
+
+- name: Verify the tenant container is running
+  ansible.builtin.command: >-
+    docker inspect --format 'state={{ "{{" }}.State.Status{{ "}}" }}'
+    {{ buzz_media_deleter_tenant_container }}
+  register: buzz_media_deleter_tenant
+  changed_when: false
+  failed_when: false
+
+- name: Warn when the tenant container is absent
+  ansible.builtin.debug:
+    msg: >-
+      WARN: {{ buzz_media_deleter_tenant_container }} is not running, so the
+      bridge-side reachability check will be skipped. Deploy the tenant
+      (playbook 45-multi-tenant-hermes.yml) to complete the contract.
+  when: "'state=running' not in buzz_media_deleter_tenant.stdout"
+
+- name: Ensure the install directory exists
+  ansible.builtin.file:
+    path: "{{ buzz_media_deleter_install_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Copy the sidecar sources from media-deleter/
+  ansible.builtin.copy:
+    src: "{{ buzz_media_deleter_source_dir }}/{{ item }}"
+    dest: "{{ buzz_media_deleter_install_dir }}/{{ item }}"
+    mode: "{{ '0755' if item.endswith('.sh') else '0644' }}"
+  loop:
+    - buzz_media_deleter.py
+    - Dockerfile
+    - docker-compose.yml
+    - install.sh
+
+- name: Run the installer (idempotent; reuses an existing .env)
+  ansible.builtin.command:
+    cmd: ./install.sh
+    chdir: "{{ buzz_media_deleter_install_dir }}"
+  environment:
+    MD_TENANT_NETWORK: "{{ buzz_media_deleter_tenant_network }}"
+    MD_TENANT_CONTAINER: "{{ buzz_media_deleter_tenant_container }}"
+    MD_MINIO_CONTAINER: "{{ buzz_media_deleter_minio_container }}"
+    MD_LISTEN_PORT: "{{ buzz_media_deleter_port | string }}"
+  register: buzz_media_deleter_install
+  changed_when: true
+
+- name: Show the installer output
+  ansible.builtin.debug:
+    var: buzz_media_deleter_install.stdout_lines
+
+# The contract needs MD_AUTH_TOKEN on BOTH sides. The sidecar side is written by
+# install.sh; this surfaces that the operator must also place it in the tenant
+# .env. The value itself is not printed (no_log) — it is readable on the host.
+- name: Check whether the tenant .env already carries the bridge token
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -q '^MD_AUTH_TOKEN=' {{ buzz_media_deleter_tenant_env_path }}
+  register: buzz_media_deleter_tenant_token
+  changed_when: false
+  failed_when: false
+
+- name: Report the remaining tenant-side wiring step
+  ansible.builtin.debug:
+    msg: >-
+      Contract: POST http://buzz-media-deleter:{{ buzz_media_deleter_port }}/delete
+      {"sha256":"<64-hex>","ext":"<ext>"} with Authorization: Bearer <MD_AUTH_TOKEN>.
+      {{ 'Tenant .env already has MD_AUTH_TOKEN — contract armed.'
+         if buzz_media_deleter_tenant_token.rc == 0 else
+         'ACTION: add MD_AUTH_TOKEN to ' ~ buzz_media_deleter_tenant_env_path ~
+         ' (value: MD_AUTH_TOKEN= line in ' ~ buzz_media_deleter_install_dir ~
+         '/.env) and recreate the tenant container.' }}

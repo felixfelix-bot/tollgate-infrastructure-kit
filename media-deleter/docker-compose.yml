@@ -1,0 +1,59 @@
+# buzz-media-deleter — the delete path for the AB-2 audio bridge.
+#
+# This stack is attached to the buzz relay's network (so it can reach MinIO by
+# service name) and to the tenant's own hermes network (so the bridge can reach
+# it by service name). That double attachment IS the design: the tenant never
+# gets docker-socket access, MinIO credentials, or ssh, and the deleter never
+# gets to serve reads.
+#
+# Usage (on VPS2):
+#   cd /opt/buzz-media-deleter
+#   set -a; . ./.env; set +a
+#   docker compose -p buzz-media-deleter up -d
+#
+# Required .env (chmod 600, NEVER committed):
+#   MD_MINIO_ACCESS_KEY / MD_MINIO_SECRET_KEY   (the buzz-relay-minio root creds)
+#   MD_AUTH_TOKEN                               (shared secret, same value in tenant .env)
+# Optional:
+#   MD_MINIO_ENDPOINT (default http://minio:9000)
+#   MD_MINIO_BUCKET   (default buzz-media)
+#   MD_LISTEN_PORT    (default 8099)
+#   MD_TENANT_NETWORK (default hermes-net-sitarani)
+#   MD_RELAY_NETWORK  (default buzz-relay-net; the install script detects it)
+
+services:
+  buzz-media-deleter:
+    image: tollgate/buzz-media-deleter:1
+    build:
+      context: .
+    container_name: buzz-media-deleter
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MD_MINIO_ENDPOINT: ${MD_MINIO_ENDPOINT:-http://minio:9000}
+      MD_MINIO_BUCKET: ${MD_MINIO_BUCKET:-buzz-media}
+      MD_MINIO_REGION: ${MD_MINIO_REGION:-us-east-1}
+      MD_LISTEN_PORT: ${MD_LISTEN_PORT:-8099}
+    networks:
+      - buzz-relay-net
+      - tenant-net
+    # No host ports: reachable only over the two docker networks above.
+    read_only: true
+    mem_limit: 128m
+    cpus: "0.25"
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  buzz-relay-net:
+    external: true
+    name: ${MD_RELAY_NETWORK:-buzz-relay-net}
+  tenant-net:
+    external: true
+    name: ${MD_TENANT_NETWORK:-hermes-net-sitarani}
