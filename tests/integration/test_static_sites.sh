@@ -16,10 +16,10 @@ test_static_site() {
     response=$(curl -s -o /dev/null -w '%{http_code}' "$url" || echo "000")
     if [[ "$response" == "200" ]]; then
         echo "OK (HTTP $response)"
-        ((PASS++))
+        PASS=$((PASS+1))
     else
         echo "FAIL (HTTP $response, expected 200)"
-        ((FAIL++))
+        FAIL=$((FAIL+1))
     fi
 }
 
@@ -31,10 +31,10 @@ test_spa_fallback() {
     response=$(curl -s -o /dev/null -w '%{http_code}' "$url" || echo "000")
     if [[ "$response" == "200" ]]; then
         echo "OK (HTTP $response)"
-        ((PASS++))
+        PASS=$((PASS+1))
     else
         echo "FAIL (HTTP $response, expected 200)"
-        ((FAIL++))
+        FAIL=$((FAIL+1))
     fi
 }
 
@@ -47,10 +47,10 @@ test_path_serving() {
     response=$(curl -s -o /dev/null -w '%{http_code}' "$base$path" || echo "000")
     if [[ "$response" == "200" ]]; then
         echo "OK (HTTP $response)"
-        ((PASS++))
+        PASS=$((PASS+1))
     else
         echo "FAIL (HTTP $response, expected 200)"
-        ((FAIL++))
+        FAIL=$((FAIL+1))
     fi
 }
 
